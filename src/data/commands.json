@@ -1,0 +1,50 @@
+{
+    "commands": {
+        "!anime": {
+            "response": "https://anilist.co/user/AlmostHadMe/animelist",
+            "isDefault": true,
+            "userLevel": "everyone"
+        },
+        "!discord": {
+            "response": "https://discord.gg/AVzs2qN2Nb",
+            "isDefault": true,
+            "userLevel": "everyone"
+        },
+        "!follow": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "followAge"
+        },
+        "!uptime": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "uptime"
+        },
+        "!fursona": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "fursona"
+        },
+        "!waifu": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "waifu"
+        }
+    },
+    "nonPrefixCommands": {
+        "kappa": {
+            "response": "Kappa",
+            "isDefault": true,
+            "userLevel": "everyone"
+        },
+        "kekw": {
+            "response": "KEKW",
+            "isDefault": true,
+            "userLevel": "everyone"
+        }
+    }
+}
