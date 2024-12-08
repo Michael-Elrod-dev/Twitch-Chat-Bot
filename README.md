@@ -1,5 +1,3 @@
-After reviewing the code, I think the README could use some updates to better reflect the current functionality and setup requirements. Here's a suggested updated version:
-
 # Twitch Chat Bot
 
 A Twitch chat bot built with Node.js that responds to user commands and provides utility functions for Twitch channels. The bot supports both default commands and allows moderators to create custom commands dynamically.
