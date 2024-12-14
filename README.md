@@ -51,8 +51,8 @@ node src/bot.js
 - `commandManager.js` - Handles command processing and storage
 - `tokenManager.js` - Manages authentication and token refresh
 - `specialHandlers.js` - Contains special command implementations
-- `utils.js` - Utility functions
 - `commands.json` - Default command configuration
+- `utils/` - Utility functions
 
 ## Dependencies
 - tmi.js - Twitch chat integration
