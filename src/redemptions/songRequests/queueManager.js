@@ -3,8 +3,7 @@ const path = require('path');
 
 class QueueManager {
     constructor() {
-        this.queueFile = path.join(__dirname, 'pendingQueue.json');
-        this.loadQueue();
+        this.queueFile = path.join(__dirname, '..', '..', 'data', 'pendingQueue.json');        this.loadQueue();
     }
 
     loadQueue() {
