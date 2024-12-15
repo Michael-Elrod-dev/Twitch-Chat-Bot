@@ -1,60 +1,84 @@
-# Twitch Chat Bot
+# AlmostHadAI Twitch Bot
 
-A Twitch chat bot built with Node.js that responds to user commands and provides utility functions for Twitch channels. The bot supports both default commands and allows moderators to create custom commands dynamically.
+A feature-rich Twitch chat bot built with Node.js that combines traditional chat commands with Spotify integration and channel point redemptions. The bot provides both utility functions and entertainment features for Twitch channels.
 
-## Features
+## Core Features
 
-### Command Management
-- Dynamic command creation, editing, and deletion by moderators
-- Persistent storage of custom commands in JSON format
-- Support for both prefix (!) and non-prefix commands
-- User level restrictions (mod-only commands)
+### Chat Commands
+- **Default Commands**
+  - `!anime` - Links to AniList profile
+  - `!discord` - Provides Discord server invite
+  - `!follow` - Shows follow duration for users
+  - `!uptime` - Displays stream duration
+  - `!fursona` - Generates unique fursona image using thisfursonadoesnotexist.com
+  - `!waifu` - Creates personalized anime character
+  - Non-prefix responses for "kappa" and "kekw"
 
-### Built-in Commands
-- `!commands <add/edit/delete> !commandname [message]` - Mod-only command for managing custom commands
-- `!follow` - Shows how long a user has been following the channel
-- `!uptime` - Displays how long the stream has been live
-- `!fursona` - Generates a unique fursona image for the user
-- `!waifu` - Creates a personalized anime character for the user
-- `!anime` - Links to AniList profile
-- `!discord` - Provides Discord server invite
+### Dynamic Command System
+- Moderator command management using `!commands`
+  - Add new commands: `!commands add !commandname <message>`
+  - Edit existing: `!commands edit !commandname <new message>`
+  - Remove commands: `!commands delete !commandname`
+- Persistent storage of custom commands
+- User permission levels (mod/everyone)
 
-### System Features
-- Automatic token management with 30-day refresh
-- Error handling and logging
-- API integration with Twitch and third-party services
-- Configurable channel and command settings
+### Spotify Integration
+- Channel point redemption for song requests
+- Automatic queue management
+- Features:
+  - Direct queue addition when Spotify is active
+  - Pending queue system for offline status
+  - Automatic playlist tracking
+  - New song detection and playlist addition
+  - Error handling with point refunds
 
-## Setup
+## Technical Architecture
 
-1. Create a `files/tokens.txt` in the following format:
+### Directory Structure
 ```
-AccessToken:your_access_token
-RefreshToken:your_refresh_token
-ClientID:your_client_id
+ALMOSTHADAI/
+├── files/           # Configuration and tokens
+├── src/
+    ├── commands/    # Command handling system
+    ├── data/        # Persistent storage
+    ├── redemptions/ # Channel point features
+    ├── utils/       # Helper utilities
+    └── bot.js       # Main application
 ```
 
-2. Configure the channels list in `tokenManager.js`
+### Key Components
+- `bot.js` - Core application with Twitch integration and event handling
+- `spotifyManager.js` - Handles Spotify authentication and playback control
+- `redemptionManager.js` - Manages channel point redemptions
+- `commandManager.js` - Command processing and storage
+- `tokenManager.js` - Authentication token management
 
-3. Install dependencies:
-```bash
-npm install
-```
+### Notable Features
+- Automatic token refresh system
+- Persistent queue management
+- Error recovery systems
+- Automatic Spotify device state monitoring
+- Dynamic command persistence
+- Modular architecture for easy feature expansion
 
-4. Start the bot:
-```bash
-node src/bot.js
-```
+## Authentication
+The bot requires several authentication tokens:
+- Twitch Bot Tokens
+- Twitch Broadcaster Tokens
+- Spotify API Tokens
 
-## Architecture
-- `bot.js` - Main entry point and event handlers
-- `commandManager.js` - Handles command processing and storage
-- `tokenManager.js` - Manages authentication and token refresh
-- `specialHandlers.js` - Contains special command implementations
-- `commands.json` - Default command configuration
-- `utils/` - Utility functions
+Tokens are managed automatically with refresh capability.
 
 ## Dependencies
-- tmi.js - Twitch chat integration
-- node-fetch - API requests
-- fs/path - File system operations
+- `tmi.js` - Twitch chat integration
+- `@twurple/api` - Twitch API integration
+- `spotify-web-api-node` - Spotify control
+- `node-fetch` - API requests
+- Native Node.js modules (fs, path)
+
+## Notes
+- The bot automatically handles Spotify connection state
+- Failed song requests are stored in a pending queue
+- Commands are persistently stored between sessions
+- Includes automatic error recovery systems
+- Supports dynamic command modification during runtime
