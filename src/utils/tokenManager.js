@@ -11,11 +11,22 @@ class TokenManager {
 
     readTokens() {
         try {
-            const tokenFile = fs.readFileSync(path.join(__dirname, '../files/tokens.json'), 'utf8');
+            const tokenFile = fs.readFileSync(path.join(__dirname, '../../files/tokens.json'), 'utf8');
             return JSON.parse(tokenFile);
         } catch (error) {
             console.error('* Error reading tokens file:', error);
-            return {};
+            throw new Error('Unable to read tokens.json. Make sure the file exists in the files directory.');
+        }
+    }
+
+    saveTokens() {
+        try {
+            fs.writeFileSync(
+                path.join(__dirname, '../../files/tokens.json'),
+                JSON.stringify(this.tokens, null, 2)
+            );
+        } catch (error) {
+            console.error('* Error saving tokens:', error);
         }
     }
 
@@ -59,7 +70,6 @@ class TokenManager {
                             }
                             this.tokens.lastRefreshDate = new Date().toISOString();
                             this.saveTokens();
-                            console.log(`* ${type.charAt(0).toUpperCase() + type.slice(1)} tokens refreshed successfully.`);
                             resolve(result.access_token);
                         } else {
                             reject(`* Failed to refresh ${type} tokens: ${result.message || 'Unknown error'}`);
@@ -80,33 +90,15 @@ class TokenManager {
     }
 
     async checkAndRefreshTokens() {
-        const lastRefreshDate = new Date(this.tokens.lastRefreshDate || 0);
-        const daysSinceRefresh = (new Date() - lastRefreshDate) / (1000 * 60 * 60 * 24);
-
-        if (daysSinceRefresh >= 30) {
-            console.log('* Tokens are over 30 days old. Refreshing...');
-            try {
-                await Promise.all([
-                    this.refreshToken('bot'),
-                    this.refreshToken('broadcaster'),
-                ]);
-            } catch (error) {
-                console.error('* Error refreshing tokens on startup:', error);
-            }
-        } else {
-            console.log(`* Tokens are valid. Last refreshed ${Math.floor(daysSinceRefresh)} days ago.`);
-        }
-    }
-
-    saveTokens() {
+        console.log('* Refreshing tokens on startup...');
         try {
-            fs.writeFileSync(
-                path.join(__dirname, '../files/tokens.json'),
-                JSON.stringify(this.tokens, null, 2)
-            );
-            console.log('* Tokens saved successfully.');
+            await Promise.all([
+                this.refreshToken('bot'),
+                this.refreshToken('broadcaster')
+            ]);
         } catch (error) {
-            console.error('* Error saving tokens:', error);
+            console.error('* Error refreshing tokens:', error);
+            console.error('* Detailed error:', error.message);
         }
     }
 

@@ -5,7 +5,7 @@ const specialHandlers = require('./specialHandlers');
 
 class CommandManager {
     constructor() {
-        this.commandsPath = path.join(__dirname, 'data', 'commands.json');
+        this.commandsPath = path.join(__dirname, '..', 'data', 'commands.json');
         this.loadCommands();
     }
 

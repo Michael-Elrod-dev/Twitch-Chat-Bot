@@ -1,7 +1,11 @@
 // src/bot.js
 const tmi = require('tmi.js');
-const TokenManager = require('./tokenManager');
-const CommandManager = require('./commandManager');
+const TokenManager = require('./utils/tokenManager');
+const SpotifyManager = require('./redemptions/songRequests/spotifyManager');
+const CommandManager = require('./commands/commandManager');
+const RedemptionManager = require('./redemptions/songRequests/redemptionManager');
+const handleSongRequest = require('./redemptions/songRequests/songRequest');
+
 const { ApiClient } = require('@twurple/api');
 const { EventSubWsListener } = require('@twurple/eventsub-ws');
 const { RefreshingAuthProvider } = require('@twurple/auth');
@@ -9,12 +13,13 @@ const { RefreshingAuthProvider } = require('@twurple/auth');
 class Bot {
     async init() {
         this.tokenManager = new TokenManager();
+        this.spotifyManager = new SpotifyManager(this.tokenManager);
         this.client = new tmi.client(this.tokenManager.getConfig());
-        
+
         const clientId = this.tokenManager.tokens.clientId.trim().replace(/\r?\n|\r/g, '');
         const clientSecret = this.tokenManager.tokens.clientSecret.trim().replace(/\r?\n|\r/g, '');
         const channelId = this.tokenManager.tokens.channelId?.trim();
-        
+
         // Create the auth provider with refresh callback
         const authProvider = new RefreshingAuthProvider({
             clientId,
@@ -33,121 +38,129 @@ class Bot {
                 await this.tokenManager.saveTokens();
             }
         });
-    
+
         // Add broadcaster token for EventSub
         await authProvider.addUserForToken({
             accessToken: this.tokenManager.tokens.broadcasterAccessToken,
             refreshToken: this.tokenManager.tokens.broadcasterRefreshToken,
-            scope: ['channel:read:redemptions', 'channel:manage:redemptions'],
+            scope: [
+                'channel:read:redemptions', 
+                'channel:manage:redemptions',
+                'channel:manage:rewards'
+            ],
             userId: channelId
         });
-    
+
         // Add bot token for chat
         await authProvider.addUserForToken({
             accessToken: this.tokenManager.tokens.botAccessToken,
             refreshToken: this.tokenManager.tokens.botRefreshToken,
             scope: ['chat:edit', 'chat:read']
         });
-        
+
         this.userApiClient = new ApiClient({ authProvider });
-        
-        this.listener = new EventSubWsListener({ 
+
+        this.listener = new EventSubWsListener({
             apiClient: this.userApiClient
         });
-        
+
         this.client.on('message', this.onMessageHandler.bind(this));
         this.client.on('connected', this.onConnectedHandler.bind(this));
         this.client.on('disconnected', this.onDisconnectedHandler.bind(this));
     }
 
-   constructor() {
-       this.init().catch(console.error);
-   }
+    constructor() {
+        this.init().catch(console.error);
+    }
 
-async checkPermissions() {
-    try {
-        const response = await fetch('https://id.twitch.tv/oauth2/validate', {
-            headers: {
-                'Authorization': `OAuth ${this.tokenManager.tokens.broadcasterAccessToken}`
+    async checkPermissions() {
+        try {
+            const response = await fetch('https://id.twitch.tv/oauth2/validate', {
+                headers: {
+                    'Authorization': `OAuth ${this.tokenManager.tokens.broadcasterAccessToken}`
+                }
+            });
+            const data = await response.json();
+
+            if (!data.scopes.includes('channel:read:redemptions')) {
+                console.log('* Error: Missing channel:read:redemptions scope on broadcaster token');
+                console.log('* Please regenerate your broadcaster token with the required scope');
+                return false;
             }
-        });
-        const data = await response.json();
-        
-        if (!data.scopes.includes('channel:read:redemptions')) {
-            console.log('* Error: Missing channel:read:redemptions scope on broadcaster token');
-            console.log('* Please regenerate your broadcaster token with the required scope');
+            return true;
+        } catch (error) {
+            console.error('Failed to check permissions:', error);
             return false;
         }
-        return true;
-    } catch (error) {
-        console.error('Failed to check permissions:', error);
-        return false;
     }
-}
 
-   async onMessageHandler(target, context, msg, self) {
-       if (self) return;
-       const message = msg.trim();
-       await CommandManager.handleCommand(this.client, target, context, message);
-   }
+    async onMessageHandler(target, context, msg, self) {
+        if (self) return;
+        const message = msg.trim();
+        await CommandManager.handleCommand(this.client, target, context, message);
+    }
 
-   onConnectedHandler(addr, port) {
-       console.log(`* Connected to ${addr}:${port}`);
-   }
+    onConnectedHandler(addr, port) {
+        console.log(`* Connected to ${addr}:${port}`);
+    }
 
-   async onDisconnectedHandler(reason) {
-       console.log(`* Bot disconnected: ${reason}`);
-       try {
-           await this.tokenManager.refreshToken('bot');
-           this.client.connect();
-       } catch (error) {
-           console.error('Failed to refresh token:', error);
-       }
-   }
+    async onDisconnectedHandler(reason) {
+        console.log(`* Bot disconnected: ${reason}`);
+        try {
+            await this.tokenManager.refreshToken('bot');
+            this.client.connect();
+        } catch (error) {
+            console.error('Failed to refresh token:', error);
+        }
+    }
 
-   async setupChannelPointRedemptions() {
-       try {
-           console.log('* Setting up channel point redemption listener...');
-           
-           const channelId = this.tokenManager.tokens.channelId?.trim();
-           if (!channelId) {
-               throw new Error('Channel ID not found in tokens');
-           }
+    async setupChannelPointRedemptions() {
+        try {
+            console.log('* Setting up channel point redemption listener...');
+    
+            const channelId = this.tokenManager.tokens.channelId?.trim();
+            if (!channelId) {
+                throw new Error('Channel ID not found in tokens');
+            }
+    
+            // Pass apiClient to RedemptionManager
+            this.redemptionManager = new RedemptionManager(
+                this.client, 
+                this.spotifyManager,
+                this.userApiClient
+            );
+            this.redemptionManager.registerHandler("Song Request", handleSongRequest);
+    
+            await this.listener.onChannelRedemptionAdd(channelId, async (event) => {
+                await this.redemptionManager.handleRedemption(event);
+            });
+        } catch (error) {
+            console.error('Error setting up channel point redemptions:', error);
+            console.error('Stack:', error.stack);
+        }
+    }
 
-           // Subscribe to channel point redemptions using broadcaster's token context
-           await this.listener.onChannelRedemptionAdd(channelId, (event) => {
-               console.log('* Channel Point Redemption Detected:');
-               console.log(`  User: ${event.userDisplayName}`);
-               console.log(`  Reward: ${event.rewardTitle}`);
-               console.log(`  Input: ${event.input || 'No input provided'}`);
-           });
-           
-           console.log('* Successfully set up channel point redemption listener');
-           
-       } catch (error) {
-           console.error('Error setting up channel point redemptions:', error.message);
-           console.error('Stack:', error.stack);
-       }
-   }
-
-   async initialize() {
-       try {
-           await this.client.connect();
-           
-           const hasPermissions = await this.checkPermissions();
-           if (!hasPermissions) {
-               console.log('* Skipping EventSub setup due to missing permissions');
-               return;
-           }
-
-           console.log('* Starting EventSub listener...');
-           await this.listener.start();
-           await this.setupChannelPointRedemptions();
-           console.log('* Bot initialized with EventSub support');
-       } catch (error) {
-           console.error('Error during initialization:', error);
-       }
-   }
+    async initialize() {
+        try {
+            await this.client.connect();
+    
+            const hasPermissions = await this.checkPermissions();
+            if (!hasPermissions) {
+                console.log('* Skipping EventSub setup due to missing permissions');
+                return;
+            }
+    
+            // Add this line
+            await this.spotifyManager.authenticate();
+    
+            console.log('* Starting EventSub listener...');
+            await this.listener.start();
+            await this.setupChannelPointRedemptions();
+            console.log('* Bot initialized with EventSub support');
+        } catch (error) {
+            console.error('Error during initialization:', error);
+        }
+    }
 }
 
 const bot = new Bot();
