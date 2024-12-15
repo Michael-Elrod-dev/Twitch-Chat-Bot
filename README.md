@@ -1,36 +1,6 @@
 # AlmostHadAI Twitch Bot
 
-A feature-rich Twitch chat bot built with Node.js that combines traditional chat commands with Spotify integration and channel point redemptions. The bot provides both utility functions and entertainment features for Twitch channels.
-
-## Core Features
-
-### Chat Commands
-- **Default Commands**
-  - `!anime` - Links to AniList profile
-  - `!discord` - Provides Discord server invite
-  - `!follow` - Shows follow duration for users
-  - `!uptime` - Displays stream duration
-  - `!fursona` - Generates unique fursona image using thisfursonadoesnotexist.com
-  - `!waifu` - Creates personalized anime character
-  - Non-prefix responses for "kappa" and "kekw"
-
-### Dynamic Command System
-- Moderator command management using `!commands`
-  - Add new commands: `!commands add !commandname <message>`
-  - Edit existing: `!commands edit !commandname <new message>`
-  - Remove commands: `!commands delete !commandname`
-- Persistent storage of custom commands
-- User permission levels (mod/everyone)
-
-### Spotify Integration
-- Channel point redemption for song requests
-- Automatic queue management
-- Features:
-  - Direct queue addition when Spotify is active
-  - Pending queue system for offline status
-  - Automatic playlist tracking
-  - New song detection and playlist addition
-  - Error handling with point refunds
+[Previous content remains the same until Technical Architecture]
 
 ## Technical Architecture
 
@@ -48,37 +18,75 @@ ALMOSTHADAI/
 
 ### Key Components
 - `bot.js` - Core application with Twitch integration and event handling
+  - Manages token refresh and authentication
+  - Handles EventSub WebSocket connections
+  - Coordinates between Twitch chat and channel points
+  - Initializes all subsystems (Spotify, commands, redemptions)
 - `spotifyManager.js` - Handles Spotify authentication and playback control
 - `redemptionManager.js` - Manages channel point redemptions
 - `commandManager.js` - Command processing and storage
-- `tokenManager.js` - Authentication token management
+- `tokenManager.js` - Authentication token management and refresh logic
 
-### Notable Features
-- Automatic token refresh system
-- Persistent queue management
-- Error recovery systems
-- Automatic Spotify device state monitoring
-- Dynamic command persistence
-- Modular architecture for easy feature expansion
+### Authentication System
+The bot implements a robust token management system:
+- Automatic token refresh on startup
+- Continuous token validity monitoring
+- Separate handling for bot and broadcaster tokens
+- Graceful error recovery for expired tokens
+- Token persistence between sessions
 
-## Authentication
-The bot requires several authentication tokens:
-- Twitch Bot Tokens
-- Twitch Broadcaster Tokens
-- Spotify API Tokens
+### Token Refresh Flow
+1. Initial token validation on startup
+2. Automatic refresh of expired tokens
+3. Persistent storage of new tokens
+4. Independent refresh cycles for:
+   - Bot chat tokens
+   - Broadcaster tokens
+   - Spotify access tokens
 
-Tokens are managed automatically with refresh capability.
+### Error Recovery
+The bot includes several error recovery mechanisms:
+- Automatic reconnection on disconnection
+- Token refresh on authentication failures
+- Pending queue for Spotify offline states
+- Graceful handling of API rate limits
+- Event subscription recovery
 
-## Dependencies
-- `tmi.js` - Twitch chat integration
-- `@twurple/api` - Twitch API integration
-- `spotify-web-api-node` - Spotify control
-- `node-fetch` - API requests
-- Native Node.js modules (fs, path)
+### State Management
+- Spotify playback state monitoring
+- Channel point redemption state tracking
+- Command state persistence
+- Token refresh state management
+- Connection state monitoring
 
-## Notes
-- The bot automatically handles Spotify connection state
-- Failed song requests are stored in a pending queue
-- Commands are persistently stored between sessions
-- Includes automatic error recovery systems
-- Supports dynamic command modification during runtime
+[Rest of previous content remains the same]
+
+## Setup and Configuration
+
+### Token Configuration
+Create a `tokens.json` file in the `files` directory with:
+```json
+{
+    "clientId": "your_twitch_client_id",
+    "clientSecret": "your_twitch_client_secret",
+    "channelId": "your_channel_id",
+    "botAccessToken": "your_bot_access_token",
+    "botRefreshToken": "your_bot_refresh_token",
+    "broadcasterAccessToken": "your_broadcaster_access_token",
+    "broadcasterRefreshToken": "your_broadcaster_refresh_token",
+    "spotifyClientId": "your_spotify_client_id",
+    "spotifyClientSecret": "your_spotify_client_secret"
+}
+```
+
+### Required Scopes
+- Twitch Bot: `chat:edit`, `chat:read`
+- Twitch Broadcaster: `channel:read:redemptions`, `channel:manage:redemptions`, `channel:manage:rewards`
+- Spotify: Various playback and playlist management scopes
+
+## Implementation Notes
+- Token refresh is handled automatically by the `RefreshingAuthProvider`
+- Spotify connection state is monitored every 10 seconds
+- Failed song requests are stored in a persistent pending queue
+- Commands are saved to disk automatically when modified
+- Event listeners are properly bound to maintain context

@@ -33,6 +33,17 @@
             "isDefault": true,
             "userLevel": "everyone",
             "handler": "waifu"
+        },
+        "!playlist": {
+            "response": "Here is the playlist of all songs ever requested by chat: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=764a9cc86dbd4d0c",
+            "isDefault": true,
+            "userLevel": "everyone"
+        },
+        "!song": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "currentSong"
         }
     },
     "nonPrefixCommands": {

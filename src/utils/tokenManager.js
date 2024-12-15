@@ -93,12 +93,18 @@ class TokenManager {
         console.log('* Refreshing tokens on startup...');
         try {
             await Promise.all([
-                this.refreshToken('bot'),
-                this.refreshToken('broadcaster')
+                this.refreshToken('bot').catch(error => {
+                    console.error('Failed to refresh bot token:', error);
+                    throw new Error('Bot token refresh failed');
+                }),
+                this.refreshToken('broadcaster').catch(error => {
+                    console.error('Failed to refresh broadcaster token:', error);
+                    throw new Error('Broadcaster token refresh failed');
+                })
             ]);
         } catch (error) {
-            console.error('* Error refreshing tokens:', error);
-            console.error('* Detailed error:', error.message);
+            console.error('* Critical error refreshing tokens:', error);
+            console.log('* You may need to re-authenticate with Twitch');
         }
     }
 

@@ -2,9 +2,9 @@ const { ApiClient } = require('@twurple/api');
 const { StaticAuthProvider } = require('@twurple/auth');
 
 // Your broadcaster's access token and bot's client ID
-const CLIENT_ID = '8e24bqxf7e8ckaqx628ad01r911dxu';  // Your bot's client ID
-const OAUTH_TOKEN = 'l5723gqitkrkd61voqyryek1gz0ccw'; // Broadcaster's access token
-const BROADCASTER_ID = '89468164';  // Replace with your broadcaster's user ID
+const CLIENT_ID = 'XXX';  // Your bot's client ID
+const OAUTH_TOKEN = 'XXX'; // Broadcaster's access token
+const BROADCASTER_ID = 'XXX';  // Replace with your broadcaster's user ID
 
 async function createSongRequestReward() {
     // Authenticate using broadcaster's OAuth token

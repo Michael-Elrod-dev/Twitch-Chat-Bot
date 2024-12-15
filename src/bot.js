@@ -11,66 +11,81 @@ const { EventSubWsListener } = require('@twurple/eventsub-ws');
 const { RefreshingAuthProvider } = require('@twurple/auth');
 
 class Bot {
-    async init() {
-        this.tokenManager = new TokenManager();
-        this.spotifyManager = new SpotifyManager(this.tokenManager);
-        this.client = new tmi.client(this.tokenManager.getConfig());
-
-        const clientId = this.tokenManager.tokens.clientId.trim().replace(/\r?\n|\r/g, '');
-        const clientSecret = this.tokenManager.tokens.clientSecret.trim().replace(/\r?\n|\r/g, '');
-        const channelId = this.tokenManager.tokens.channelId?.trim();
-
-        // Create the auth provider with refresh callback
-        const authProvider = new RefreshingAuthProvider({
-            clientId,
-            clientSecret,
-            onRefresh: async (userId, newTokenData) => {
-                console.log(`* Token refreshed for user ${userId}`);
-                // Update the appropriate token in tokens.json based on userId
-                if (userId === channelId) {
-                    this.tokenManager.tokens.broadcasterAccessToken = newTokenData.accessToken;
-                    this.tokenManager.tokens.broadcasterRefreshToken = newTokenData.refreshToken;
-                } else {
-                    this.tokenManager.tokens.botAccessToken = newTokenData.accessToken;
-                    this.tokenManager.tokens.botRefreshToken = newTokenData.refreshToken;
-                }
-                // Save updated tokens
-                await this.tokenManager.saveTokens();
-            }
-        });
-
-        // Add broadcaster token for EventSub
-        await authProvider.addUserForToken({
-            accessToken: this.tokenManager.tokens.broadcasterAccessToken,
-            refreshToken: this.tokenManager.tokens.broadcasterRefreshToken,
-            scope: [
-                'channel:read:redemptions', 
-                'channel:manage:redemptions',
-                'channel:manage:rewards'
-            ],
-            userId: channelId
-        });
-
-        // Add bot token for chat
-        await authProvider.addUserForToken({
-            accessToken: this.tokenManager.tokens.botAccessToken,
-            refreshToken: this.tokenManager.tokens.botRefreshToken,
-            scope: ['chat:edit', 'chat:read']
-        });
-
-        this.userApiClient = new ApiClient({ authProvider });
-
-        this.listener = new EventSubWsListener({
-            apiClient: this.userApiClient
-        });
-
-        this.client.on('message', this.onMessageHandler.bind(this));
-        this.client.on('connected', this.onConnectedHandler.bind(this));
-        this.client.on('disconnected', this.onDisconnectedHandler.bind(this));
+    constructor() {
+        // Don't call init in constructor, we'll chain it with initialize
     }
 
-    constructor() {
-        this.init().catch(console.error);
+    async init() {
+        try {
+            this.tokenManager = new TokenManager();
+            await this.tokenManager.checkAndRefreshTokens();
+            
+            this.spotifyManager = new SpotifyManager(this.tokenManager);
+            global.spotifyManager = this.spotifyManager;
+            
+            this.client = new tmi.client(this.tokenManager.getConfig());
+
+            const clientId = this.tokenManager.tokens.clientId.trim().replace(/\r?\n|\r/g, '');
+            const clientSecret = this.tokenManager.tokens.clientSecret.trim().replace(/\r?\n|\r/g, '');
+            const channelId = this.tokenManager.tokens.channelId?.trim();
+
+            if (!clientId || !clientSecret || !channelId) {
+                throw new Error('Missing required token configuration');
+            }
+
+            this.authProvider = new RefreshingAuthProvider({
+                clientId,
+                clientSecret,
+                onRefresh: async (userId, newTokenData) => {
+                    try {
+                        console.log(`* Token refreshed for user ${userId}`);
+                        if (userId === channelId) {
+                            this.tokenManager.tokens.broadcasterAccessToken = newTokenData.accessToken;
+                            this.tokenManager.tokens.broadcasterRefreshToken = newTokenData.refreshToken;
+                        } else {
+                            this.tokenManager.tokens.botAccessToken = newTokenData.accessToken;
+                            this.tokenManager.tokens.botRefreshToken = newTokenData.refreshToken;
+                        }
+                        await this.tokenManager.saveTokens();
+                    } catch (error) {
+                        console.error('Error saving refreshed tokens:', error);
+                    }
+                }
+            });
+
+            // Add broadcaster token for EventSub
+            await this.authProvider.addUserForToken({
+                accessToken: this.tokenManager.tokens.broadcasterAccessToken,
+                refreshToken: this.tokenManager.tokens.broadcasterRefreshToken,
+                scope: [
+                    'channel:read:redemptions', 
+                    'channel:manage:redemptions',
+                    'channel:manage:rewards'
+                ],
+                userId: channelId
+            });
+
+            // Add bot token for chat
+            await this.authProvider.addUserForToken({
+                accessToken: this.tokenManager.tokens.botAccessToken,
+                refreshToken: this.tokenManager.tokens.botRefreshToken,
+                scope: ['chat:edit', 'chat:read']
+            });
+
+            this.userApiClient = new ApiClient({ authProvider: this.authProvider });
+
+            this.listener = new EventSubWsListener({
+                apiClient: this.userApiClient
+            });
+
+            this.client.on('message', this.onMessageHandler.bind(this));
+            this.client.on('connected', this.onConnectedHandler.bind(this));
+            this.client.on('disconnected', this.onDisconnectedHandler.bind(this));
+
+        } catch (error) {
+            console.error('Failed to initialize bot:', error);
+            throw error;
+        }
     }
 
     async checkPermissions() {
@@ -123,7 +138,6 @@ class Bot {
                 throw new Error('Channel ID not found in tokens');
             }
     
-            // Pass apiClient to RedemptionManager
             this.redemptionManager = new RedemptionManager(
                 this.client, 
                 this.spotifyManager,
@@ -150,7 +164,6 @@ class Bot {
                 return;
             }
     
-            // Add this line
             await this.spotifyManager.authenticate();
     
             console.log('* Starting EventSub listener...');
@@ -163,7 +176,10 @@ class Bot {
     }
 }
 
+// Create and initialize the bot
 const bot = new Bot();
-bot.initialize();
+bot.init()
+    .then(() => bot.initialize())
+    .catch(console.error);
 
 module.exports = bot.client;

@@ -84,6 +84,24 @@ const specialHandlers = {
         const url = `https://arfa.dev/waifu-ed/editor_d6a3dae.html?seed=${seed}`;
         
         client.say(target, `@${username}, here is your cute waifu! ${url} AYAYA`);
+    },
+
+    async currentSong(client, target) {
+        try {
+            const spotifyManager = global.spotifyManager;
+            const currentTrack = await spotifyManager.spotifyApi.getMyCurrentPlayingTrack();
+            
+            if (currentTrack.body && currentTrack.body.item) {
+                const trackName = currentTrack.body.item.name;
+                const artistName = currentTrack.body.item.artists[0].name;
+                client.say(target, `Currently playing: ${trackName} by ${artistName}`);
+            } else {
+                client.say(target, "No song is currently playing.");
+            }
+        } catch (error) {
+            console.error('Error fetching current song:', error);
+            client.say(target, "Unable to fetch current song information.");
+        }
     }
 };
 
