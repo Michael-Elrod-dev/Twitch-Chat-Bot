@@ -7,6 +7,7 @@ const specialHandlers = {
         const channel = target.replace('#', '');
 
         try {
+            await client.tokenManager.validateToken('bot');
             const response = await fetch(`https://commands.garretcharp.com/twitch/followage/${channel}/${toUser}`);
             const followAge = await response.text();
             
@@ -26,6 +27,7 @@ const specialHandlers = {
         const channel = target.replace('#', '');
         
         try {
+            await client.tokenManager.validateToken('bot');
             const clientId = client.getOptions().options.clientId;
             const accessToken = client.getOptions().identity.password.replace('oauth:', '');
 
@@ -89,6 +91,7 @@ const specialHandlers = {
     async currentSong(client, target) {
         try {
             const spotifyManager = global.spotifyManager;
+            await spotifyManager.ensureTokenValid();
             const currentTrack = await spotifyManager.spotifyApi.getMyCurrentPlayingTrack();
             
             if (currentTrack.body && currentTrack.body.item) {

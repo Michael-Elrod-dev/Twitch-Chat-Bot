@@ -30,6 +30,26 @@ class TokenManager {
         }
     }
 
+    async validateToken(type = 'bot') {
+        try {
+            const token = type === 'bot' ? this.tokens.botAccessToken : this.tokens.broadcasterAccessToken;
+            const response = await fetch('https://id.twitch.tv/oauth2/validate', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                await this.refreshToken(type);
+                return true;
+            }
+            return true;
+        } catch (error) {
+            console.error(`Token validation failed for ${type}:`, error);
+            return false;
+        }
+    }
+
     async refreshToken(type = 'bot') {
         const refreshToken = type === 'bot' ? this.tokens.botRefreshToken : this.tokens.broadcasterRefreshToken;
         const postData = new URLSearchParams({
@@ -68,7 +88,6 @@ class TokenManager {
                                 this.tokens.broadcasterAccessToken = result.access_token;
                                 this.tokens.broadcasterRefreshToken = result.refresh_token;
                             }
-                            this.tokens.lastRefreshDate = new Date().toISOString();
                             this.saveTokens();
                             resolve(result.access_token);
                         } else {

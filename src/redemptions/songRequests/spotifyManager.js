@@ -158,6 +158,7 @@ class SpotifyManager {
 
     async getPlaybackState() {
         try {
+            await this.ensureTokenValid();
             const state = await this.spotifyApi.getMyCurrentPlaybackState();
             if (!state.body || !state.body.device) {
                 return 'CLOSED';
@@ -216,6 +217,7 @@ class SpotifyManager {
         if (this.requestsPlaylistId) return this.requestsPlaylistId;
 
         try {
+            await this.ensureTokenValid();
             // Get user's playlists
             const playlists = await this.spotifyApi.getUserPlaylists();
             const requestsPlaylist = playlists.body.items.find(p => p.name === 'Chat Song Requests');
@@ -239,6 +241,7 @@ class SpotifyManager {
 
     async addToRequestsPlaylist(trackUri) {
         try {
+            await this.ensureTokenValid();
             const playlistId = await this.getOrCreateRequestsPlaylist();
 
             // Check if song already exists in playlist

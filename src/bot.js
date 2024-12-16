@@ -12,7 +12,7 @@ const { RefreshingAuthProvider } = require('@twurple/auth');
 
 class Bot {
     constructor() {
-        // Don't call init in constructor, we'll chain it with initialize
+        // Don't call init in constructor, chain it with initialize
     }
 
     async init() {
@@ -24,6 +24,7 @@ class Bot {
             global.spotifyManager = this.spotifyManager;
             
             this.client = new tmi.client(this.tokenManager.getConfig());
+            this.client.tokenManager = this.tokenManager;
 
             const clientId = this.tokenManager.tokens.clientId.trim().replace(/\r?\n|\r/g, '');
             const clientSecret = this.tokenManager.tokens.clientSecret.trim().replace(/\r?\n|\r/g, '');
@@ -90,13 +91,14 @@ class Bot {
 
     async checkPermissions() {
         try {
+            await this.tokenManager.validateToken('broadcaster');
             const response = await fetch('https://id.twitch.tv/oauth2/validate', {
                 headers: {
-                    'Authorization': `OAuth ${this.tokenManager.tokens.broadcasterAccessToken}`
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`
                 }
             });
             const data = await response.json();
-
+    
             if (!data.scopes.includes('channel:read:redemptions')) {
                 console.log('* Error: Missing channel:read:redemptions scope on broadcaster token');
                 console.log('* Please regenerate your broadcaster token with the required scope');
@@ -122,7 +124,7 @@ class Bot {
     async onDisconnectedHandler(reason) {
         console.log(`* Bot disconnected: ${reason}`);
         try {
-            await this.tokenManager.refreshToken('bot');
+            await this.tokenManager.validateToken('bot');
             this.client.connect();
         } catch (error) {
             console.error('Failed to refresh token:', error);
@@ -133,6 +135,7 @@ class Bot {
         try {
             console.log('* Setting up channel point redemption listener...');
     
+            await this.tokenManager.validateToken('broadcaster');
             const channelId = this.tokenManager.tokens.channelId?.trim();
             if (!channelId) {
                 throw new Error('Channel ID not found in tokens');
