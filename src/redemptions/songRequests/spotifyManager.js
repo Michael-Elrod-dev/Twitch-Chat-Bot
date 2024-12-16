@@ -7,7 +7,7 @@ class SpotifyManager {
         this.spotifyApi = new SpotifyWebApi({
             clientId: this.tokenManager.tokens.spotifyClientId,
             clientSecret: this.tokenManager.tokens.spotifyClientSecret,
-            redirectUri: 'http://localhost:3000/callback'
+            redirectUri: 'http://127.0.0.1:3000/callback'
         });
 
         // Set tokens if we have them

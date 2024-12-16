@@ -22,6 +22,7 @@ class Bot {
             await this.tokenManager.checkAndRefreshTokens();
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
+            await this.spotifyManager.authenticate();
             global.spotifyManager = this.spotifyManager;
             
             this.client = new tmi.client(this.tokenManager.getConfig());
@@ -168,9 +169,7 @@ class Bot {
                 console.log('* Skipping EventSub setup due to missing permissions');
                 return;
             }
-    
-            await this.spotifyManager.authenticate();
-    
+        
             console.log('* Starting EventSub listener...');
             await this.listener.start();
             await this.setupChannelPointRedemptions();
@@ -183,8 +182,16 @@ class Bot {
 
 // Create and initialize the bot
 const bot = new Bot();
-bot.init()
-    .then(() => bot.initialize())
-    .catch(console.error);
+async function startBot() {
+    try {
+        await bot.init();
+        await bot.initialize();
+    } catch (error) {
+        console.error('Failed to start bot:', error);
+        process.exit(1);
+    }
+}
+
+startBot();
 
 module.exports = bot.client;
