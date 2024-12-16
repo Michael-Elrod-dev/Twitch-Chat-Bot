@@ -26,6 +26,8 @@ ALMOSTHADAI/
 - `redemptionManager.js` - Manages channel point redemptions
 - `commandManager.js` - Command processing and storage
 - `tokenManager.js` - Authentication token management and refresh logic
+- `quoteManager.js` - Manages saving and retrieving chat quotes
+- `handleQuote.js` - Processes channel point quote redemptions
 
 ### Authentication System
 The bot implements a robust token management system:
@@ -58,6 +60,7 @@ The bot includes several error recovery mechanisms:
 - Command state persistence
 - Token refresh state management
 - Connection state monitoring
+- Quote storage and retrieval system
 
 [Rest of previous content remains the same]
 

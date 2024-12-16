@@ -44,6 +44,12 @@
             "isDefault": true,
             "userLevel": "everyone",
             "handler": "currentSong"
+        },
+        "!quote": {
+            "response": null,
+            "isDefault": true,
+            "userLevel": "everyone",
+            "handler": "quoteHandler"
         }
     },
     "nonPrefixCommands": {

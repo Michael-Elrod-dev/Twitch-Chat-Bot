@@ -5,6 +5,7 @@ const SpotifyManager = require('./redemptions/songRequests/spotifyManager');
 const CommandManager = require('./commands/commandManager');
 const RedemptionManager = require('./redemptions/songRequests/redemptionManager');
 const handleSongRequest = require('./redemptions/songRequests/songRequest');
+const handleQuote = require('./redemptions/quotes/handleQuote');
 
 const { ApiClient } = require('@twurple/api');
 const { EventSubWsListener } = require('@twurple/eventsub-ws');
@@ -147,6 +148,7 @@ class Bot {
                 this.userApiClient
             );
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
+            this.redemptionManager.registerHandler("Add a quote", handleQuote);
     
             await this.listener.onChannelRedemptionAdd(channelId, async (event) => {
                 await this.redemptionManager.handleRedemption(event);

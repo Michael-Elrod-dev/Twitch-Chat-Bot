@@ -1,5 +1,6 @@
 // src/specialHandlers.js
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const QuoteManager = require('../redemptions/quotes/quoteManager');
 
 const specialHandlers = {
     async followAge(client, target, context, args) {
@@ -105,6 +106,32 @@ const specialHandlers = {
             console.error('Error fetching current song:', error);
             client.say(target, "Unable to fetch current song information.");
         }
+    },
+
+    async quoteHandler(client, target, context, args) {
+        const quoteManager = new QuoteManager();
+        const totalQuotes = quoteManager.getTotalQuotes();
+        
+        if (totalQuotes === 0) {
+            client.say(target, "No quotes saved yet!");
+            return;
+        }
+    
+        let quote;
+        if (args[0]) {
+            const id = parseInt(args[0]);
+            quote = quoteManager.getQuoteById(id);
+            
+            if (!quote) {
+                client.say(target, `Quote #${id} not found!`);
+                return;
+            }
+        } else {
+            quote = quoteManager.getRandomQuote();
+        }
+    
+        const year = new Date(quote.savedAt).getFullYear();
+        client.say(target, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
     }
 };
 
