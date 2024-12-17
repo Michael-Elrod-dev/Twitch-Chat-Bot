@@ -100,7 +100,7 @@ const specialHandlers = {
                 const artistName = currentTrack.body.item.artists[0].name;
                 client.say(target, `Currently playing: ${trackName} by ${artistName}`);
             } else {
-                client.say(target, "No song is currently playing.");
+                client.say(target, "No song is currently playing in Spotify.");
             }
         } catch (error) {
             console.error('Error fetching current song:', error);
