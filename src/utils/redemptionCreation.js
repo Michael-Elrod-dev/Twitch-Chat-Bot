@@ -33,11 +33,11 @@ async function createChannelPointReward(rewardConfig) {
 
 // Example usage: specifying all fields directly, even if disabled
 createChannelPointReward({
-    title: 'Add a quote',
-    prompt: "Add a !quote from either stream or something someone said in chat. The format should be:\n'What was said in quotes' - Who said it",
-    cost: 1000,
+    title: 'MS paint',
+    prompt: "I'll draw anything you want in MS paint just for you",
+    cost: 2000,
     isEnabled: true,
-    backgroundColor: '#E69900',
+    backgroundColor: '#000000',
     userInputRequired: true,
     shouldRedemptionsSkipRequestQueue: false,
 

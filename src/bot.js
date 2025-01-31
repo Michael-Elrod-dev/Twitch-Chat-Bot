@@ -81,6 +81,18 @@ class Bot {
                 apiClient: this.userApiClient
             });
 
+            this.listener.onDisconnect((_, reason) => {
+                console.error(`* EventSub disconnected: ${reason}`);
+            });
+            
+            this.listener.onFailure((_, error) => {
+                console.error('* EventSub connection failure:', error);
+            });
+            
+            this.listener.onReconnect(() => {
+                console.log('* EventSub attempting to reconnect');
+            });
+
             this.client.on('message', this.onMessageHandler.bind(this));
             this.client.on('connected', this.onConnectedHandler.bind(this));
             this.client.on('disconnected', this.onDisconnectedHandler.bind(this));
@@ -152,6 +164,12 @@ class Bot {
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
     
             await this.listener.onChannelRedemptionAdd(channelId, async (event) => {
+                console.log('* Raw redemption event received:', {
+                    timestamp: new Date().toISOString(),
+                    title: event.rewardTitle,
+                    user: event.userDisplayName,
+                    status: event.status
+                });
                 await this.redemptionManager.handleRedemption(event);
             });
         } catch (error) {
