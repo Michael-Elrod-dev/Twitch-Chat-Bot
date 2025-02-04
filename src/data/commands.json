@@ -50,6 +50,11 @@
             "handler": "currentSong",
             "userLevel": "everyone"
         },
+        "!lastsong": {
+            "response": null,
+            "handler": "lastSong",
+            "userLevel": "everyone"
+        },
         "!quote": {
             "response": null,
             "handler": "quoteHandler",

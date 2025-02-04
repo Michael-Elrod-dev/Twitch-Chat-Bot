@@ -19,13 +19,14 @@ class SpotifyManager {
         this.queueManager = new QueueManager();
         this.lastPlaybackState = 'NONE';
         this.startPlaybackMonitoring();
+        this.lastPlayedTrack = null;
+        this.startLastSongTracking();
     }
 
     startPlaybackMonitoring() {
         // Set initial state
         this.lastPlaybackState = 'NONE';
         
-        // Check every 10 seconds
         setInterval(async () => {
             try {
                 const currentState = await this.getPlaybackState();
@@ -45,7 +46,34 @@ class SpotifyManager {
             } catch (error) {
                 console.error('Error monitoring playback:', error);
             }
-        }, 10000);
+        }, 5000);
+    }
+    
+    startLastSongTracking() {
+        setInterval(async () => {
+            try {
+                await this.ensureTokenValid();
+                const currentTrack = await this.spotifyApi.getMyCurrentPlayingTrack();
+                
+                if (currentTrack.body && currentTrack.body.item) {
+                    // If current track is different from what we last stored
+                    if (!this.lastPlayedTrack || 
+                        this.lastPlayedTrack.id !== currentTrack.body.item.id) {
+                        // Store the previous track before updating
+                        if (this.lastPlayedTrack) {
+                            this.previousTrack = {
+                                name: this.lastPlayedTrack.name,
+                                artist: this.lastPlayedTrack.artists[0].name
+                            };
+                        }
+                        // Update current track
+                        this.lastPlayedTrack = currentTrack.body.item;
+                    }
+                }
+            } catch (error) {
+                console.error('Error tracking last song:', error);
+            }
+        }, 5000);
     }
     
     async processPendingQueue() {

@@ -108,6 +108,22 @@ const specialHandlers = {
         }
     },
 
+    async lastSong(client, target) {
+        try {
+            const spotifyManager = global.spotifyManager;
+            
+            if (spotifyManager.previousTrack) {
+                const { name, artist } = spotifyManager.previousTrack;
+                client.say(target, `Last played song: ${name} by ${artist}`);
+            } else {
+                client.say(target, "No previous song information available yet.");
+            }
+        } catch (error) {
+            console.error('Error fetching last song:', error);
+            client.say(target, "Unable to fetch last song information.");
+        }
+    },
+
     async quoteHandler(client, target, context, args) {
         const quoteManager = new QuoteManager();
         const totalQuotes = quoteManager.getTotalQuotes();
