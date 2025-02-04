@@ -3,7 +3,8 @@ const tmi = require('tmi.js');
 const TokenManager = require('./utils/tokenManager');
 const SpotifyManager = require('./redemptions/songRequests/spotifyManager');
 const CommandManager = require('./commands/commandManager');
-const RedemptionManager = require('./redemptions/songRequests/redemptionManager');
+const RedemptionManager = require('./redemptions/redemptionManager');
+const ChatManager = require('./chat-messages/chatManager');
 const handleSongRequest = require('./redemptions/songRequests/songRequest');
 const handleQuote = require('./redemptions/quotes/handleQuote');
 
@@ -24,6 +25,9 @@ class Bot {
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
             global.spotifyManager = this.spotifyManager;
+
+            this.chatManager = new ChatManager();
+            global.chatManager = this.chatManager;
             
             this.client = new tmi.client(this.tokenManager.getConfig());
             this.client.tokenManager = this.tokenManager;
@@ -81,18 +85,6 @@ class Bot {
                 apiClient: this.userApiClient
             });
 
-            this.listener.onDisconnect((_, reason) => {
-                console.error(`* EventSub disconnected: ${reason}`);
-            });
-            
-            this.listener.onFailure((_, error) => {
-                console.error('* EventSub connection failure:', error);
-            });
-            
-            this.listener.onReconnect(() => {
-                console.log('* EventSub attempting to reconnect');
-            });
-
             this.client.on('message', this.onMessageHandler.bind(this));
             this.client.on('connected', this.onConnectedHandler.bind(this));
             this.client.on('disconnected', this.onDisconnectedHandler.bind(this));
@@ -127,8 +119,20 @@ class Bot {
 
     async onMessageHandler(target, context, msg, self) {
         if (self) return;
+            
+        // Add check for redemption messages
+        if (context['custom-reward-id']) {
+            return;
+        }
+        
         const message = msg.trim();
-        await CommandManager.handleCommand(this.client, target, context, message);
+        
+        if (message.startsWith('!')) {
+            await this.chatManager.incrementMessageCount(context.username, 'command');
+            await CommandManager.handleCommand(this.client, target, context, message);
+        } else {
+            await this.chatManager.incrementMessageCount(context.username, 'message');
+        }
     }
 
     onConnectedHandler(addr, port) {
@@ -148,13 +152,13 @@ class Bot {
     async setupChannelPointRedemptions() {
         try {
             console.log('* Setting up channel point redemption listener...');
-    
+     
             await this.tokenManager.validateToken('broadcaster');
             const channelId = this.tokenManager.tokens.channelId?.trim();
             if (!channelId) {
                 throw new Error('Channel ID not found in tokens');
             }
-    
+     
             this.redemptionManager = new RedemptionManager(
                 this.client, 
                 this.spotifyManager,
@@ -162,14 +166,18 @@ class Bot {
             );
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
-    
+     
             await this.listener.onChannelRedemptionAdd(channelId, async (event) => {
+                // Track all redemptions
+                await this.chatManager.incrementMessageCount(event.userDisplayName, 'redemption');
+    
                 console.log('* Raw redemption event received:', {
                     timestamp: new Date().toISOString(),
                     title: event.rewardTitle,
                     user: event.userDisplayName,
                     status: event.status
                 });
+                
                 await this.redemptionManager.handleRedemption(event);
             });
         } catch (error) {

@@ -1,67 +1,81 @@
 {
     "commands": {
+        "!command": {
+            "response": null,
+            "handler": "modCommands",
+            "userLevel": "mod"
+        },
+        "!commands": {
+            "response": "See the bot commands at https://github.com/Michael-Elrod-dev/Twitch-Chat-Bot/wiki",
+            "handler": null,
+            "userLevel": "everyone"
+        },
         "!anime": {
             "response": "https://anilist.co/user/AlmostHadMe/animelist",
-            "isDefault": true,
+            "handler": null,
             "userLevel": "everyone"
         },
         "!discord": {
             "response": "https://discord.gg/XEwUXAv",
-            "isDefault": true,
+            "handler": null,
             "userLevel": "everyone"
         },
         "!follow": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "followAge"
+            "handler": "followAge",
+            "userLevel": "everyone"
         },
         "!uptime": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "uptime"
+            "handler": "uptime",
+            "userLevel": "everyone"
         },
         "!fursona": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "fursona"
+            "handler": "fursona",
+            "userLevel": "everyone"
         },
         "!waifu": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "waifu"
+            "handler": "waifu",
+            "userLevel": "everyone"
         },
         "!playlist": {
             "response": "Here is the playlist of all songs ever requested by chat: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=764a9cc86dbd4d0c",
-            "isDefault": true,
+            "handler": null,
             "userLevel": "everyone"
         },
         "!song": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "currentSong"
+            "handler": "currentSong",
+            "userLevel": "everyone"
         },
         "!quote": {
             "response": null,
-            "isDefault": true,
-            "userLevel": "everyone",
-            "handler": "quoteHandler"
+            "handler": "quoteHandler",
+            "userLevel": "everyone"
+        },
+        "!chats": {
+            "response": null,
+            "handler": "combinedStats",
+            "userLevel": "everyone"
+        },
+        "!topchats": {
+            "response": null,
+            "handler": "topStats",
+            "userLevel": "everyone"
         }
     },
     "nonPrefixCommands": {
         "kappa": {
             "response": "Kappa",
-            "isDefault": true,
+            "handler": null,
             "userLevel": "everyone"
         },
         "kekw": {
             "response": "KEKW",
-            "isDefault": true,
+            "handler": null,
             "userLevel": "everyone"
         }
     }
-}
+ }

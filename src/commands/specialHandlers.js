@@ -118,7 +118,7 @@ const specialHandlers = {
         }
     
         let quote;
-        if (args[0]) {
+        if (args.length > 0 && !isNaN(args[0])) {
             const id = parseInt(args[0]);
             quote = quoteManager.getQuoteById(id);
             
@@ -132,6 +132,37 @@ const specialHandlers = {
     
         const year = new Date(quote.savedAt).getFullYear();
         client.say(target, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
+    },
+
+    async combinedStats(client, target, context, args) {
+        try {
+            const chatManager = global.chatManager;
+            const requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
+            
+            const messages = chatManager.getUserMessages(requestedUser);
+            const commands = chatManager.getUserCommands(requestedUser);
+            const redemptions = chatManager.getUserRedemptions(requestedUser);
+            const total = messages + commands + redemptions;
+            
+            client.say(target, 
+                `@${requestedUser} has ${total} total interactions ` +
+                `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
+            );
+        } catch (error) {
+            console.error('Error in combinedStats:', error);
+            client.say(target, 'An error occurred while fetching chat stats.');
+        }
+    },
+    
+    async topStats(client, target, context, args) {
+        try {
+            const chatManager = global.chatManager;
+            const topUsers = chatManager.getTopFiveUsers();
+            client.say(target, `Top 5 Most Active Chatters: ${topUsers.join(' | ')}`);
+        } catch (error) {
+            console.error('Error in topStats:', error);
+            client.say(target, 'An error occurred while fetching top stats.');
+        }
     }
 };
 

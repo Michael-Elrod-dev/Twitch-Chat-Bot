@@ -39,39 +39,37 @@ class CommandManager {
     }
 
     async handleCommand(client, target, context, message) {
-        // Handle non-prefix commands
-        if (!message.startsWith('!')) {
-            const command = this.data.nonPrefixCommands[message.toLowerCase()];
-            if (command) {
-                client.say(target, command.response);
-            }
-            return;
-        }
-
-        // Handle commands command
-        if (message.startsWith('!commands')) {
+        if (message === '!command' || message.startsWith('!command ')) {
             // Only allow mods and broadcaster to use this command
             if (!context.mod && !context.badges?.broadcaster) return;
             
             const args = message.split(' ');
-            if (args.length < 3) {
-                client.say(target, 'Usage: !commands <add/edit/delete> !commandname [message]');
+            
+            // If just !command with no args, show usage
+            if (args.length === 1) {
+                client.say(target, 'Usage: !command <add/edit/delete> !commandname [message]');
                 return;
             }
-
+     
             const action = args[1].toLowerCase();
+            
+            // If has action but missing command name
+            if (args.length < 3) {
+                client.say(target, 'Usage: !command <add/edit/delete> !commandname [message]');
+                return;
+            }
+     
             const commandName = args[2].toLowerCase();
             
             if (!commandName.startsWith('!')) {
                 client.say(target, 'Command must start with !');
                 return;
             }
-
+     
             switch (action) {
-                case 'add':
-                case 'new': {
+                case 'add': {
                     if (args.length < 4) {
-                        client.say(target, 'Usage: !commands add !commandname <message>');
+                        client.say(target, 'Usage: !command add !commandname <message>');
                         return;
                     }
                     const response = args.slice(3).join(' ');
@@ -84,62 +82,56 @@ class CommandManager {
                 }
                 case 'edit': {
                     if (args.length < 4) {
-                        client.say(target, 'Usage: !commands edit !commandname <new message>');
+                        client.say(target, 'Usage: !command edit !commandname <new message>');
                         return;
                     }
                     const response = args.slice(3).join(' ');
                     if (this.editCommand(commandName, response)) {
                         client.say(target, `Command ${commandName} has been updated.`);
                     } else {
-                        client.say(target, `Cannot edit ${commandName} (command doesn't exist or is a default command).`);
+                        client.say(target, `Cannot edit ${commandName} (command doesn't exist or has special handling).`);
                     }
                     break;
                 }
-                case 'delete':
-                case 'remove': {
+                case 'delete': {
                     if (this.deleteCommand(commandName)) {
                         client.say(target, `Command ${commandName} has been deleted.`);
                     } else {
-                        client.say(target, `Cannot delete ${commandName} (command doesn't exist or is a default command).`);
+                        client.say(target, `Cannot delete ${commandName} (command doesn't exist or has special handling).`);
                     }
                     break;
                 }
                 default:
-                    client.say(target, 'Invalid action. Use !commands <add/edit/delete> !commandname [message]');
+                    client.say(target, 'Invalid action. Use !command <add/edit/delete> !commandname [message]');
             }
             return;
         }
-
-        // Handle regular commands
+     
         const args = message.slice(1).split(' ');
         const commandName = '!' + args[0].toLowerCase();
         const command = this.data.commands[commandName];
-
+     
         if (!command) return;
-
-        // Check user level
         if (command.userLevel === 'mod' && !context.mod && !context.badges?.broadcaster) return;
-
+     
         try {
             if (command.handler && specialHandlers[command.handler]) {
-                // Handle special commands
                 await specialHandlers[command.handler](client, target, context, args.slice(1));
             } else {
-                // Handle basic response commands
                 client.say(target, command.response);
             }
         } catch (error) {
             console.error(`Error executing command ${commandName}:`, error);
         }
-    }
+     }
 
-    addCommand(name, response, userLevel = 'everyone', isDefault = false) {
+    addCommand(name, response, userLevel = 'everyone') {
         if (this.data.commands[name]) {
-            return false;  // Command already exists
+            return false;
         }
         this.data.commands[name] = {
             response,
-            isDefault,
+            handler: null,
             userLevel
         };
         this.saveCommands();
@@ -148,7 +140,7 @@ class CommandManager {
 
     editCommand(name, response) {
         if (this.data.commands[name]) {
-            if (this.data.commands[name].isDefault) {
+            if (this.data.commands[name].handler) {
                 return false;
             }
             this.data.commands[name].response = response;
@@ -159,7 +151,7 @@ class CommandManager {
     }
 
     deleteCommand(name) {
-        if (this.data.commands[name] && !this.data.commands[name].isDefault) {
+        if (this.data.commands[name] && !this.data.commands[name].handler) {
             delete this.data.commands[name];
             this.saveCommands();
             return true;
