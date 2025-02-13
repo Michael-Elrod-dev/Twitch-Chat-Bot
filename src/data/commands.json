@@ -69,6 +69,16 @@
             "response": null,
             "handler": "topStats",
             "userLevel": "everyone"
+        },
+        "!songson": {
+            "response": null,
+            "handler": "toggleSongs",
+            "userLevel": "mod"
+        },
+        "!songsoff": {
+            "response": null,
+            "handler": "toggleSongs",
+            "userLevel": "mod"
         }
     },
     "nonPrefixCommands": {
@@ -83,4 +93,4 @@
             "userLevel": "everyone"
         }
     }
- }
+}

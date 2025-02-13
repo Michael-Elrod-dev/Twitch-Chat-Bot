@@ -80,10 +80,11 @@ class Bot {
             });
 
             this.userApiClient = new ApiClient({ authProvider: this.authProvider });
-
             this.listener = new EventSubWsListener({
                 apiClient: this.userApiClient
             });
+            
+            this.client.tokenManager.apiClient = this.userApiClient;
 
             this.client.on('message', this.onMessageHandler.bind(this));
             this.client.on('connected', this.onConnectedHandler.bind(this));

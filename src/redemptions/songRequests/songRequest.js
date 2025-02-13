@@ -31,6 +31,26 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
             return;
         }
 
+        // Temporary YouTube link handling
+        if (input.includes('youtube.com/watch?v=') || input.includes('youtu.be/')) {
+            console.log('* YouTube link detected - feature not yet implemented');
+            try {
+                await apiClient.channelPoints.updateRedemptionStatusByIds(
+                    event.broadcasterId,
+                    event.rewardId,
+                    [event.id],
+                    'CANCELED'
+                );
+                
+                await client.say(`#${event.broadcasterDisplayName}`, 
+                    `@${event.userDisplayName} YouTube links are not supported yet - please use Spotify links only! Your points have been refunded.`);
+                return;
+            } catch (refundError) {
+                console.error('* Error refunding points:', refundError);
+                throw refundError;
+            }
+        }
+
         if (!input.includes('spotify.com/track/')) {
             console.log('* Redemption cancelled: Invalid Spotify link');
             try {

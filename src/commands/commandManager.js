@@ -116,7 +116,7 @@ class CommandManager {
      
         try {
             if (command.handler && specialHandlers[command.handler]) {
-                await specialHandlers[command.handler](client, target, context, args.slice(1));
+                await specialHandlers[command.handler](client, target, context, args.slice(1), commandName);
             } else {
                 client.say(target, command.response);
             }

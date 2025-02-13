@@ -179,6 +179,48 @@ const specialHandlers = {
             console.error('Error in topStats:', error);
             client.say(target, 'An error occurred while fetching top stats.');
         }
+    },
+
+    async toggleSongs(client, target, context, args, command) {
+        try {
+            if (!context.mod && !context.badges?.broadcaster) return;
+    
+            const channelId = client.tokenManager.tokens.channelId?.trim();
+            const apiClient = client.tokenManager.apiClient;
+    
+            if (!apiClient) {
+                console.error('API client not found');
+                client.say(target, 'Error: Could not access Twitch API');
+                return;
+            }
+    
+            // Get all channel rewards
+            const rewards = await apiClient.channelPoints.getCustomRewards(channelId);
+            const songReward = rewards.find(reward => reward.title.toLowerCase() === "song request");
+    
+            if (!songReward) {
+                client.say(target, "Could not find Song Request reward!");
+                return;
+            }
+    
+            const enable = command === '!songson';
+            
+            // Check if the reward is already in the desired state
+            if (songReward.isEnabled === enable) {
+                client.say(target, `Song requests are already turned ${enable ? 'on' : 'off'}`);
+                return;
+            }
+    
+            // Update the reward state
+            await apiClient.channelPoints.updateCustomReward(channelId, songReward.id, {
+                isEnabled: enable
+            });
+    
+            client.say(target, `Song requests have been turned ${enable ? 'on' : 'off'}`);
+        } catch (error) {
+            console.error('Error toggling songs:', error);
+            client.say(target, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
+        }
     }
 };
 
