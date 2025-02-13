@@ -1,6 +1,6 @@
 # AlmostHadAI Twitch Bot
 
-[Previous content remains the same until Technical Architecture]
+Needs updating
 
 ## Technical Architecture
 
