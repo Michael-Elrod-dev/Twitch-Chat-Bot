@@ -33,9 +33,9 @@ async function createChannelPointReward(rewardConfig) {
 
 // Example usage: specifying all fields directly, even if disabled
 createChannelPointReward({
-    title: 'MS paint',
-    prompt: "I'll draw anything you want in MS paint just for you",
-    cost: 2000,
+    title: 'Skip song queue',
+    prompt: "Share a Spotify link to add to the front of the queue skipping everyone else",
+    cost: 200,
     isEnabled: true,
     backgroundColor: '#000000',
     userInputRequired: true,

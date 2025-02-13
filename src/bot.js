@@ -20,7 +20,7 @@ class Bot {
     async init() {
         try {
             this.tokenManager = new TokenManager();
-            await this.tokenManager.checkAndRefreshTokens();
+            // await this.tokenManager.checkAndRefreshTokens();
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
@@ -166,6 +166,7 @@ class Bot {
                 this.userApiClient
             );
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
+            this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
      
             await this.listener.onChannelRedemptionAdd(channelId, async (event) => {

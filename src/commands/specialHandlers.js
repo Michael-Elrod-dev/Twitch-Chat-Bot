@@ -221,6 +221,94 @@ const specialHandlers = {
             console.error('Error toggling songs:', error);
             client.say(target, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
         }
+    },
+
+    async nextSong(client, target) {
+        try {
+            const spotifyManager = global.spotifyManager;
+            const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+            
+            if (pendingTracks.length === 0) {
+                client.say(target, "There are no songs in the queue.");
+                return;
+            }
+    
+            const nextTrack = pendingTracks[0];
+            client.say(target, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
+        } catch (error) {
+            console.error('Error fetching next song:', error);
+            client.say(target, "Unable to fetch next song information.");
+        }
+    },
+
+    async queueInfo(client, target, context, args) {
+        try {
+            const spotifyManager = global.spotifyManager;
+            const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+            
+            if (pendingTracks.length === 0) {
+                client.say(target, "The queue is currently empty.");
+                return;
+            }
+    
+            // Determine which user to look up
+            const requestedUser = args[0] ? args[0].replace('@', '').toLowerCase() : context.username.toLowerCase();
+            
+            // Find all positions where the user has songs
+            const userPositions = pendingTracks
+                .map((track, index) => ({ position: index + 1, requestedBy: track.requestedBy }))
+                .filter(track => track.requestedBy.toLowerCase() === requestedUser)
+                .map(track => track.position);
+    
+            // Create response message
+            let response = `Queue length: ${pendingTracks.length} song${pendingTracks.length !== 1 ? 's' : ''}`;
+            
+            if (userPositions.length > 0) {
+                response += ` | ${requestedUser}'s songs are in position${userPositions.length !== 1 ? 's' : ''}: ${userPositions.join(', ')}`;
+            } else {
+                response += ` | ${requestedUser} has no songs in queue`;
+            }
+    
+            client.say(target, response);
+        } catch (error) {
+            console.error('Error fetching queue information:', error);
+            client.say(target, "Unable to fetch queue information.");
+        }
+    },
+
+    async skipSong(client, target, context) {
+        // Only allow mods and broadcaster
+        if (!context.mod && !context.badges?.broadcaster) return;
+    
+        try {
+            const spotifyManager = global.spotifyManager;
+            await spotifyManager.ensureTokenValid();
+    
+            // Get current playback state
+            const state = await spotifyManager.getPlaybackState();
+            if (state === 'CLOSED') {
+                client.say(target, "Spotify is not currently active.");
+                return;
+            }
+    
+            // Check if there's a song in the queue before skipping
+            const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+            if (pendingTracks.length > 0) {
+                // Add next song to Spotify queue before skipping
+                const nextTrack = pendingTracks[0];
+                await spotifyManager.spotifyApi.addToQueue(nextTrack.uri);
+                spotifyManager.queueManager.removeFirstTrack();
+                console.log(`* Added next track to queue before skip: ${nextTrack.name} by ${nextTrack.artist}`);
+            }
+    
+            // Skip the current song
+            await spotifyManager.spotifyApi.skipToNext();
+            client.say(target, "Skipped to next song!");
+    
+        } catch (error) {
+            console.error('Error skipping song:', error);
+            client.say(target, "Unable to skip song. Make sure Spotify is active.");
+        }
     }
 };
 

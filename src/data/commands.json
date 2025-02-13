@@ -45,7 +45,7 @@
             "handler": null,
             "userLevel": "everyone"
         },
-        "!song": {
+        "!currentsong": {
             "response": null,
             "handler": "currentSong",
             "userLevel": "everyone"
@@ -78,6 +78,21 @@
         "!songsoff": {
             "response": null,
             "handler": "toggleSongs",
+            "userLevel": "mod"
+        },
+        "!nextsong": {
+            "response": null,
+            "handler": "nextSong",
+            "userLevel": "everyone"
+        },
+        "!queue": {
+            "response": null,
+            "handler": "queueInfo",
+            "userLevel": "everyone"
+        },
+        "!skipsong": {
+            "response": null,
+            "handler": "skipSong",
             "userLevel": "mod"
         }
     },

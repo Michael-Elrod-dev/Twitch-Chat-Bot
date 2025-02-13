@@ -11,6 +11,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
         console.log(`* Song Request: ${event.input || 'No input provided'}`);
 
         const input = event.input.trim();
+        const isPriorityRequest = event.rewardTitle.toLowerCase().includes('skip song queue');
         
         if (!input) {
             console.log('* Redemption cancelled: No input provided');
@@ -55,14 +56,12 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
         console.log('* Extracted track URI:', trackUri);
 
         try {
-            // Get track info first
             console.log('* Fetching track info from Spotify...');
             const trackInfo = await spotifyManager.spotifyApi.getTrack(trackId);
             const trackName = trackInfo.body.name;
             const artistName = trackInfo.body.artists[0].name;
             console.log('* Track info retrieved:', { trackName, artistName });
 
-            // Add to history playlist first
             let wasAddedToPlaylist = false;
             try {
                 console.log('* Attempting to add to history playlist...');
@@ -72,27 +71,26 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                 console.error('* Error adding to history playlist:', playlistError);
             }
 
-            // Try to add to queue (or pending queue)
-            try {
-                console.log('* Attempting to add to Spotify queue...');
-                await spotifyManager.addToQueue(trackUri);
-                console.log('* Successfully added to Spotify queue');
-            } catch (queueError) {
-                console.log('* Queue error:', queueError.body?.error?.reason);
-                if (queueError.body?.error?.reason === 'NO_ACTIVE_DEVICE') {
-                    console.log('* No active device, adding to pending queue');
-                    // Add to pending queue
-                    spotifyManager.queueManager.addToPendingQueue({
-                        uri: trackUri,
-                        name: trackName,
-                        artist: artistName,
-                        requestedBy: event.userDisplayName
-                    });
-                    console.log('* Added to pending queue successfully');
-                } else {
-                    throw queueError;
-                }
+            // Handle priority queue vs regular queue
+            if (isPriorityRequest) {
+                console.log('* Adding to start of pending queue...');
+                spotifyManager.queueManager.pendingTracks.unshift({
+                    uri: trackUri,
+                    name: trackName,
+                    artist: artistName,
+                    requestedBy: event.userDisplayName
+                });
+                spotifyManager.queueManager.saveQueue();
+            } else {
+                console.log('* Adding to end of pending queue...');
+                spotifyManager.queueManager.addToPendingQueue({
+                    uri: trackUri,
+                    name: trackName,
+                    artist: artistName,
+                    requestedBy: event.userDisplayName
+                });
             }
+            console.log('* Successfully added to queue');
 
             // Mark redemption as fulfilled
             console.log('* Marking redemption as fulfilled...');
@@ -105,7 +103,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
             console.log('* Redemption marked as fulfilled');
 
             // Send message to chat
-            let message = `@${event.userDisplayName} Successfully added "${trackName}" by ${artistName} to the queue!`;
+            let message = `@${event.userDisplayName} Successfully added "${trackName}" by ${artistName} to the ${isPriorityRequest ? 'priority ' : ''}queue!`;
             if (wasAddedToPlaylist) {
                 message += ' This song is new and has been added to the Chat Playlist: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=6e4c734c87244bd0';
             }

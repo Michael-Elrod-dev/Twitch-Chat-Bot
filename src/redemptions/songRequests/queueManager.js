@@ -13,18 +13,18 @@ class QueueManager {
                 // Check if file is empty or malformed
                 if (!fileContent.trim()) {
                     this.pendingTracks = [];
-                    this.saveQueue(); // Initialize with empty array
+                    this.saveQueue();
                 } else {
                     this.pendingTracks = JSON.parse(fileContent);
                 }
             } else {
                 this.pendingTracks = [];
-                this.saveQueue(); // Create new file with empty array
+                this.saveQueue();
             }
         } catch (error) {
             console.error('Error loading queue file:', error);
             this.pendingTracks = [];
-            this.saveQueue(); // Recover by creating new file
+            this.saveQueue();
         }
     }
 
@@ -51,6 +51,11 @@ class QueueManager {
 
     getPendingTracks() {
         return this.pendingTracks;
+    }
+
+    removeFirstTrack() {
+        this.pendingTracks.shift();
+        this.saveQueue();
     }
 }
 
