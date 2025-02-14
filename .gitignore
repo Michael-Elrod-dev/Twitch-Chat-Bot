@@ -2,3 +2,6 @@ files/
 node_modules/
 package-lock.json
 package.json
+pendingQueue.json
+chatters.json
+redemptionCreation.js

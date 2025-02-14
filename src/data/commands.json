@@ -16,7 +16,7 @@
             "userLevel": "everyone"
         },
         "!tts": {
-            "response": "To play TTS on my stream go to https://tts.monster/aimosthadme use the extension panel or the channel point reward",
+            "response": "To play TTS on my stream go to https://tts.monster/aimosthadme use the extension panel below, or the channel point reward",
             "handler": null,
             "userLevel": "everyone"
         },
