@@ -197,24 +197,30 @@ const specialHandlers = {
             // Get all channel rewards
             const rewards = await apiClient.channelPoints.getCustomRewards(channelId);
             const songReward = rewards.find(reward => reward.title.toLowerCase() === "song request");
+            const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === "skip song queue");
     
-            if (!songReward) {
-                client.say(target, "Could not find Song Request reward!");
+            if (!songReward || !skipQueueReward) {
+                client.say(target, "Could not find one or both song-related rewards!");
                 return;
             }
     
             const enable = command === '!songson';
             
-            // Check if the reward is already in the desired state
-            if (songReward.isEnabled === enable) {
+            // Check if both rewards are already in the desired state
+            if (songReward.isEnabled === enable && skipQueueReward.isEnabled === enable) {
                 client.say(target, `Song requests are already turned ${enable ? 'on' : 'off'}`);
                 return;
             }
     
-            // Update the reward state
-            await apiClient.channelPoints.updateCustomReward(channelId, songReward.id, {
-                isEnabled: enable
-            });
+            // Update both rewards' states
+            await Promise.all([
+                apiClient.channelPoints.updateCustomReward(channelId, songReward.id, {
+                    isEnabled: enable
+                }),
+                apiClient.channelPoints.updateCustomReward(channelId, skipQueueReward.id, {
+                    isEnabled: enable
+                })
+            ]);
     
             client.say(target, `Song requests have been turned ${enable ? 'on' : 'off'}`);
         } catch (error) {
