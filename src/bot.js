@@ -1,11 +1,11 @@
 // src/bot.js
 const tmi = require('tmi.js');
-const TokenManager = require('./utils/tokenManager');
-const SpotifyManager = require('./redemptions/songRequests/spotifyManager');
+const TokenManager = require('./tokens/tokenManager');
+const SpotifyManager = require('./redemptions/songs/spotifyManager');
 const CommandManager = require('./commands/commandManager');
 const RedemptionManager = require('./redemptions/redemptionManager');
-const ChatManager = require('./chat-messages/chatManager');
-const handleSongRequest = require('./redemptions/songRequests/songRequest');
+const ChatManager = require('./chats/chatManager');
+const handleSongRequest = require('./redemptions/songs/songRequest');
 const handleQuote = require('./redemptions/quotes/handleQuote');
 
 const { ApiClient } = require('@twurple/api');

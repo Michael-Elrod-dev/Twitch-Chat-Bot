@@ -7,12 +7,14 @@ Needs updating
 ### Directory Structure
 ```
 ALMOSTHADAI/
-├── files/           # Configuration and tokens
 ├── src/
-    ├── commands/    # Command handling system
+    ├── chats/    # Chat monitoring
+    ├── commands/    # Command management
     ├── data/        # Persistent storage
     ├── redemptions/ # Channel point features
-    ├── utils/       # Helper utilities
+        ├── quotes/     # Quotes management
+        └── songs       # Song request management
+    ├── tokens/      # Token management
     └── bot.js       # Main application
 ```
 
@@ -61,35 +63,3 @@ The bot includes several error recovery mechanisms:
 - Token refresh state management
 - Connection state monitoring
 - Quote storage and retrieval system
-
-[Rest of previous content remains the same]
-
-## Setup and Configuration
-
-### Token Configuration
-Create a `tokens.json` file in the `files` directory with:
-```json
-{
-    "clientId": "your_twitch_client_id",
-    "clientSecret": "your_twitch_client_secret",
-    "channelId": "your_channel_id",
-    "botAccessToken": "your_bot_access_token",
-    "botRefreshToken": "your_bot_refresh_token",
-    "broadcasterAccessToken": "your_broadcaster_access_token",
-    "broadcasterRefreshToken": "your_broadcaster_refresh_token",
-    "spotifyClientId": "your_spotify_client_id",
-    "spotifyClientSecret": "your_spotify_client_secret"
-}
-```
-
-### Required Scopes
-- Twitch Bot: `chat:edit`, `chat:read`
-- Twitch Broadcaster: `channel:read:redemptions`, `channel:manage:redemptions`, `channel:manage:rewards`
-- Spotify: Various playback and playlist management scopes
-
-## Implementation Notes
-- Token refresh is handled automatically by the `RefreshingAuthProvider`
-- Spotify connection state is monitored every 10 seconds
-- Failed song requests are stored in a persistent pending queue
-- Commands are saved to disk automatically when modified
-- Event listeners are properly bound to maintain context

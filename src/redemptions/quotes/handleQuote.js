@@ -1,3 +1,4 @@
+// src/redemptions/quotes/handleQuote.js
 const QuoteManager = require('./quoteManager');
 
 async function handleQuote(event, client, _, apiClient) {

@@ -1,4 +1,4 @@
-// src/commandManager.js
+// src/commands/commandManager.js
 const fs = require('fs');
 const path = require('path');
 const specialHandlers = require('./specialHandlers');

@@ -1,4 +1,4 @@
-// src/chat-messages/chatManager.js
+// src/chats/chatManager.js
 const fs = require('fs').promises;
 const path = require('path');
 

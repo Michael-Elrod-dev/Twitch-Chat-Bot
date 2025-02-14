@@ -1,4 +1,4 @@
-// redemptionManager.js
+// src/redemptions/redemptionManager.js
 class RedemptionManager {
     constructor(client, spotifyManager, apiClient) {
         console.log('* Initializing RedemptionManager');

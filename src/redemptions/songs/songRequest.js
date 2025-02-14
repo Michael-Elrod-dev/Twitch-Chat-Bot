@@ -1,3 +1,4 @@
+// src/redemptions/songs/songRequests.js
 async function handleSongRequest(event, client, spotifyManager, apiClient) {
     console.log('* Song Request Redemption Received:', {
         timestamp: new Date().toISOString(),

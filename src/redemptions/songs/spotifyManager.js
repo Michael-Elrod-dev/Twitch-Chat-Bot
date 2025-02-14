@@ -1,3 +1,4 @@
+// src/redemptions/songs/spotifyManager.js
 const QueueManager = require('./queueManager');
 const SpotifyWebApi = require('spotify-web-api-node');
 
