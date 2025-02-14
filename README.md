@@ -6,16 +6,15 @@ Needs updating
 
 ### Directory Structure
 ```
-ALMOSTHADAI/
-├── src/
-    ├── chats/    # Chat monitoring
-    ├── commands/    # Command management
-    ├── data/        # Persistent storage
-    ├── redemptions/ # Channel point features
-        ├── quotes/     # Quotes management
-        └── songs       # Song request management
-    ├── tokens/      # Token management
-    └── bot.js       # Main application
+src/
+  ├── chats/       # Chat monitoring
+  ├── commands/    # Command management
+  ├── data/        # Persistent storage
+  ├── redemptions/ # Channel point features
+     ├── quotes/     # Quotes management
+     └── songs       # Song request management
+  ├── tokens/      # Token management
+  └── bot.js       # Main application
 ```
 
 ### Key Components
