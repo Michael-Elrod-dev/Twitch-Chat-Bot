@@ -39,10 +39,30 @@ class TokenManager {
                 }
             });
             
+            const data = await response.json();
+            
             if (!response.ok) {
                 await this.refreshToken(type);
-                return true;
+                
+                // After refresh, validate again to get the user ID
+                const newResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
+                    headers: {
+                        'Authorization': `Bearer ${this.tokens.botAccessToken}`
+                    }
+                });
+                const newData = await newResponse.json();
+                if (type === 'bot') {
+                    this.tokens.botId = newData.user_id;
+                }
+            } else {
+                if (type === 'bot') {
+                    this.tokens.botId = data.user_id;
+                } else {
+                    this.tokens.userId = data.user_id;
+                }
             }
+            
+            this.saveTokens();
             return true;
         } catch (error) {
             console.error(`Token validation failed for ${type}:`, error);
@@ -58,7 +78,7 @@ class TokenManager {
             client_id: this.tokens.clientId,
             client_secret: this.tokens.clientSecret,
         }).toString();
-
+    
         const options = {
             hostname: 'id.twitch.tv',
             path: '/oauth2/token',
@@ -68,22 +88,31 @@ class TokenManager {
                 'Content-Length': postData.length,
             },
         };
-
+    
         return new Promise((resolve, reject) => {
             const req = https.request(options, (res) => {
                 let data = '';
-
+    
                 res.on('data', (chunk) => {
                     data += chunk;
                 });
-
-                res.on('end', () => {
+    
+                res.on('end', async () => {
                     try {
                         const result = JSON.parse(data);
                         if (result.access_token && result.refresh_token) {
                             if (type === 'bot') {
                                 this.tokens.botAccessToken = result.access_token;
                                 this.tokens.botRefreshToken = result.refresh_token;
+                                
+                                // Validate the new token to get the bot ID
+                                const validateResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
+                                    headers: {
+                                        'Authorization': `Bearer ${result.access_token}`
+                                    }
+                                });
+                                const validateData = await validateResponse.json();
+                                this.tokens.botId = validateData.user_id;
                             } else {
                                 this.tokens.broadcasterAccessToken = result.access_token;
                                 this.tokens.broadcasterRefreshToken = result.refresh_token;
@@ -98,11 +127,11 @@ class TokenManager {
                     }
                 });
             });
-
+    
             req.on('error', (error) => {
                 reject(`* Network error during ${type} token refresh: ${error.message}`);
             });
-
+    
             req.write(postData);
             req.end();
         });
@@ -120,11 +149,18 @@ class TokenManager {
                     throw new Error('Broadcaster token refresh failed');
                 })
             ]);
+    
+            // Add validation after refresh to get user IDs
+            await Promise.all([
+                this.validateToken('bot'),
+                this.validateToken('broadcaster')
+            ]);
+    
+            console.log('✅ Tokens refreshed');
         } catch (error) {
             console.error('* Critical error refreshing tokens:', error);
             console.log('* You may need to re-authenticate with Twitch');
         }
-        console.log('✅ Tokens refreshed');
     }
 
     getConfig() {

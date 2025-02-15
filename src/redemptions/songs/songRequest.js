@@ -1,5 +1,5 @@
-// src/redemptions/songs/songRequests.js
-async function handleSongRequest(event, client, spotifyManager, apiClient) {
+// src/redemptions/songs/songRequest.js
+async function handleSongRequest(event, apiClient, spotifyManager) {
     console.log('* Song Request Redemption Received:', {
         timestamp: new Date().toISOString(),
         user: event.userDisplayName,
@@ -24,7 +24,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                     'CANCELED'
                 );
                 
-                await client.say(`#${event.broadcasterDisplayName}`, 
+                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
                 console.error('* Error refunding points:', refundError);
@@ -43,7 +43,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                     'CANCELED'
                 );
                 
-                await client.say(`#${event.broadcasterDisplayName}`, 
+                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a valid Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
                 console.error('* Error refunding points:', refundError);
@@ -72,7 +72,6 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                 console.error('* Error adding to history playlist:', playlistError);
             }
 
-            // Handle priority queue vs regular queue
             if (isPriorityRequest) {
                 console.log('* Adding to start of pending queue...');
                 spotifyManager.queueManager.pendingTracks.unshift({
@@ -93,7 +92,6 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
             }
             console.log('* Successfully added to queue');
 
-            // Mark redemption as fulfilled
             console.log('* Marking redemption as fulfilled...');
             await apiClient.channelPoints.updateRedemptionStatusByIds(
                 event.broadcasterId,
@@ -103,12 +101,11 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
             );
             console.log('* Redemption marked as fulfilled');
 
-            // Send message to chat
             let message = `@${event.userDisplayName} Successfully added "${trackName}" by ${artistName} to the ${isPriorityRequest ? 'priority ' : ''}queue!`;
             if (wasAddedToPlaylist) {
                 message += ' This song is new and has been added to the Chat Playlist: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=6e4c734c87244bd0';
             }
-            await client.say(`#${event.broadcasterDisplayName}`, message);
+            await apiClient.chat.sendMessage(event.broadcasterDisplayName, message);
             console.log('* Success message sent to chat');
 
         } catch (error) {
@@ -126,7 +123,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                     'CANCELED'
                 );
                 
-                await client.say(`#${event.broadcasterDisplayName}`, 
+                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Sorry, I couldn't process your request. Your points have been refunded.`);
                 console.log('* Points refunded successfully');
             } catch (refundError) {
@@ -156,7 +153,7 @@ async function handleSongRequest(event, client, spotifyManager, apiClient) {
                 'CANCELED'
             );
             
-            await client.say(`#${event.broadcasterDisplayName}`, 
+            await apiClient.chat.sendMessage(event.broadcasterDisplayName,
                 `@${event.userDisplayName} Sorry, there was an error processing your request. Your points have been refunded.`);
             console.log('* Points refunded successfully after fatal error');
         } catch (refundError) {

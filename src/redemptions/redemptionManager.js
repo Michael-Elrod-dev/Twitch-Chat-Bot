@@ -1,9 +1,8 @@
 // src/redemptions/redemptionManager.js
 class RedemptionManager {
-    constructor(client, spotifyManager, apiClient) {
-        this.client = client;
-        this.spotifyManager = spotifyManager;
+    constructor(apiClient, spotifyManager) {
         this.apiClient = apiClient;
+        this.spotifyManager = spotifyManager;
         this.handlers = new Map();
     }
 
@@ -33,7 +32,7 @@ class RedemptionManager {
 
         try {
             console.log(`* Executing handler for: ${event.rewardTitle}`);
-            await handler(event, this.client, this.spotifyManager, this.apiClient);
+            await handler(event, this.apiClient, this.spotifyManager, this.apiClient);
             console.log(`* Handler completed successfully for: ${event.rewardTitle}`);
         } catch (error) {
             console.error('* Handler execution failed:', {

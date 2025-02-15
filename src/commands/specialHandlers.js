@@ -3,46 +3,31 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 const QuoteManager = require('../redemptions/quotes/quoteManager');
 
 const specialHandlers = {
-    async followAge(client, target, context, args) {
+    async followAge(apiClient, channel, context, args) {
         const toUser = args[0]?.replace('@', '') || context.username;
-        const channel = target.replace('#', '');
 
         try {
-            await client.tokenManager.validateToken('bot');
             const response = await fetch(`https://commands.garretcharp.com/twitch/followage/${channel}/${toUser}`);
             const followAge = await response.text();
             
             if (followAge.toLowerCase().includes('must login')) {
-                client.say(target, 'The channel owner needs to authenticate at https://commands.garretcharp.com/ to enable followage lookups.');
+                await apiClient.chat.sendMessage(channel, 'The channel owner needs to authenticate at https://commands.garretcharp.com/ to enable followage lookups.');
                 return;
             }
             
-            client.say(target, followAge);
+            await apiClient.chat.sendMessage(channel, followAge);
         } catch (error) {
             console.error('Error fetching follow data:', error);
-            client.say(target, `Error: ${error.message || 'Unable to fetch follow data'}`);
+            await apiClient.chat.sendMessage(channel, `Error: ${error.message || 'Unable to fetch follow data'}`);
         }
     },
 
-    async uptime(client, target, context) {
-        const channel = target.replace('#', '');
-        
+    async uptime(apiClient, channel, context) {
         try {
-            await client.tokenManager.validateToken('bot');
-            const clientId = client.getOptions().options.clientId;
-            const accessToken = client.getOptions().identity.password.replace('oauth:', '');
-
-            const response = await fetch(`https://api.twitch.tv/helix/streams?user_login=${channel}`, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken.trim()}`,
-                    'Client-Id': clientId.trim()
-                }
-            });
+            const stream = await apiClient.streams.getStreamByUserName(channel);
             
-            const data = await response.json();
-            
-            if (data.data && data.data.length > 0) {
-                const startTime = new Date(data.data[0].started_at);
+            if (stream) {
+                const startTime = new Date(stream.startDate);
                 const now = new Date();
                 const diffMs = now - startTime;
                 
@@ -53,17 +38,17 @@ const specialHandlers = {
                 if (hours > 0) uptimeStr += `${hours} hour${hours !== 1 ? 's' : ''} `;
                 if (minutes > 0 || hours === 0) uptimeStr += `${minutes} minute${minutes !== 1 ? 's' : ''}`;
                 
-                client.say(target, `Stream has been live for ${uptimeStr.trim()}`);
+                await apiClient.chat.sendMessage(channel, `Stream has been live for ${uptimeStr.trim()}`);
             } else {
-                client.say(target, `${channel} is not live`);
+                await apiClient.chat.sendMessage(channel, `${channel} is not live`);
             }
         } catch (error) {
             console.error('Uptime fetch failed:', error);
-            client.say(target, 'Unable to fetch uptime at this time.');
+            await apiClient.chat.sendMessage(channel, 'A fix for this command is coming soon.');
         }
     },
 
-    fursona(client, target, context, args) {
+    async fursona(apiClient, channel, context, args) {
         const hashCode = s => s.split('').reduce((a,b) => {
             a = ((a<<5)-a) + b.charCodeAt(0);
             return a & a;
@@ -73,10 +58,10 @@ const specialHandlers = {
         const seed = (1 + Math.abs(hashCode(username)) % 99999).toString().padStart(5, '0');
         const url = `https://thisfursonadoesnotexist.com/v2/jpgs-2x/seed${seed}.jpg`;
         
-        client.say(target, `@${username}, here is your fursona: ${url}`);
+        await apiClient.chat.sendMessage(channel, `@${username}, here is your fursona: ${url}`);
     },
 
-    waifu(client, target, context, args) {
+    async waifu(apiClient, channel, context, args) {
         const hashCode = s => s.split('').reduce((a,b) => {
             a = ((a<<5)-a) + b.charCodeAt(0);
             return a & a;
@@ -86,10 +71,10 @@ const specialHandlers = {
         const seed = (10000 + Math.abs(hashCode(username)) % 89999).toString().padStart(5, '0');
         const url = `https://arfa.dev/waifu-ed/editor_d6a3dae.html?seed=${seed}`;
         
-        client.say(target, `@${username}, here is your cute waifu! ${url} AYAYA`);
+        await apiClient.chat.sendMessage(channel, `@${username}, here is your cute waifu! ${url} AYAYA`);
     },
 
-    async currentSong(client, target) {
+    async currentSong(apiClient, channel) {
         try {
             const spotifyManager = global.spotifyManager;
             await spotifyManager.ensureTokenValid();
@@ -98,38 +83,38 @@ const specialHandlers = {
             if (currentTrack.body && currentTrack.body.item) {
                 const trackName = currentTrack.body.item.name;
                 const artistName = currentTrack.body.item.artists[0].name;
-                client.say(target, `Currently playing: ${trackName} by ${artistName}`);
+                await apiClient.chat.sendMessage(channel, `Currently playing: ${trackName} by ${artistName}`);
             } else {
-                client.say(target, "No song is currently playing in Spotify.");
+                await apiClient.chat.sendMessage(channel, "No song is currently playing in Spotify.");
             }
         } catch (error) {
             console.error('Error fetching current song:', error);
-            client.say(target, "Unable to fetch current song information.");
+            await apiClient.chat.sendMessage(channel, "Unable to fetch current song information.");
         }
     },
 
-    async lastSong(client, target) {
+    async lastSong(apiClient, channel) {
         try {
             const spotifyManager = global.spotifyManager;
             
             if (spotifyManager.previousTrack) {
                 const { name, artist } = spotifyManager.previousTrack;
-                client.say(target, `Last played song: ${name} by ${artist}`);
+                await apiClient.chat.sendMessage(channel, `Last played song: ${name} by ${artist}`);
             } else {
-                client.say(target, "No previous song information available yet.");
+                await apiClient.chat.sendMessage(channel, "No previous song information available yet.");
             }
         } catch (error) {
             console.error('Error fetching last song:', error);
-            client.say(target, "Unable to fetch last song information.");
+            await apiClient.chat.sendMessage(channel, "Unable to fetch last song information.");
         }
     },
 
-    async quoteHandler(client, target, context, args) {
+    async quoteHandler(apiClient, channel, context, args) {
         const quoteManager = new QuoteManager();
         const totalQuotes = quoteManager.getTotalQuotes();
         
         if (totalQuotes === 0) {
-            client.say(target, "No quotes saved yet!");
+            await apiClient.chat.sendMessage(channel, "No quotes saved yet!");
             return;
         }
     
@@ -139,7 +124,7 @@ const specialHandlers = {
             quote = quoteManager.getQuoteById(id);
             
             if (!quote) {
-                client.say(target, `Quote #${id} not found!`);
+                await apiClient.chat.sendMessage(channel, `Quote #${id} not found!`);
                 return;
             }
         } else {
@@ -147,10 +132,10 @@ const specialHandlers = {
         }
     
         const year = new Date(quote.savedAt).getFullYear();
-        client.say(target, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
+        await apiClient.chat.sendMessage(channel, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
     },
 
-    async combinedStats(client, target, context, args) {
+    async combinedStats(apiClient, channel, context, args) {
         try {
             const chatManager = global.chatManager;
             const requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
@@ -160,47 +145,44 @@ const specialHandlers = {
             const redemptions = chatManager.getUserRedemptions(requestedUser);
             const total = messages + commands + redemptions;
             
-            client.say(target, 
+            await apiClient.chat.sendMessage(channel, 
                 `@${requestedUser} has ${total} total interactions ` +
                 `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
             );
         } catch (error) {
             console.error('Error in combinedStats:', error);
-            client.say(target, 'An error occurred while fetching chat stats.');
+            await apiClient.chat.sendMessage(channel, 'An error occurred while fetching chat stats.');
         }
     },
     
-    async topStats(client, target, context, args) {
+    async topStats(apiClient, channel, context, args) {
         try {
             const chatManager = global.chatManager;
             const topUsers = chatManager.getTopFiveUsers();
-            client.say(target, `Top 5 Most Active Chatters: ${topUsers.join(' | ')}`);
+            await apiClient.chat.sendMessage(channel, `Top 5 Most Active Chatters: ${topUsers.join(' | ')}`);
         } catch (error) {
             console.error('Error in topStats:', error);
-            client.say(target, 'An error occurred while fetching top stats.');
+            await apiClient.chat.sendMessage(channel, 'An error occurred while fetching top stats.');
         }
     },
 
-    async toggleSongs(client, target, context, args, command) {
+    async toggleSongs(apiClient, channel, context, args, command) {
         try {
             if (!context.mod && !context.badges?.broadcaster) return;
     
-            const channelId = client.tokenManager.tokens.channelId?.trim();
-            const apiClient = client.tokenManager.apiClient;
-    
-            if (!apiClient) {
-                console.error('API client not found');
-                client.say(target, 'Error: Could not access Twitch API');
+            const channelId = await apiClient.users.getUserByName(channel);
+            if (!channelId) {
+                console.error('Channel not found');
                 return;
             }
     
             // Get all channel rewards
-            const rewards = await apiClient.channelPoints.getCustomRewards(channelId);
+            const rewards = await apiClient.channelPoints.getCustomRewards(channelId.id);
             const songReward = rewards.find(reward => reward.title.toLowerCase() === "song request");
             const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === "skip song queue");
     
             if (!songReward || !skipQueueReward) {
-                client.say(target, "Could not find one or both song-related rewards!");
+                await apiClient.chat.sendMessage(channel, "Could not find one or both song-related rewards!");
                 return;
             }
     
@@ -208,52 +190,52 @@ const specialHandlers = {
             
             // Check if both rewards are already in the desired state
             if (songReward.isEnabled === enable && skipQueueReward.isEnabled === enable) {
-                client.say(target, `Song requests are already turned ${enable ? 'on' : 'off'}`);
+                await apiClient.chat.sendMessage(channel, `Song requests are already turned ${enable ? 'on' : 'off'}`);
                 return;
             }
     
             // Update both rewards' states
             await Promise.all([
-                apiClient.channelPoints.updateCustomReward(channelId, songReward.id, {
+                apiClient.channelPoints.updateCustomReward(channelId.id, songReward.id, {
                     isEnabled: enable
                 }),
-                apiClient.channelPoints.updateCustomReward(channelId, skipQueueReward.id, {
+                apiClient.channelPoints.updateCustomReward(channelId.id, skipQueueReward.id, {
                     isEnabled: enable
                 })
             ]);
     
-            client.say(target, `Song requests have been turned ${enable ? 'on' : 'off'}`);
+            await apiClient.chat.sendMessage(channel, `Song requests have been turned ${enable ? 'on' : 'off'}`);
         } catch (error) {
             console.error('Error toggling songs:', error);
-            client.say(target, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
+            await apiClient.chat.sendMessage(channel, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
         }
     },
 
-    async nextSong(client, target) {
+    async nextSong(apiClient, channel) {
         try {
             const spotifyManager = global.spotifyManager;
             const pendingTracks = spotifyManager.queueManager.getPendingTracks();
             
             if (pendingTracks.length === 0) {
-                client.say(target, "There are no songs in the queue.");
+                await apiClient.chat.sendMessage(channel, "There are no songs in the queue.");
                 return;
             }
     
             const nextTrack = pendingTracks[0];
-            client.say(target, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
+            await apiClient.chat.sendMessage(channel, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
         } catch (error) {
             console.error('Error fetching next song:', error);
-            client.say(target, "Unable to fetch next song information.");
+            await apiClient.chat.sendMessage(channel, "Unable to fetch next song information.");
         }
     },
 
-    async queueInfo(client, target, context, args) {
+    async queueInfo(apiClient, channel, context, args) {
         try {
             const spotifyManager = global.spotifyManager;
             const pendingTracks = spotifyManager.queueManager.getPendingTracks();
             
             if (pendingTracks.length === 0) {
-                client.say(target, "The queue is currently empty.");
+                await apiClient.chat.sendMessage(channel, "The queue is currently empty.");
                 return;
             }
     
@@ -275,14 +257,14 @@ const specialHandlers = {
                 response += ` | ${requestedUser} has no songs in queue`;
             }
     
-            client.say(target, response);
+            await apiClient.chat.sendMessage(channel, response);
         } catch (error) {
             console.error('Error fetching queue information:', error);
-            client.say(target, "Unable to fetch queue information.");
+            await apiClient.chat.sendMessage(channel, "Unable to fetch queue information.");
         }
     },
 
-    async skipSong(client, target, context) {
+    async skipSong(apiClient, channel, context) {
         // Only allow mods and broadcaster
         if (!context.mod && !context.badges?.broadcaster) return;
     
@@ -293,7 +275,7 @@ const specialHandlers = {
             // Get current playback state
             const state = await spotifyManager.getPlaybackState();
             if (state === 'CLOSED') {
-                client.say(target, "Spotify is not currently active.");
+                await apiClient.chat.sendMessage(channel, "Spotify is not currently active.");
                 return;
             }
     
@@ -309,11 +291,11 @@ const specialHandlers = {
     
             // Skip the current song
             await spotifyManager.spotifyApi.skipToNext();
-            client.say(target, "Skipped to next song!");
+            await apiClient.chat.sendMessage(channel, "Skipped to next song!");
     
         } catch (error) {
             console.error('Error skipping song:', error);
-            client.say(target, "Unable to skip song. Make sure Spotify is active.");
+            await apiClient.chat.sendMessage(channel, "Unable to skip song. Make sure Spotify is active.");
         }
     }
 };
