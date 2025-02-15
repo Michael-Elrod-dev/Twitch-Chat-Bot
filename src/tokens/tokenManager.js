@@ -6,7 +6,6 @@ const https = require('https');
 class TokenManager {
     constructor() {
         this.tokens = this.readTokens();
-        console.log('* Checking token validity on startup...');
         this.checkAndRefreshTokens();
     }
 
@@ -110,7 +109,6 @@ class TokenManager {
     }
 
     async checkAndRefreshTokens() {
-        console.log('* Refreshing tokens on startup...');
         try {
             await Promise.all([
                 this.refreshToken('bot').catch(error => {
@@ -126,6 +124,7 @@ class TokenManager {
             console.error('* Critical error refreshing tokens:', error);
             console.log('* You may need to re-authenticate with Twitch');
         }
+        console.log('✅ Tokens refreshed');
     }
 
     getConfig() {

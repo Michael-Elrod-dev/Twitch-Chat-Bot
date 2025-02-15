@@ -1,7 +1,6 @@
 // src/redemptions/redemptionManager.js
 class RedemptionManager {
     constructor(client, spotifyManager, apiClient) {
-        console.log('* Initializing RedemptionManager');
         this.client = client;
         this.spotifyManager = spotifyManager;
         this.apiClient = apiClient;
@@ -9,13 +8,12 @@ class RedemptionManager {
     }
 
     registerHandler(rewardTitle, handler) {
-        console.log(`* Registering handler for reward: ${rewardTitle}`);
         const existingHandler = this.handlers.get(rewardTitle.toLowerCase());
         if (existingHandler) {
             console.log(`* Replacing existing handler for: ${rewardTitle}`);
         }
         this.handlers.set(rewardTitle.toLowerCase(), handler);
-        console.log(`* Current registered handlers: ${Array.from(this.handlers.keys()).join(', ')}`);
+        console.log(`✅ Current registered handlers: ${Array.from(this.handlers.keys()).join(', ')}`);
     }
 
     async handleRedemption(event) {

@@ -20,7 +20,7 @@ class Bot {
     async init() {
         try {
             this.tokenManager = new TokenManager();
-            // await this.tokenManager.checkAndRefreshTokens();
+            await this.tokenManager.checkAndRefreshTokens();
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
@@ -137,7 +137,7 @@ class Bot {
     }
 
     onConnectedHandler(addr, port) {
-        console.log(`* Connected to ${addr}:${port}`);
+        console.log(`✅ Connected to ${addr}:${port}`);
     }
 
     async onDisconnectedHandler(reason) {
@@ -151,9 +151,7 @@ class Bot {
     }
 
     async setupChannelPointRedemptions() {
-        try {
-            console.log('* Setting up channel point redemption listener...');
-     
+        try {     
             await this.tokenManager.validateToken('broadcaster');
             const channelId = this.tokenManager.tokens.channelId?.trim();
             if (!channelId) {
@@ -198,10 +196,9 @@ class Bot {
                 return;
             }
         
-            console.log('* Starting EventSub listener...');
             await this.listener.start();
             await this.setupChannelPointRedemptions();
-            console.log('* Bot initialized with EventSub support');
+            console.log('✅ Initialized EventSub');
         } catch (error) {
             console.error('Error during initialization:', error);
         }

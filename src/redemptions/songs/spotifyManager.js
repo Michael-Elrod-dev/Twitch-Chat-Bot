@@ -74,7 +74,7 @@ class SpotifyManager {
             } catch (error) {
                 console.error('Error monitoring current track:', error);
             }
-        }, 5000); // Check every 3 seconds
+        }, 5000); // Check every 5 seconds
     }
     
     startLastSongTracking() {
@@ -111,7 +111,7 @@ class SpotifyManager {
                 try {
                     // Test the token
                     await this.spotifyApi.getMe();
-                    console.log('* Existing Spotify user auth valid');
+                    console.log('✅ Existing Spotify user auth valid');
                     return;
                 } catch (error) {
                     // Token invalid, try refresh
