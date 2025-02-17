@@ -1,10 +1,11 @@
 // src/redemptions/quotes/quoteManager.js
 const fs = require('fs');
 const path = require('path');
+const config = require('../../config/config');
 
 class QuoteManager {
     constructor() {
-        this.quotesFile = path.join(__dirname, '..', '..', 'data', 'quotes.json');
+        this.quotesFile = path.join(config.dataPath, 'quotes.json');
         this.loadQuotes();
     }
 

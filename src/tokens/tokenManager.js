@@ -1,7 +1,7 @@
 // src/tokens/tokenManager.js
 const fs = require('fs');
-const path = require('path');
 const https = require('https');
+const config = require('../config/config');
 
 class TokenManager {
     constructor() {
@@ -11,7 +11,7 @@ class TokenManager {
 
     readTokens() {
         try {
-            const tokenFile = fs.readFileSync(path.join(__dirname, '../../files/tokens.json'), 'utf8');
+            const tokenFile = fs.readFileSync(config.tokensPath, 'utf8');
             return JSON.parse(tokenFile);
         } catch (error) {
             console.error('* Error reading tokens file:', error);
@@ -21,13 +21,14 @@ class TokenManager {
 
     saveTokens() {
         try {
-            fs.writeFileSync(
-                path.join(__dirname, '../../files/tokens.json'),
-                JSON.stringify(this.tokens, null, 2)
-            );
+            fs.writeFileSync(config.tokensPath, JSON.stringify(this.tokens, null, 2));
         } catch (error) {
             console.error('* Error saving tokens:', error);
         }
+    }
+
+    getChannelName() {
+        return this.tokens.channelName;
     }
 
     async validateToken(type = 'bot') {

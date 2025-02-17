@@ -1,40 +1,58 @@
 // src/bot.js
 const WebSocket = require('ws');
-const TokenManager = require('./tokens/tokenManager');
-const SpotifyManager = require('./redemptions/songs/spotifyManager');
-const CommandManager = require('./commands/commandManager');
-const RedemptionManager = require('./redemptions/redemptionManager');
+const config = require('./config/config');
+const TwitchAPI = require('./tokens/twitchAPI');
 const ChatManager = require('./chats/chatManager');
-const handleSongRequest = require('./redemptions/songs/songRequest');
+const TokenManager = require('./tokens/tokenManager');
+const CommandManager = require('./commands/commandManager');
+const QuoteManager = require('./redemptions/quotes/quoteManager');
+const SpotifyManager = require('./redemptions/songs/spotifyManager');
+const RedemptionManager = require('./redemptions/redemptionManager');
+
 const handleQuote = require('./redemptions/quotes/handleQuote');
+const handleSongRequest = require('./redemptions/songs/songRequest');
+const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
 class Bot {
     constructor() {
         this.wsConnection = null;
         this.sessionId = null;
-        this.channelName = 'aimosthadme'; // Move this to config later
     }
 
     async init() {
         try {
             this.tokenManager = new TokenManager();
             await this.tokenManager.checkAndRefreshTokens();
+            this.channelName = config.channelName;
+            this.twitchAPI = new TwitchAPI(this.tokenManager);
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
-            global.spotifyManager = this.spotifyManager;
 
             this.chatManager = new ChatManager();
-            global.chatManager = this.chatManager;
+            this.quoteManager = new QuoteManager();
+            
+            const handlers = specialCommandHandlers({
+                quoteManager: this.quoteManager,
+                spotifyManager: this.spotifyManager,
+                chatManager: this.chatManager
+            });
+            this.commandManager = new CommandManager(handlers);
 
-            // Set up reward handlers
             this.redemptionManager = new RedemptionManager(this, this.spotifyManager);
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
 
-            // Connect to EventSub WebSocket
             await this.connectWebSocket();
+
+            setInterval(async () => {
+                try {
+                    await this.tokenManager.checkAndRefreshTokens();
+                } catch (error) {
+                    console.error('Error in periodic token refresh:', error);
+                }
+            }, config.tokenRefreshInterval);
 
         } catch (error) {
             console.error('Failed to initialize bot:', error);
@@ -44,10 +62,11 @@ class Bot {
 
     async connectWebSocket() {
         try {
-            this.wsConnection = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+            this.wsConnection = new WebSocket(config.wsEndpoint);
 
-            this.wsConnection.on('open', () => {
-                console.log('✅ Connected to EventSub WebSocket');
+            this.wsConnection.on('close', (code, reason) => {
+                console.log(`* WebSocket closed: ${code} - ${reason}`);
+                setTimeout(() => this.connectWebSocket(), config.wsReconnectDelay);
             });
 
             this.wsConnection.on('message', async (data) => {
@@ -124,7 +143,7 @@ class Bot {
     
             if (event.message.text.startsWith('!')) {
                 await this.chatManager.incrementMessageCount(context.username, 'command');
-                await CommandManager.handleCommand(this, this.channelName, context, event.message.text);
+                await this.commandManager.handleCommand(this, this.channelName, context, event.message.text);
             } else {
                 await this.chatManager.incrementMessageCount(context.username, 'message');
             }
@@ -152,7 +171,7 @@ class Bot {
                 }
             };
         
-            const response = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+            const response = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
                 method: 'POST',
                 headers: {
                     'Client-Id': this.tokenManager.tokens.clientId,
@@ -175,7 +194,7 @@ class Bot {
         }
     }
 
-    async chat(channel, message) {
+    async sendMessage(channel, message) {
         try {
             if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.botId) {
                 console.error('Missing required IDs -', {
@@ -185,16 +204,23 @@ class Bot {
                 return;
             }
     
-            const response = await fetch('https://api.twitch.tv/helix/chat/messages', {
+            try {
+                await this.tokenManager.validateToken('bot');
+            } catch (error) {
+                console.error('Error validating bot token:', error);
+                throw error;
+            }
+    
+            const response = await fetch(`${config.twitchApiEndpoint}/chat/messages`, {
                 method: 'POST',
                 headers: {
                     'Client-Id': this.tokenManager.tokens.clientId,
-                    'Authorization': `Bearer ${this.tokenManager.tokens.botAccessToken}`, // Use bot token instead of broadcaster
+                    'Authorization': `Bearer ${this.tokenManager.tokens.botAccessToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     broadcaster_id: this.tokenManager.tokens.channelId,
-                    sender_id: this.tokenManager.tokens.botId,  // This is required
+                    sender_id: this.tokenManager.tokens.botId,
                     message: message
                 })
             });

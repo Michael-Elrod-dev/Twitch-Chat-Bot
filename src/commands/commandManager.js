@@ -1,11 +1,12 @@
 // src/commands/commandManager.js
 const fs = require('fs');
 const path = require('path');
-const specialHandlers = require('./specialHandlers');
+const config = require('../config/config');
 
 class CommandManager {
-    constructor() {
-        this.commandsPath = path.join(__dirname, '..', 'data', 'commands.json');
+    constructor(specialCommandHandlers) {
+        this.specialCommandHandlers = specialCommandHandlers;
+        this.commandsPath = path.join(config.dataPath, 'commands.json');
         this.loadCommands();
     }
 
@@ -38,7 +39,7 @@ class CommandManager {
         }
     }
 
-    async handleCommand(apiClient, channel, context, message) {
+    async handleCommand(twitchBot, channel, context, message) {
         if (message === '!command' || message.startsWith('!command ')) {
             // Only allow mods and broadcaster to use this command
             if (!context.mod && !context.badges?.broadcaster) return;
@@ -46,61 +47,61 @@ class CommandManager {
             const args = message.split(' ');
             
             if (args.length === 1) {
-                await this.sendChatMessage(apiClient, channel, 'Usage: !command <add/edit/delete> !commandname [message]');
+                await this.sendChatMessage(twitchBot, channel, 'Usage: !command <add/edit/delete> !commandname [message]');
                 return;
             }
      
             const action = args[1].toLowerCase();
             
             if (args.length < 3) {
-                await this.sendChatMessage(apiClient, channel, 'Usage: !command <add/edit/delete> !commandname [message]');
+                await this.sendChatMessage(twitchBot, channel, 'Usage: !command <add/edit/delete> !commandname [message]');
                 return;
             }
      
             const commandName = args[2].toLowerCase();
             
             if (!commandName.startsWith('!')) {
-                await this.sendChatMessage(apiClient, channel, 'Command must start with !');
+                await this.sendChatMessage(twitchBot, channel, 'Command must start with !');
                 return;
             }
      
             switch (action) {
                 case 'add': {
                     if (args.length < 4) {
-                        await this.sendChatMessage(apiClient, channel, 'Usage: !command add !commandname <message>');
+                        await this.sendChatMessage(twitchBot, channel, 'Usage: !command add !commandname <message>');
                         return;
                     }
                     const response = args.slice(3).join(' ');
                     if (this.addCommand(commandName, response)) {
-                        await this.sendChatMessage(apiClient, channel, `Command ${commandName} has been added.`);
+                        await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been added.`);
                     } else {
-                        await this.sendChatMessage(apiClient, channel, `Command ${commandName} already exists.`);
+                        await this.sendChatMessage(twitchBot, channel, `Command ${commandName} already exists.`);
                     }
                     break;
                 }
                 case 'edit': {
                     if (args.length < 4) {
-                        await this.sendChatMessage(apiClient, channel, 'Usage: !command edit !commandname <new message>');
+                        await this.sendChatMessage(twitchBot, channel, 'Usage: !command edit !commandname <new message>');
                         return;
                     }
                     const response = args.slice(3).join(' ');
                     if (this.editCommand(commandName, response)) {
-                        await this.sendChatMessage(apiClient, channel, `Command ${commandName} has been updated.`);
+                        await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been updated.`);
                     } else {
-                        await this.sendChatMessage(apiClient, channel, `Cannot edit ${commandName} (command doesn't exist or has special handling).`);
+                        await this.sendChatMessage(twitchBot, channel, `Cannot edit ${commandName} (command doesn't exist or has special handling).`);
                     }
                     break;
                 }
                 case 'delete': {
                     if (this.deleteCommand(commandName)) {
-                        await this.sendChatMessage(apiClient, channel, `Command ${commandName} has been deleted.`);
+                        await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been deleted.`);
                     } else {
-                        await this.sendChatMessage(apiClient, channel, `Cannot delete ${commandName} (command doesn't exist or has special handling).`);
+                        await this.sendChatMessage(twitchBot, channel, `Cannot delete ${commandName} (command doesn't exist or has special handling).`);
                     }
                     break;
                 }
                 default:
-                    await this.sendChatMessage(apiClient, channel, 'Invalid action. Use !command <add/edit/delete> !commandname [message]');
+                    await this.sendChatMessage(twitchBot, channel, 'Invalid action. Use !command <add/edit/delete> !commandname [message]');
             }
             return;
         }
@@ -113,28 +114,29 @@ class CommandManager {
         if (command.userLevel === 'mod' && !context.mod && !context.badges?.broadcaster) return;
      
         try {
-            if (command.handler && specialHandlers[command.handler]) {
-                // Create chat wrapper for backwards compatibility
-                const chatWrapper = {
-                    chat: {
-                        sendMessage: (channel, message) => apiClient.chat(channel, message)
+            if (command.handler && this.specialCommandHandlers[command.handler]) {
+                const twitchBotWrapper = {
+                    sendMessage: (channel, message) => twitchBot.sendMessage(channel, message),
+                    channelPoints: {
+                        getCustomRewards: (broadcasterId) => twitchBot.twitchAPI.getCustomRewards(broadcasterId),
+                        updateCustomReward: (broadcasterId, rewardId, updates) => 
+                            twitchBot.twitchAPI.updateCustomReward(broadcasterId, rewardId, updates)
                     },
-                    channelPoints: apiClient.channelPoints,
-                    users: apiClient.users,
-                    streams: apiClient.streams
+                    users: twitchBot.twitchAPI,
+                    streams: twitchBot.streams
                 };
-                await specialHandlers[command.handler](chatWrapper, channel, context, args.slice(1), commandName);
+                await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
             } else {
-                await apiClient.chat(channel, command.response);
+                await twitchBot.sendMessage(channel, command.response);
             }
         } catch (error) {
             console.error(`Error executing command ${commandName}:`, error);
         }
     }
 
-    async sendChatMessage(apiClient, channel, message) {
+    async sendChatMessage(twitchBot, channel, response) {
         try {
-            await apiClient.chat(channel, message);
+            await twitchBot.sendMessage(channel, response);
         } catch (error) {
             console.error('Error sending chat message:', error);
         }
@@ -179,4 +181,4 @@ class CommandManager {
     }
 }
 
-module.exports = new CommandManager();
+module.exports = CommandManager;

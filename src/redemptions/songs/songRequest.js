@@ -1,5 +1,5 @@
 // src/redemptions/songs/songRequest.js
-async function handleSongRequest(event, apiClient, spotifyManager) {
+async function handleSongRequest(event, twitchBot, spotifyManager) {
     console.log('* Song Request Redemption Received:', {
         timestamp: new Date().toISOString(),
         user: event.userDisplayName,
@@ -17,14 +17,14 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
         if (!input) {
             console.log('* Redemption cancelled: No input provided');
             try {
-                await apiClient.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.channelPoints.updateRedemptionStatusByIds(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
                     'CANCELED'
                 );
                 
-                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
+                await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
                 console.error('* Error refunding points:', refundError);
@@ -36,14 +36,14 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
         if (!input.includes('spotify.com/track/')) {
             console.log('* Redemption cancelled: Invalid Spotify link');
             try {
-                await apiClient.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.channelPoints.updateRedemptionStatusByIds(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
                     'CANCELED'
                 );
                 
-                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
+                await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a valid Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
                 console.error('* Error refunding points:', refundError);
@@ -93,7 +93,7 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
             console.log('* Successfully added to queue');
 
             console.log('* Marking redemption as fulfilled...');
-            await apiClient.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.channelPoints.updateRedemptionStatusByIds(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
@@ -105,7 +105,7 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
             if (wasAddedToPlaylist) {
                 message += ' This song is new and has been added to the Chat Playlist: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=6e4c734c87244bd0';
             }
-            await apiClient.chat.sendMessage(event.broadcasterDisplayName, message);
+            await twitchBot.sendMessage(event.broadcasterDisplayName, message);
             console.log('* Success message sent to chat');
 
         } catch (error) {
@@ -116,14 +116,14 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
             });
             try {
                 console.log('* Attempting to refund points due to error...');
-                await apiClient.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.channelPoints.updateRedemptionStatusByIds(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
                     'CANCELED'
                 );
                 
-                await apiClient.chat.sendMessage(event.broadcasterDisplayName,
+                await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Sorry, I couldn't process your request. Your points have been refunded.`);
                 console.log('* Points refunded successfully');
             } catch (refundError) {
@@ -146,14 +146,14 @@ async function handleSongRequest(event, apiClient, spotifyManager) {
         });
         try {
             console.log('* Attempting to refund points after fatal error...');
-            await apiClient.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.channelPoints.updateRedemptionStatusByIds(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
                 'CANCELED'
             );
             
-            await apiClient.chat.sendMessage(event.broadcasterDisplayName,
+            await twitchBot.sendMessage(event.broadcasterDisplayName,
                 `@${event.userDisplayName} Sorry, there was an error processing your request. Your points have been refunded.`);
             console.log('* Points refunded successfully after fatal error');
         } catch (refundError) {

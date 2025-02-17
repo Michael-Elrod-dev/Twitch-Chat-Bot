@@ -1,7 +1,7 @@
 // src/redemptions/redemptionManager.js
 class RedemptionManager {
-    constructor(apiClient, spotifyManager) {
-        this.apiClient = apiClient;
+    constructor(twitchBot, spotifyManager) {
+        this.twitchBot = twitchBot;
         this.spotifyManager = spotifyManager;
         this.handlers = new Map();
     }
@@ -32,7 +32,7 @@ class RedemptionManager {
 
         try {
             console.log(`* Executing handler for: ${event.rewardTitle}`);
-            await handler(event, this.apiClient, this.spotifyManager, this.apiClient);
+            await handler(event, this.twitchBot, this.spotifyManager, this.twitchBot);
             console.log(`* Handler completed successfully for: ${event.rewardTitle}`);
         } catch (error) {
             console.error('* Handler execution failed:', {

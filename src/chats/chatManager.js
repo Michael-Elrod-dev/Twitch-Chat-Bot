@@ -1,10 +1,11 @@
 // src/chats/chatManager.js
-const fs = require('fs').promises;
 const path = require('path');
+const fs = require('fs').promises;
+const config = require('../config/config');
 
 class ChatManager {
     constructor() {
-        this.chattersPath = path.join(__dirname, '..', 'data', 'chatters.json');
+        this.chattersPath = path.join(config.dataPath, 'chatters.json');
         this.chatters = {};
         this.loadChatters();
     }

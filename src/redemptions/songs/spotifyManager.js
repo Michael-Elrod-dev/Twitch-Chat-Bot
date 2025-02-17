@@ -1,4 +1,5 @@
 // src/redemptions/songs/spotifyManager.js
+const config = require('../../config/config');
 const QueueManager = require('./queueManager');
 const SpotifyWebApi = require('spotify-web-api-node');
 
@@ -40,7 +41,7 @@ class SpotifyManager {
             } catch (error) {
                 console.error('Error monitoring playback:', error);
             }
-        }, 5000);
+        }, config.spotifyInterval);
     }
 
     async monitorCurrentTrack() {
@@ -55,7 +56,7 @@ class SpotifyManager {
                     const remaining = totalDuration - progress;
                     
                     // If less than 5 seconds remaining
-                    if (remaining < 5000) {
+                    if (remaining <  config.spotifyInterval) {
                         // Get next song from pending queue
                         const pendingTracks = this.queueManager.getPendingTracks();
                         if (pendingTracks.length > 0) {
@@ -74,12 +75,17 @@ class SpotifyManager {
             } catch (error) {
                 console.error('Error monitoring current track:', error);
             }
-        }, 5000); // Check every 5 seconds
+        }, config.spotifyInterval);
     }
     
     startLastSongTracking() {
         setInterval(async () => {
             try {
+                const state = await this.getPlaybackState();
+                if (state === 'CLOSED') {
+                    return;
+                }
+    
                 await this.ensureTokenValid();
                 const currentTrack = await this.spotifyApi.getMyCurrentPlayingTrack();
                 
@@ -101,7 +107,7 @@ class SpotifyManager {
             } catch (error) {
                 console.error('Error tracking last song:', error);
             }
-        }, 5000);
+        }, config.spotifyInterval);
     }
 
     async authenticate() {
