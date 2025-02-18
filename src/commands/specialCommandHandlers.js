@@ -18,7 +18,7 @@ function specialCommandHandlers(dependencies) {
 
                 await twitchBot.sendMessage(channel, followAge);
             } catch (error) {
-                console.error('Error fetching follow data:', error);
+                console.error('❌ Error fetching follow data:', error);
                 await twitchBot.sendMessage(channel, `Error: ${error.message || 'Unable to fetch follow data'}`);
             }
         },
@@ -88,7 +88,7 @@ function specialCommandHandlers(dependencies) {
                     await twitchBot.sendMessage(channel, "No song is currently playing in Spotify.");
                 }
             } catch (error) {
-                console.error('Error fetching current song:', error);
+                console.error('❌ Error fetching current song:', error);
                 await twitchBot.sendMessage(channel, "Unable to fetch current song information.");
             }
         },
@@ -102,7 +102,7 @@ function specialCommandHandlers(dependencies) {
                     await twitchBot.sendMessage(channel, "No previous song information available yet.");
                 }
             } catch (error) {
-                console.error('Error fetching last song:', error);
+                console.error('❌ Error fetching last song:', error);
                 await twitchBot.sendMessage(channel, "Unable to fetch last song information.");
             }
         },
@@ -146,7 +146,7 @@ function specialCommandHandlers(dependencies) {
                     `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
                 );
             } catch (error) {
-                console.error('Error in combinedStats:', error);
+                console.error('❌ Error in combinedStats:', error);
                 await twitchBot.sendMessage(channel, 'An error occurred while fetching chat stats.');
             }
         },
@@ -156,7 +156,7 @@ function specialCommandHandlers(dependencies) {
                 const topUsers = chatManager.getTopFiveUsers();
                 await twitchBot.sendMessage(channel, `Top 5 Most Active Chatters: ${topUsers.join(' | ')}`);
             } catch (error) {
-                console.error('Error in topStats:', error);
+                console.error('❌ Error in topStats:', error);
                 await twitchBot.sendMessage(channel, 'An error occurred while fetching top stats.');
             }
         },
@@ -201,7 +201,7 @@ function specialCommandHandlers(dependencies) {
 
                 await twitchBot.sendMessage(channel, `Song requests have been turned ${enable ? 'on' : 'off'}`);
             } catch (error) {
-                console.error('Error toggling songs:', error);
+                console.error('❌ Error toggling songs:', error);
                 await twitchBot.sendMessage(channel, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
             }
         },
@@ -218,7 +218,7 @@ function specialCommandHandlers(dependencies) {
                 const nextTrack = pendingTracks[0];
                 await twitchBot.sendMessage(channel, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
             } catch (error) {
-                console.error('Error fetching next song:', error);
+                console.error('❌ Error fetching next song:', error);
                 await twitchBot.sendMessage(channel, "Unable to fetch next song information.");
             }
         },
@@ -252,7 +252,7 @@ function specialCommandHandlers(dependencies) {
 
                 await twitchBot.sendMessage(channel, response);
             } catch (error) {
-                console.error('Error fetching queue information:', error);
+                console.error('❌ Error fetching queue information:', error);
                 await twitchBot.sendMessage(channel, "Unable to fetch queue information.");
             }
         },
@@ -283,7 +283,7 @@ function specialCommandHandlers(dependencies) {
                 await twitchBot.sendMessage(channel, "Skipped to next song!");
 
             } catch (error) {
-                console.error('Error skipping song:', error);
+                console.error('❌ Error skipping song:', error);
                 await twitchBot.sendMessage(channel, "Unable to skip song. Make sure Spotify is active.");
             }
         }

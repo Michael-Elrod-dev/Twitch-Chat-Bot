@@ -8,6 +8,7 @@ class Config {
 
         // Paths
         this.dataPath = path.join(__dirname, '..', 'data');
+        this.dbConfigPath = path.join(this.dataPath, 'db.json');
         this.tokensPath = path.join(this.dataPath, 'tokens.json');
 
         // WebSocket

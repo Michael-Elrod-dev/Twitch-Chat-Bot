@@ -23,7 +23,7 @@ class ChatManager {
             if (error.code === 'ENOENT') {
                 await this.saveChatters();
             } else {
-                console.error('Error loading chatters:', error);
+                console.error('❌ Error loading chatters:', error);
                 this.chatters = {};
             }
         }
@@ -33,7 +33,7 @@ class ChatManager {
         try {
             await fs.writeFile(this.chattersPath, JSON.stringify(this.chatters, null, 2));
         } catch (error) {
-            console.error('Error saving chatters:', error);
+            console.error('❌ Error saving chatters:', error);
         }
     }
 

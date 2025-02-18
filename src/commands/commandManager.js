@@ -23,7 +23,7 @@ class CommandManager {
                 this.data = JSON.parse(fileContent);
             }
         } catch (error) {
-            console.error('Error loading commands:', error);
+            console.error('❌ Error loading commands:', error);
             this.data = {
                 commands: {},
                 nonPrefixCommands: {}
@@ -35,7 +35,7 @@ class CommandManager {
         try {
             fs.writeFileSync(this.commandsPath, JSON.stringify(this.data, null, 4));
         } catch (error) {
-            console.error('Error saving commands:', error);
+            console.error('❌ Error saving commands:', error);
         }
     }
 
@@ -140,7 +140,7 @@ class CommandManager {
         try {
             await twitchBot.sendMessage(channel, response);
         } catch (error) {
-            console.error('Error sending chat message:', error);
+            console.error('❌ Error sending chat message:', error);
         }
     }
 

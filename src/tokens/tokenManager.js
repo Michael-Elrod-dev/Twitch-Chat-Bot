@@ -142,11 +142,11 @@ class TokenManager {
         try {
             await Promise.all([
                 this.refreshToken('bot').catch(error => {
-                    console.error('Failed to refresh bot token:', error);
+                    console.error('❌ Failed to refresh bot token:', error);
                     throw new Error('Bot token refresh failed');
                 }),
                 this.refreshToken('broadcaster').catch(error => {
-                    console.error('Failed to refresh broadcaster token:', error);
+                    console.error('❌ Failed to refresh broadcaster token:', error);
                     throw new Error('Broadcaster token refresh failed');
                 })
             ]);

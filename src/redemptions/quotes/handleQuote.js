@@ -50,7 +50,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
         try {
             quoteId = quoteManager.addQuote(quoteData);
         } catch (saveError) {
-            console.error('Error saving quote:', saveError);
+            console.error('❌ Error saving quote:', saveError);
             await twitchBot.channelPoints.updateRedemptionStatusByIds(
                 event.broadcasterId,
                 event.rewardId,
@@ -74,7 +74,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             `Quote #${quoteId} has been saved! "${quote.trim()}" - ${author.trim()}`);
 
     } catch (error) {
-        console.error('Error in quote handler:', error);
+        console.error('❌ Error in quote handler:', error);
         try {
             await twitchBot.channelPoints.updateRedemptionStatusByIds(
                 event.broadcasterId,
@@ -86,7 +86,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             await twitchBot.sendMessage(event.broadcasterDisplayName, 
                 `@${event.userDisplayName} Sorry, there was an error saving your quote. Your points have been refunded.`);
         } catch (refundError) {
-            console.error('Error refunding points:', refundError);
+            console.error('❌ Error refunding points:', refundError);
         }
     }
 }

@@ -21,7 +21,7 @@ class TwitchAPI {
             }
             throw new Error('User not found');
         } catch (error) {
-            console.error('Failed to get channel ID:', error);
+            console.error('❌ Failed to get channel ID:', error);
             throw error;
         }
     }
@@ -43,7 +43,7 @@ class TwitchAPI {
             }
             return null;
         } catch (error) {
-            console.error('Failed to get stream:', error);
+            console.error('❌ Failed to get stream:', error);
             throw error;
         }
     }
@@ -63,7 +63,7 @@ class TwitchAPI {
             }
             return null;
         } catch (error) {
-            console.error('Failed to get user:', error);
+            console.error('❌ Failed to get user:', error);
             throw error;
         }
     }
@@ -83,7 +83,7 @@ class TwitchAPI {
             }
             return [];
         } catch (error) {
-            console.error('Failed to get custom rewards:', error);
+            console.error('❌ Failed to get custom rewards:', error);
             throw error;
         }
     }
@@ -104,9 +104,9 @@ class TwitchAPI {
             if (data.data && data.data[0]) {
                 return data.data[0];
             }
-            throw new Error('Failed to update reward');
+            throw new Error('❌ Failed to update reward');
         } catch (error) {
-            console.error('Failed to update custom reward:', error);
+            console.error('❌ Failed to update custom reward:', error);
             throw error;
         }
     }

@@ -25,7 +25,7 @@ class QueueManager {
                 this.saveQueue();
             }
         } catch (error) {
-            console.error('Error loading queue file:', error);
+            console.error('❌ Error loading queue file:', error);
             this.pendingTracks = [];
             this.saveQueue();
         }
@@ -35,7 +35,7 @@ class QueueManager {
         try {
             fs.writeFileSync(this.queueFile, JSON.stringify(this.pendingTracks, null, 2));
         } catch (error) {
-            console.error('Error saving queue:', error);
+            console.error('❌ Error saving queue:', error);
         }
     }
 

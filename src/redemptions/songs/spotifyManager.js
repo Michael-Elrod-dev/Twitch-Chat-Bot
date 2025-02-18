@@ -33,13 +33,9 @@ class SpotifyManager {
         setInterval(async () => {
             try {
                 const currentState = await this.getPlaybackState();
-                
-                if (currentState !== this.lastPlaybackState) {
-                    console.log(`* Spotify state changed: ${this.lastPlaybackState} -> ${currentState}`);
-                }
                 this.lastPlaybackState = currentState;
             } catch (error) {
-                console.error('Error monitoring playback:', error);
+                console.error('❌ Error monitoring playback:', error);
             }
         }, config.spotifyInterval);
     }
@@ -73,7 +69,7 @@ class SpotifyManager {
                     }
                 }
             } catch (error) {
-                console.error('Error monitoring current track:', error);
+                console.error('❌ Error monitoring current track:', error);
             }
         }, config.spotifyInterval);
     }
@@ -105,7 +101,7 @@ class SpotifyManager {
                     }
                 }
             } catch (error) {
-                console.error('Error tracking last song:', error);
+                console.error('❌ Error tracking last song:', error);
             }
         }, config.spotifyInterval);
     }
@@ -195,7 +191,7 @@ class SpotifyManager {
             
             return state.body.is_playing ? 'PLAYING' : 'PAUSED';
         } catch (error) {
-            console.error('Error getting playback state:', error);
+            console.error('❌ Error getting playback state:', error);
             return 'CLOSED';
         }
     }
@@ -214,7 +210,7 @@ class SpotifyManager {
             return true;
         } catch (error) {
             if (error.body?.error?.reason !== 'NO_ACTIVE_DEVICE') {
-                console.error('Error adding to queue:', error);
+                console.error('❌ Error adding to queue:', error);
             }
             throw error;
         }
@@ -232,7 +228,7 @@ class SpotifyManager {
                     this.tokenManager.tokens.spotifyUserAccessToken = data.body['access_token'];
                     await this.tokenManager.saveTokens();
                 } catch (refreshError) {
-                    console.error('Error refreshing token:', refreshError);
+                    console.error('❌ Error refreshing token:', refreshError);
                     throw refreshError;
                 }
             } else {
@@ -262,7 +258,7 @@ class SpotifyManager {
 
             return this.requestsPlaylistId;
         } catch (error) {
-            console.error('Error getting/creating requests playlist:', error);
+            console.error('❌ Error getting/creating requests playlist:', error);
             throw error;
         }
     }
@@ -300,7 +296,7 @@ class SpotifyManager {
     
             return false;
         } catch (error) {
-            console.error('Error adding to requests playlist:', error);
+            console.error('❌ Error adding to requests playlist:', error);
             throw error;
         }
     }

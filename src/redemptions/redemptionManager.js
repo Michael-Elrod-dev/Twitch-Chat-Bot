@@ -7,12 +7,8 @@ class RedemptionManager {
     }
 
     registerHandler(rewardTitle, handler) {
-        const existingHandler = this.handlers.get(rewardTitle.toLowerCase());
-        if (existingHandler) {
-            console.log(`* Replacing existing handler for: ${rewardTitle}`);
-        }
         this.handlers.set(rewardTitle.toLowerCase(), handler);
-        console.log(`✅ Current registered handlers: ${Array.from(this.handlers.keys()).join(', ')}`);
+        console.log(`✅ Registered ${rewardTitle} handler`);
     }
 
     async handleRedemption(event) {

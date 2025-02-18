@@ -19,7 +19,7 @@ class QuoteManager {
                 this.saveQuotes();
             }
         } catch (error) {
-            console.error('Error loading quotes:', error);
+            console.error('❌ Error loading quotes:', error);
             this.quotes = [];
             this.saveQuotes();
         }
@@ -29,7 +29,7 @@ class QuoteManager {
         try {
             fs.writeFileSync(this.quotesFile, JSON.stringify(this.quotes, null, 2));
         } catch (error) {
-            console.error('Error saving quotes:', error);
+            console.error('❌ Error saving quotes:', error);
         }
     }
 

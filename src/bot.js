@@ -1,10 +1,10 @@
-// src/bot.js
 const WebSocket = require('ws');
 const config = require('./config/config');
 const TwitchAPI = require('./tokens/twitchAPI');
 const ChatManager = require('./chats/chatManager');
 const TokenManager = require('./tokens/tokenManager');
 const CommandManager = require('./commands/commandManager');
+const AnalyticsManager = require('./analytics/analyticsManager');
 const QuoteManager = require('./redemptions/quotes/quoteManager');
 const SpotifyManager = require('./redemptions/songs/spotifyManager');
 const RedemptionManager = require('./redemptions/redemptionManager');
@@ -21,6 +21,9 @@ class Bot {
 
     async init() {
         try {
+            this.analyticsManager = new AnalyticsManager();
+            await this.analyticsManager.init();
+
             this.tokenManager = new TokenManager();
             await this.tokenManager.checkAndRefreshTokens();
             this.channelName = config.channelName;
@@ -50,12 +53,12 @@ class Bot {
                 try {
                     await this.tokenManager.checkAndRefreshTokens();
                 } catch (error) {
-                    console.error('Error in periodic token refresh:', error);
+                    console.error('❌ Error in periodic token refresh:', error);
                 }
             }, config.tokenRefreshInterval);
-
+            
         } catch (error) {
-            console.error('Failed to initialize bot:', error);
+            console.error('❌ Failed to initialize bot:', error);
             throw error;
         }
     }
@@ -74,17 +77,12 @@ class Bot {
                 await this.handleWebSocketMessage(message);
             });
 
-            this.wsConnection.on('close', (code, reason) => {
-                console.log(`* WebSocket closed: ${code} - ${reason}`);
-                setTimeout(() => this.connectWebSocket(), 5000);
-            });
-
             this.wsConnection.on('error', (error) => {
                 console.error('WebSocket error:', error);
             });
 
         } catch (error) {
-            console.error('Failed to connect to WebSocket:', error);
+            console.error('❌ Failed to connect to WebSocket:', error);
             throw error;
         }
     }
@@ -99,13 +97,16 @@ class Bot {
             switch (message.metadata.message_type) {
                 case 'session_welcome': {
                     this.sessionId = message.payload.session.id;
-                    console.log('✅ Received session ID:', this.sessionId);
+                    console.log('✅ WebSocket session started');
                     await this.subscribeToChatEvents();
+                    await this.subscribeToChannelPoints();
                     break;
                 }
                 case 'notification': {
                     if (message.metadata.subscription_type === 'channel.chat.message') {
                         await this.handleChatMessage(message.payload);
+                    } else if (message.metadata.subscription_type === 'channel.channel_points_custom_reward_redemption.add') {
+                        await this.handleRedemption(message.payload);
                     }
                     break;
                 }
@@ -116,7 +117,29 @@ class Bot {
                 }
             }
         } catch (error) {
-            console.error('Error handling WebSocket message:', error);
+            console.error('❌ Error handling WebSocket message:', error);
+        }
+    }
+
+    async handleRedemption(payload) {
+        try {
+            if (!payload.event) return;
+
+            const event = {
+                rewardTitle: payload.event.reward.title,
+                rewardId: payload.event.reward.id,
+                userDisplayName: payload.event.user_login,
+                input: payload.event.user_input,
+                status: payload.event.status,
+                id: payload.event.id,
+                broadcasterId: payload.event.broadcaster_user_id,
+                broadcasterDisplayName: payload.event.broadcaster_user_login
+            };
+
+            await this.chatManager.incrementMessageCount(event.userDisplayName, 'redemption');
+            await this.redemptionManager.handleRedemption(event);
+        } catch (error) {
+            console.error('❌ Error handling redemption:', error);
         }
     }
 
@@ -125,7 +148,6 @@ class Bot {
             if (!payload.event) return;
     
             const event = payload.event;
-            // Skip messages from the bot itself
             if (event.chatter_user_id === this.tokenManager.tokens.botId) return;
     
             const context = {
@@ -138,7 +160,6 @@ class Bot {
                 'custom-reward-id': event.reward_id
             };
     
-            // Handle channel point redemption messages separately
             if (event.reward_id) return;
     
             if (event.message.text.startsWith('!')) {
@@ -148,7 +169,7 @@ class Bot {
                 await this.chatManager.incrementMessageCount(context.username, 'message');
             }
         } catch (error) {
-            console.error('Error handling chat message:', error);
+            console.error('❌ Error handling chat message:', error);
         }
     }
 
@@ -189,7 +210,48 @@ class Bot {
     
             console.log('✅ Subscribed to chat events');
         } catch (error) {
-            console.error('Error subscribing to chat events:', error);
+            console.error('❌ Error subscribing to chat events:', error);
+            throw error;
+        }
+    }
+
+    async subscribeToChannelPoints() {
+        try {
+            if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.userId) {
+                throw new Error('Missing required IDs');
+            }
+    
+            const subscription = {
+                type: 'channel.channel_points_custom_reward_redemption.add',
+                version: '1',
+                condition: {
+                    broadcaster_user_id: this.tokenManager.tokens.channelId
+                },
+                transport: {
+                    method: 'websocket',
+                    session_id: this.sessionId
+                }
+            };
+        
+            const response = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
+                method: 'POST',
+                headers: {
+                    'Client-Id': this.tokenManager.tokens.clientId,
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(subscription)
+            });
+    
+            const responseData = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(`Failed to subscribe to channel points: ${JSON.stringify(responseData)}`);
+            }
+    
+            console.log('✅ Subscribed to channel point redemptions');
+        } catch (error) {
+            console.error('❌ Error subscribing to channel points:', error);
             throw error;
         }
     }
@@ -207,7 +269,7 @@ class Bot {
             try {
                 await this.tokenManager.validateToken('bot');
             } catch (error) {
-                console.error('Error validating bot token:', error);
+                console.error('❌ Error validating bot token:', error);
                 throw error;
             }
     
@@ -230,19 +292,18 @@ class Bot {
                 throw new Error(`Failed to send chat message: ${JSON.stringify(errorData)}`);
             }
         } catch (error) {
-            console.error('Error sending chat message:', error);
+            console.error('❌ Error sending chat message:', error);
             throw error;
         }
     }
 }
 
-// Create and initialize the bot
 const bot = new Bot();
 async function startBot() {
     try {
         await bot.init();
     } catch (error) {
-        console.error('Failed to start bot:', error);
+        console.error('❌ Failed to start bot:', error);
         process.exit(1);
     }
 }
