@@ -123,7 +123,9 @@ class CommandManager {
                             twitchBot.twitchAPI.updateCustomReward(broadcasterId, rewardId, updates)
                     },
                     users: twitchBot.twitchAPI,
-                    streams: twitchBot.streams
+                    streams: {
+                        getStreamByUserName: (username) => twitchBot.twitchAPI.getStreamByUserName(username)
+                    }
                 };
                 await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
             } else {

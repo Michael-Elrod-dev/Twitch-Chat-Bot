@@ -25,6 +25,28 @@ class TwitchAPI {
             throw error;
         }
     }
+
+    async getStreamByUserName(username) {
+        try {
+            const response = await fetch(`${config.twitchApiEndpoint}/streams?user_login=${username}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Client-Id': this.tokenManager.tokens.clientId
+                }
+            });
+    
+            const data = await response.json();
+            if (data.data && data.data[0]) {
+                return {
+                    startDate: data.data[0].started_at
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to get stream:', error);
+            throw error;
+        }
+    }
     
     async getUserByName(username) {
         try {
