@@ -1,23 +1,13 @@
 // src/redemptions/songs/songRequest.js
 async function handleSongRequest(event, twitchBot, spotifyManager) {
-    console.log('* Song Request Redemption Received:', {
-        timestamp: new Date().toISOString(),
-        user: event.userDisplayName,
-        rewardTitle: event.rewardTitle,
-        input: event.input || 'No input provided'
-    });
-
     try {
-        console.log(`* User: ${event.userDisplayName}`);
-        console.log(`* Song Request: ${event.input || 'No input provided'}`);
-
         const input = event.input.trim();
         const isPriorityRequest = event.rewardTitle.toLowerCase().includes('skip song queue');
         
         if (!input) {
             console.log('* Redemption cancelled: No input provided');
             try {
-                await twitchBot.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
@@ -36,7 +26,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
         if (!input.includes('spotify.com/track/')) {
             console.log('* Redemption cancelled: Invalid Spotify link');
             try {
-                await twitchBot.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
@@ -54,26 +44,20 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
 
         const trackId = input.split('track/')[1].split('?')[0];
         const trackUri = `spotify:track:${trackId}`;
-        console.log('* Extracted track URI:', trackUri);
 
         try {
-            console.log('* Fetching track info from Spotify...');
             const trackInfo = await spotifyManager.spotifyApi.getTrack(trackId);
             const trackName = trackInfo.body.name;
             const artistName = trackInfo.body.artists[0].name;
-            console.log('* Track info retrieved:', { trackName, artistName });
 
             let wasAddedToPlaylist = false;
             try {
-                console.log('* Attempting to add to history playlist...');
                 wasAddedToPlaylist = await spotifyManager.addToRequestsPlaylist(trackUri);
-                console.log('* Added to history playlist:', wasAddedToPlaylist);
             } catch (playlistError) {
                 console.error('* Error adding to history playlist:', playlistError);
             }
 
             if (isPriorityRequest) {
-                console.log('* Adding to start of pending queue...');
                 spotifyManager.queueManager.pendingTracks.unshift({
                     uri: trackUri,
                     name: trackName,
@@ -82,7 +66,6 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 });
                 spotifyManager.queueManager.saveQueue();
             } else {
-                console.log('* Adding to end of pending queue...');
                 spotifyManager.queueManager.addToPendingQueue({
                     uri: trackUri,
                     name: trackName,
@@ -92,8 +75,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
             }
             console.log('* Successfully added to queue');
 
-            console.log('* Marking redemption as fulfilled...');
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
@@ -115,8 +97,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 trackUri: trackUri
             });
             try {
-                console.log('* Attempting to refund points due to error...');
-                await twitchBot.channelPoints.updateRedemptionStatusByIds(
+                await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
                     [event.id],
@@ -146,7 +127,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
         });
         try {
             console.log('* Attempting to refund points after fatal error...');
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],

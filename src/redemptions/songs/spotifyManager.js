@@ -128,57 +128,9 @@ class SpotifyManager {
                     }
                 }
             }
-
-            // Generate authorization URL
-            const scopes = [
-                'user-read-playback-state',
-                'user-modify-playback-state',
-                'user-read-currently-playing',
-                'playlist-read-private',
-                'playlist-read-collaborative',
-                'playlist-modify-public',
-                'playlist-modify-private'
-            ];
-
-            const authorizeURL = this.spotifyApi.createAuthorizeURL(scopes);
-            console.log('\n* Please visit this URL to authorize your Spotify account:');
-            console.log(authorizeURL);
-            console.log('\n* After authorizing, copy the code from the URL and paste it here.');
-
-            // Wait for user input
-            const code = await this.waitForInput('Enter the code: ');
-
-            // Get tokens
-            const data = await this.spotifyApi.authorizationCodeGrant(code);
-
-            // Save tokens
-            this.spotifyApi.setAccessToken(data.body['access_token']);
-            this.spotifyApi.setRefreshToken(data.body['refresh_token']);
-
-            this.tokenManager.tokens.spotifyUserAccessToken = data.body['access_token'];
-            this.tokenManager.tokens.spotifyUserRefreshToken = data.body['refresh_token'];
-            await this.tokenManager.saveTokens();
-
-            console.log('* Spotify user authentication successful');
-
         } catch (error) {
             console.error('Spotify authentication error:', error);
         }
-    }
-
-    // Helper function to get user input
-    waitForInput(prompt) {
-        const readline = require('readline').createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-
-        return new Promise((resolve) => {
-            readline.question(prompt, (answer) => {
-                readline.close();
-                resolve(answer);
-            });
-        });
     }
 
     async getPlaybackState() {
@@ -198,14 +150,7 @@ class SpotifyManager {
 
     async addToQueue(trackUri) {
         try {
-            await this.ensureTokenValid();
-            const state = await this.getPlaybackState();
-    
-            if (state === 'CLOSED') {
-                console.log('* Spotify not active, will use pending queue');
-                throw { body: { error: { reason: 'NO_ACTIVE_DEVICE' } } };
-            }
-    
+            await this.ensureTokenValid();    
             await this.spotifyApi.addToQueue(trackUri);
             return true;
         } catch (error) {

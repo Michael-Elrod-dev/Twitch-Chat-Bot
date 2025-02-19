@@ -59,7 +59,7 @@ function specialCommandHandlers(dependencies) {
             const seed = (1 + Math.abs(hashCode(username)) % 99999).toString().padStart(5, '0');
             const url = `https://thisfursonadoesnotexist.com/v2/jpgs-2x/seed${seed}.jpg`;
 
-            await twitchBot.sendMessage(channel, `@${username}, here is your fursona: ${url}`);
+            await twitchBot.sendMessage(channel, `@${username}, here is your fursona ${url}`);
         },
 
         async waifu(twitchBot, channel, context, args) {
@@ -72,7 +72,7 @@ function specialCommandHandlers(dependencies) {
             const seed = (10000 + Math.abs(hashCode(username)) % 89999).toString().padStart(5, '0');
             const url = `https://arfa.dev/waifu-ed/editor_d6a3dae.html?seed=${seed}`;
 
-            await twitchBot.sendMessage(channel, `@${username}, here is your cute waifu! ${url} AYAYA`);
+            await twitchBot.sendMessage(channel, `@${username}, here is your waifu ${url}`);
         },
 
         async currentSong(twitchBot, channel) {

@@ -13,6 +13,8 @@ const handleQuote = require('./redemptions/quotes/handleQuote');
 const handleSongRequest = require('./redemptions/songs/songRequest');
 const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
+const emoteResponses = require('./data/emotes.json');
+
 class Bot {
     constructor() {
         this.wsConnection = null;
@@ -162,7 +164,17 @@ class Bot {
     
             if (event.reward_id) return;
     
-            if (event.message.text.startsWith('!')) {
+            const messageText = event.message.text.toLowerCase();
+    
+            // Check for emotes
+            if (emoteResponses[messageText]) {
+                await this.chatManager.incrementMessageCount(context.username, 'message');
+                await this.sendMessage(this.channelName, emoteResponses[messageText]);
+                return;
+            }
+    
+            // Handle regular commands
+            if (messageText.startsWith('!')) {
                 await this.chatManager.incrementMessageCount(context.username, 'command');
                 await this.commandManager.handleCommand(this, this.channelName, context, event.message.text);
             } else {

@@ -1,10 +1,7 @@
 // src/analytics/db/dbManager.js
 const fs = require('fs');
 const mysql = require('mysql2/promise');
-const { exec } = require('child_process');
 const config = require('../../config/config');
-const util = require('util');
-const execPromise = util.promisify(exec);
 
 class DbManager {
     constructor() {
@@ -24,11 +21,8 @@ class DbManager {
 
     async connect() {
         try {
-            await this.startMySQLService();
-            await new Promise(resolve => setTimeout(resolve, 10000));
-
             this.connection = await mysql.createConnection(this.dbConfig);
-            console.log('✅ Connected to twitch_bot database');
+            console.log('✅ Connected to SQL database');
         } catch (error) {
             console.error('❌ Failed to connect to database:', error);
             throw error;

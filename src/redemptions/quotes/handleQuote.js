@@ -3,14 +3,10 @@ const QuoteManager = require('./quoteManager');
 
 async function handleQuote(event, twitchBot, _, twitchBot2) {
     try {
-        console.log('* Quote Redemption Detected:');
-        console.log(`  User: ${event.userDisplayName}`);
-        console.log(`  Input: ${event.input || 'No input provided'}`);
-
         const input = event.input.trim();
         
         if (!input) {
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
@@ -18,14 +14,14 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             );
             
             await twitchBot.sendMessage(event.broadcasterDisplayName, 
-                `@${event.userDisplayName} Please provide a quote in the format: 'Quote' - Person who said it. Your points have been refunded.`);
+                `@${event.userDisplayName} Please provide a quote in the format: "Quote" - Person who said it. Your points have been refunded.`);
             return;
         }
 
         const match = input.match(/[''"](.*?)[''"]\s*-\s*(.*)/);
         
         if (!match) {
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
@@ -33,7 +29,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             );
             
             await twitchBot.sendMessage(event.broadcasterDisplayName, 
-                `@${event.userDisplayName} Invalid format. Please use: 'Quote' - Person who said it. Your points have been refunded.`);
+                `@${event.userDisplayName} Invalid format. Please use: "Quote" - Person who said it. Your points have been refunded.`);
             return;
         }
 
@@ -51,7 +47,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             quoteId = quoteManager.addQuote(quoteData);
         } catch (saveError) {
             console.error('❌ Error saving quote:', saveError);
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],
@@ -63,7 +59,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             return;
         }
 
-        await twitchBot.channelPoints.updateRedemptionStatusByIds(
+        await twitchBot.redemptionManager.updateRedemptionStatus(
             event.broadcasterId,
             event.rewardId,
             [event.id],
@@ -76,7 +72,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
     } catch (error) {
         console.error('❌ Error in quote handler:', error);
         try {
-            await twitchBot.channelPoints.updateRedemptionStatusByIds(
+            await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
                 [event.id],

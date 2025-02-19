@@ -8,6 +8,6 @@ IF %ERRORLEVEL% NEQ 0 (
 if "%1"=="am_admin" (
     cd /d D:\Code\AlmostHadAI
     net start MySQL90
-    git checkout main
+    git checkout dev
     node D:\Code\AlmostHadAI\src\bot.js
 )

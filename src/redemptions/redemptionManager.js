@@ -1,4 +1,6 @@
 // src/redemptions/redemptionManager.js
+const config = require('../config/config');
+
 class RedemptionManager {
     constructor(twitchBot, spotifyManager) {
         this.twitchBot = twitchBot;
@@ -13,23 +15,16 @@ class RedemptionManager {
 
     async handleRedemption(event) {
         const timestamp = new Date().toISOString();
-        console.log(`* Processing redemption event at ${timestamp} for: ${event.rewardTitle}`, {
-            user: event.userDisplayName,
-            rewardId: event.rewardId,
-            status: event.status
-        });
-        
         const handler = this.handlers.get(event.rewardTitle.toLowerCase());
-        
+
         if (!handler) {
             console.log(`* No handler found for reward: ${event.rewardTitle}`);
             return;
         }
 
         try {
-            console.log(`* Executing handler for: ${event.rewardTitle}`);
             await handler(event, this.twitchBot, this.spotifyManager, this.twitchBot);
-            console.log(`* Handler completed successfully for: ${event.rewardTitle}`);
+            console.log(`* Executed handler for: ${event.rewardTitle}`);
         } catch (error) {
             console.error('* Handler execution failed:', {
                 timestamp,
@@ -43,6 +38,30 @@ class RedemptionManager {
                     input: event.input
                 }
             });
+        }
+    }
+
+    async updateRedemptionStatus(broadcasterId, rewardId, redemptionIds, status) {
+        try {
+            const response = await fetch(`${config.twitchApiEndpoint}/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${rewardId}&id=${redemptionIds[0]}`, {
+                method: 'PATCH',
+                headers: {
+                    'Client-Id': this.twitchBot.tokenManager.tokens.clientId,
+                    'Authorization': `Bearer ${this.twitchBot.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    status: status
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Failed to update redemption status: ${response.status} - ${JSON.stringify(errorData)}`);
+            }
+        } catch (error) {
+            console.error('Error updating redemption status:', error);
+            throw error;
         }
     }
 }
