@@ -34,7 +34,7 @@ class TokenManager {
     async validateToken(type = 'bot') {
         try {
             const token = type === 'bot' ? this.tokens.botAccessToken : this.tokens.broadcasterAccessToken;
-            const response = await fetch('https://id.twitch.tv/oauth2/validate', {
+            const response = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -46,7 +46,7 @@ class TokenManager {
                 await this.refreshToken(type);
                 
                 // After refresh, validate again to get the user ID
-                const newResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
+                const newResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                     headers: {
                         'Authorization': `Bearer ${this.tokens.botAccessToken}`
                     }
@@ -107,7 +107,7 @@ class TokenManager {
                                 this.tokens.botRefreshToken = result.refresh_token;
                                 
                                 // Validate the new token to get the bot ID
-                                const validateResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
+                                const validateResponse = await fetch(`${config.twitchApiEndpoint}/validate`, {
                                     headers: {
                                         'Authorization': `Bearer ${result.access_token}`
                                     }

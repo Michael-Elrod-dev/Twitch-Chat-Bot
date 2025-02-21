@@ -1,56 +1,100 @@
-const WebSocket = require('ws');
+// src/bot.js
 const config = require('./config/config');
 const TwitchAPI = require('./tokens/twitchAPI');
-const ChatManager = require('./chats/chatManager');
 const TokenManager = require('./tokens/tokenManager');
+const ViewerManager = require('./viewers/viewerManager');
 const CommandManager = require('./commands/commandManager');
 const AnalyticsManager = require('./analytics/analyticsManager');
 const QuoteManager = require('./redemptions/quotes/quoteManager');
 const SpotifyManager = require('./redemptions/songs/spotifyManager');
 const RedemptionManager = require('./redemptions/redemptionManager');
 
+const MessageSender = require('./messages/messageSender');
+const WebSocketManager = require('./websocket/webSocketManager');
+const RedemptionHandler = require('./messages/redemptionHandler');
+const ChatMessageHandler = require('./messages/chatMessageHandler');
+const SubscriptionManager = require('./websocket/subscriptionManager');
+
 const handleQuote = require('./redemptions/quotes/handleQuote');
 const handleSongRequest = require('./redemptions/songs/songRequest');
 const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
-const emoteResponses = require('./data/emotes.json');
-
 class Bot {
     constructor() {
-        this.wsConnection = null;
-        this.sessionId = null;
+        this.currentStreamId = null;
+        this.isStreaming = false;
+        this.channelName = config.channelName;
     }
 
     async init() {
         try {
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init();
-
+    
+            // Create stream session right after analytics initialization
+            this.currentStreamId = Date.now().toString(); // Simple unique ID
+            await this.analyticsManager.trackStreamStart(
+            this.currentStreamId,
+            null, // We can fetch title later if needed
+            null  // Same for category
+            );
+    
             this.tokenManager = new TokenManager();
             await this.tokenManager.checkAndRefreshTokens();
-            this.channelName = config.channelName;
+            
             this.twitchAPI = new TwitchAPI(this.tokenManager);
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
-
-            this.chatManager = new ChatManager();
+    
+            this.viewerManager = new ViewerManager();
             this.quoteManager = new QuoteManager();
             
             const handlers = specialCommandHandlers({
                 quoteManager: this.quoteManager,
                 spotifyManager: this.spotifyManager,
-                chatManager: this.chatManager
+                viewerManager: this.viewerManager
             });
             this.commandManager = new CommandManager(handlers);
-
+    
+            this.messageSender = new MessageSender(this.tokenManager);
+            
+            this.chatMessageHandler = new ChatMessageHandler(
+                this.viewerManager,
+                this.commandManager
+            );
+            
             this.redemptionManager = new RedemptionManager(this, this.spotifyManager);
+            this.redemptionHandler = new RedemptionHandler(
+                this.viewerManager,
+                this.redemptionManager
+            );
+            
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
-
-            await this.connectWebSocket();
-
+    
+            this.subscriptionManager = new SubscriptionManager(
+                this.tokenManager,
+                null
+            );
+    
+            this.webSocketManager = new WebSocketManager(
+                this.tokenManager,
+                this.handleChatMessage.bind(this),
+                this.handleRedemption.bind(this),
+                this.handleStreamOffline.bind(this)
+            );
+            
+            this.webSocketManager.onSessionReady = async (sessionId) => {
+                this.subscriptionManager.setSessionId(sessionId);
+                await this.subscriptionManager.subscribeToChatEvents();
+                await this.subscriptionManager.subscribeToChannelPoints();
+                await this.subscriptionManager.subscribeToStreamOffline();
+            };
+            
+            await this.webSocketManager.connect();
+    
             setInterval(async () => {
                 try {
                     await this.tokenManager.checkAndRefreshTokens();
@@ -58,254 +102,61 @@ class Bot {
                     console.error('❌ Error in periodic token refresh:', error);
                 }
             }, config.tokenRefreshInterval);
-            
         } catch (error) {
             console.error('❌ Failed to initialize bot:', error);
             throw error;
         }
     }
 
-    async connectWebSocket() {
-        try {
-            this.wsConnection = new WebSocket(config.wsEndpoint);
-
-            this.wsConnection.on('close', (code, reason) => {
-                console.log(`* WebSocket closed: ${code} - ${reason}`);
-                setTimeout(() => this.connectWebSocket(), config.wsReconnectDelay);
-            });
-
-            this.wsConnection.on('message', async (data) => {
-                const message = JSON.parse(data);
-                await this.handleWebSocketMessage(message);
-            });
-
-            this.wsConnection.on('error', (error) => {
-                console.error('WebSocket error:', error);
-            });
-
-        } catch (error) {
-            console.error('❌ Failed to connect to WebSocket:', error);
-            throw error;
-        }
-    }
-
-    async handleWebSocketMessage(message) {
-        try {
-            if (!message.metadata) {
-                console.error('Missing metadata in message:', message);
-                return;
-            }
-
-            switch (message.metadata.message_type) {
-                case 'session_welcome': {
-                    this.sessionId = message.payload.session.id;
-                    console.log('✅ WebSocket session started');
-                    await this.subscribeToChatEvents();
-                    await this.subscribeToChannelPoints();
-                    break;
-                }
-                case 'notification': {
-                    if (message.metadata.subscription_type === 'channel.chat.message') {
-                        await this.handleChatMessage(message.payload);
-                    } else if (message.metadata.subscription_type === 'channel.channel_points_custom_reward_redemption.add') {
-                        await this.handleRedemption(message.payload);
-                    }
-                    break;
-                }
-                case 'session_reconnect': {
-                    console.log('* Reconnect requested, reconnecting...');
-                    await this.connectWebSocket();
-                    break;
-                }
-            }
-        } catch (error) {
-            console.error('❌ Error handling WebSocket message:', error);
-        }
+    async handleChatMessage(payload) {
+        await this.chatMessageHandler.handleChatMessage(payload, this);
     }
 
     async handleRedemption(payload) {
-        try {
-            if (!payload.event) return;
-
-            const event = {
-                rewardTitle: payload.event.reward.title,
-                rewardId: payload.event.reward.id,
-                userDisplayName: payload.event.user_login,
-                input: payload.event.user_input,
-                status: payload.event.status,
-                id: payload.event.id,
-                broadcasterId: payload.event.broadcaster_user_id,
-                broadcasterDisplayName: payload.event.broadcaster_user_login
-            };
-
-            await this.chatManager.incrementMessageCount(event.userDisplayName, 'redemption');
-            await this.redemptionManager.handleRedemption(event);
-        } catch (error) {
-            console.error('❌ Error handling redemption:', error);
-        }
+        await this.redemptionHandler.handleRedemption(payload, this);
     }
 
-    async handleChatMessage(payload) {
-        try {
-            if (!payload.event) return;
-    
-            const event = payload.event;
-            if (event.chatter_user_id === this.tokenManager.tokens.botId) return;
-    
-            const context = {
-                username: event.chatter_user_name,
-                userId: event.chatter_user_id,
-                mod: event.chatter_is_mod,
-                badges: {
-                    broadcaster: event.chatter_user_id === this.tokenManager.tokens.channelId
-                },
-                'custom-reward-id': event.reward_id
-            };
-    
-            if (event.reward_id) return;
-    
-            const messageText = event.message.text.toLowerCase();
-    
-            // Check for emotes
-            if (emoteResponses[messageText]) {
-                await this.chatManager.incrementMessageCount(context.username, 'message');
-                await this.sendMessage(this.channelName, emoteResponses[messageText]);
-                return;
-            }
-    
-            // Handle regular commands
-            if (messageText.startsWith('!')) {
-                await this.chatManager.incrementMessageCount(context.username, 'command');
-                await this.commandManager.handleCommand(this, this.channelName, context, event.message.text);
-            } else {
-                await this.chatManager.incrementMessageCount(context.username, 'message');
-            }
-        } catch (error) {
-            console.error('❌ Error handling chat message:', error);
-        }
-    }
-
-    async subscribeToChatEvents() {
-        try {
-            if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.userId) {
-                throw new Error('Missing required IDs');
-            }
-    
-            const subscription = {
-                type: 'channel.chat.message',
-                version: '1',
-                condition: {
-                    broadcaster_user_id: this.tokenManager.tokens.channelId,
-                    user_id: this.tokenManager.tokens.userId
-                },
-                transport: {
-                    method: 'websocket',
-                    session_id: this.sessionId
-                }
-            };
-        
-            const response = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
-                method: 'POST',
-                headers: {
-                    'Client-Id': this.tokenManager.tokens.clientId,
-                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(subscription)
-            });
-    
-            const responseData = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(`Failed to subscribe to chat events: ${JSON.stringify(responseData)}`);
-            }
-    
-            console.log('✅ Subscribed to chat events');
-        } catch (error) {
-            console.error('❌ Error subscribing to chat events:', error);
-            throw error;
-        }
-    }
-
-    async subscribeToChannelPoints() {
-        try {
-            if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.userId) {
-                throw new Error('Missing required IDs');
-            }
-    
-            const subscription = {
-                type: 'channel.channel_points_custom_reward_redemption.add',
-                version: '1',
-                condition: {
-                    broadcaster_user_id: this.tokenManager.tokens.channelId
-                },
-                transport: {
-                    method: 'websocket',
-                    session_id: this.sessionId
-                }
-            };
-        
-            const response = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
-                method: 'POST',
-                headers: {
-                    'Client-Id': this.tokenManager.tokens.clientId,
-                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(subscription)
-            });
-    
-            const responseData = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(`Failed to subscribe to channel points: ${JSON.stringify(responseData)}`);
-            }
-    
-            console.log('✅ Subscribed to channel point redemptions');
-        } catch (error) {
-            console.error('❌ Error subscribing to channel points:', error);
-            throw error;
-        }
+    async handleStreamOffline() {
+        console.log('Stream detected as ended via EventSub');
+        await this.cleanup();
+        process.exit(0);
     }
 
     async sendMessage(channel, message) {
+        return this.messageSender.sendMessage(channel, message);
+    }
+
+    async cleanup() {
+        console.log('Starting cleanup process...');
         try {
-            if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.botId) {
-                console.error('Missing required IDs -', {
-                    channelId: this.tokenManager.tokens.channelId,
-                    botId: this.tokenManager.tokens.botId
-                });
-                return;
+            if (this.currentStreamId) {
+                console.log('Ending stream session...');
+                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
             }
-    
-            try {
-                await this.tokenManager.validateToken('bot');
-            } catch (error) {
-                console.error('❌ Error validating bot token:', error);
-                throw error;
+            
+            if (this.webSocketManager) {
+                console.log('Closing WebSocket connection...');
+                this.webSocketManager.close();
             }
-    
-            const response = await fetch(`${config.twitchApiEndpoint}/chat/messages`, {
-                method: 'POST',
-                headers: {
-                    'Client-Id': this.tokenManager.tokens.clientId,
-                    'Authorization': `Bearer ${this.tokenManager.tokens.botAccessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    broadcaster_id: this.tokenManager.tokens.channelId,
-                    sender_id: this.tokenManager.tokens.botId,
-                    message: message
-                })
-            });
-    
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Failed to send chat message: ${JSON.stringify(errorData)}`);
+            
+            if (this.analyticsManager && this.analyticsManager.dbManager) {
+                console.log('Closing database connection...');
+                await this.analyticsManager.dbManager.close();
             }
+            
+            console.log('Cleanup complete!');
+            console.log('Press any key to exit...');
+            
+            // Wait for keypress before exiting
+            process.stdin.setRawMode(true);
+            process.stdin.resume();
+            process.stdin.on('data', process.exit.bind(process, 0));
         } catch (error) {
-            console.error('❌ Error sending chat message:', error);
-            throw error;
+            console.error('Error during cleanup:', error);
+            console.log('Press any key to exit...');
+            process.stdin.setRawMode(true);
+            process.stdin.resume();
+            process.stdin.on('data', process.exit.bind(process, 1));
         }
     }
 }
@@ -319,7 +170,6 @@ async function startBot() {
         process.exit(1);
     }
 }
-
 startBot();
 
 module.exports = bot;

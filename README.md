@@ -1,64 +1,123 @@
 # AlmostHadAI Twitch Bot
 
-Needs updating
+A comprehensive Twitch chat bot with Spotify integration, channel point redemptions, custom commands, and chat analytics stored in SQL.
 
 ## Technical Architecture
 
 ### Directory Structure
+
 ```
 src/
-  ├── chats/       # Chat monitoring
-  ├── commands/    # Command management
-  ├── data/        # Persistent storage
-  ├── redemptions/ # Channel point features
-     ├── quotes/     # Quotes management
-     └── songs       # Song request management
-  ├── tokens/      # Token management
-  └── bot.js       # Main application
+├── analytics/                 # Stream and chat analytics
+│   ├── collectors/            # Data collection modules
+│   ├── db/                    # Database management
+│   │   ├── dbManager.js       # Database connection handling
+│   │   └── schema.sql         # Database schema
+│   └── analyticsManager.js    # Central analytics coordination
+├── commands/                  # Command handling
+│   ├── commandManager.js      # Custom command management
+│   └── specialCommandHandlers.js # Built-in command implementations
+├── config/                    # Configuration
+│   └── config.js              # App-wide configuration
+├── data/                      # Persistent storage
+│   ├── commands.json          # Custom commands storage
+│   ├── db.json                # Database configuration
+│   ├── emotes.json            # Emote response mappings
+│   ├── pendingQueue.json      # Pending song queue
+│   ├── quotes.json            # Saved quotes
+│   ├── tokens.json            # API tokens
+│   └── viewers.json           # Viewer statistics
+├── messages/                  # Message handling
+│   ├── chatMessageHandler.js  # Chat message processing
+│   ├── messageSender.js       # Message sending to Twitch
+│   └── redemptionHandler.js   # Channel point redemption processing
+├── redemptions/               # Channel point features
+│   ├── quotes/                # Quote system
+│   │   ├── handleQuote.js     # Quote redemption handler
+│   │   └── quoteManager.js    # Quote storage and retrieval
+│   ├── songs/                 # Song request system
+│   │   ├── queueManager.js    # Song queue management
+│   │   ├── songRequest.js     # Song request handling
+│   │   └── spotifyManager.js  # Spotify API integration
+│   └── redemptionManager.js   # Channel point redemption routing
+├── tokens/                    # API authentication
+│   ├── tokenManager.js        # Token refresh and storage
+│   └── twitchAPI.js           # Twitch API wrapper
+├── viewers/                   # Viewer tracking
+│   └── viewerManager.js       # Viewer statistics and management
+├── websocket/                 # Real-time communication
+│   ├── eventHandler.js        # EventSub event handling
+│   ├── subscriptionManager.js # EventSub subscription management
+│   └── webSocketManager.js    # WebSocket connection handling
+└── bot.js                     # Main application entry point
 ```
 
-### Key Components
-- `bot.js` - Core application with Twitch integration and event handling
-  - Manages token refresh and authentication
-  - Handles EventSub WebSocket connections
-  - Coordinates between Twitch chat and channel points
-  - Initializes all subsystems (Spotify, commands, redemptions)
-- `spotifyManager.js` - Handles Spotify authentication and playback control
-- `redemptionManager.js` - Manages channel point redemptions
-- `commandManager.js` - Command processing and storage
-- `tokenManager.js` - Authentication token management and refresh logic
-- `quoteManager.js` - Manages saving and retrieving chat quotes
-- `handleQuote.js` - Processes channel point quote redemptions
+## Key Components
 
-### Authentication System
-The bot implements a robust token management system:
-- Automatic token refresh on startup
-- Continuous token validity monitoring
-- Separate handling for bot and broadcaster tokens
-- Graceful error recovery for expired tokens
-- Token persistence between sessions
+### Core Bot (`bot.js`)
+- Initializes all subsystems and manages their lifecycle
+- Coordinates between components via dependency injection
+- Establishes event subscriptions and message routing
+- Handles stream start/end detection and cleanup
 
-### Token Refresh Flow
-1. Initial token validation on startup
-2. Automatic refresh of expired tokens
-3. Persistent storage of new tokens
-4. Independent refresh cycles for:
-   - Bot chat tokens
-   - Broadcaster tokens
-   - Spotify access tokens
+### Authentication & API (`tokens/`)
+- **tokenManager.js**: Manages OAuth tokens for Twitch and Spotify with automatic refreshing
+- **twitchAPI.js**: Provides methods for interacting with Twitch API endpoints
 
-### Error Recovery
-The bot includes several error recovery mechanisms:
-- Automatic reconnection on disconnection
+### Event Handling (`websocket/`)
+- **webSocketManager.js**: Maintains WebSocket connection to Twitch EventSub
+- **subscriptionManager.js**: Sets up and manages event subscriptions
+- **eventHandler.js**: Routes incoming events to appropriate handlers
+
+### Message Processing (`messages/`)
+- **chatMessageHandler.js**: Processes incoming chat messages and routes to commands
+- **messageSender.js**: Handles sending messages to Twitch chat
+- **redemptionHandler.js**: Processes channel point redemptions
+
+### Commands (`commands/`)
+- **commandManager.js**: Manages custom commands with storage and permission handling
+- **specialCommandHandlers.js**: Implements built-in commands with complex functionality
+
+### Channel Point Features (`redemptions/`)
+- **redemptionManager.js**: Routes redemptions to appropriate handlers
+- **quotes/**: Quote saving and retrieval system
+- **songs/**: Spotify song request and queue management
+
+### Spotify Integration (`redemptions/songs/`)
+- **spotifyManager.js**: Authenticates with Spotify and manages playback
+- **queueManager.js**: Manages pending song requests
+- **songRequest.js**: Processes song request redemptions
+
+### Viewer Tracking (`viewers/`)
+- **viewerManager.js**: Tracks viewer participation statistics
+
+### Analytics (`analytics/`)
+- **analyticsManager.js**: Coordinates stream and chat data collection
+- **dbManager.js**: Handles database connections and queries
+
+## Features
+
+- **Custom Commands**: Create, edit, and manage chat commands
+- **Song Requests**: Channel point integration with Spotify
+- **Quote System**: Save and retrieve memorable stream quotes
+- **Viewer Stats**: Track viewer participation and engagement
+- **Analytics**: Record stream data for later analysis
+- **Spotify Playback**: Queue management and song history
+- **Automatic Token Refresh**: Maintains authentication without manual intervention
+- **Stream Lifecycle**: Detects stream start/end and manages resources accordingly
+
+## Error Handling & Recovery
+
+- Automatic reconnection on WebSocket disconnection
 - Token refresh on authentication failures
-- Pending queue for Spotify offline states
-- Graceful handling of API rate limits
-- Event subscription recovery
+- Graceful handling of API rate limits and errors
+- Persistent storage for recovery between sessions
+- Comprehensive logging for troubleshooting
 
-### State Management
-- Spotify playback state monitoring
-- Channel point redemption state tracking
+## State Management
+
+- Spotify playback state tracking
+- Channel point redemption status updates
 - Command state persistence
-- Token refresh state management
-- Connection state monitoring
-- Quote storage and retrieval system
+- Viewer statistics tracking
+- Session-based analytics

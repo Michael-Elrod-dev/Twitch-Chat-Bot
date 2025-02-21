@@ -16,11 +16,13 @@ class Config {
         this.wsReconnectDelay = 5000; // 5 seconds
 
         // API Endpoints
+        this.twitchAuthEndpoint = 'https://id.twitch.tv/oauth2';
         this.twitchApiEndpoint = 'https://api.twitch.tv/helix';
         this.spotifyApiEndpoint = 'https://api.spotify.com/v1';
 
         // Intervals
-        this.tokenRefreshInterval = 30 * 60 * 1000; // 30 minutes
+        this.tokenRefreshInterval = 5 * 60 * 1000; // 5 minutes
+        this.steamingInterval = 10000; // 10 seconds
         this.spotifyInterval = 3000; // 3 seconds
     }
 }

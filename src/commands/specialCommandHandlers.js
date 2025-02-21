@@ -2,7 +2,7 @@
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 function specialCommandHandlers(dependencies) {
-    const { quoteManager, spotifyManager, chatManager } = dependencies;
+    const { quoteManager, spotifyManager, viewerManager } = dependencies;
     return {
         async followAge(twitchBot, channel, context, args) {
             const toUser = args[0]?.replace('@', '') || context.username;
@@ -136,9 +136,9 @@ function specialCommandHandlers(dependencies) {
             try {
                 const requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
 
-                const messages = chatManager.getUserMessages(requestedUser);
-                const commands = chatManager.getUserCommands(requestedUser);
-                const redemptions = chatManager.getUserRedemptions(requestedUser);
+                const messages = viewerManager.getUserMessages(requestedUser);
+                const commands = viewerManager.getUserCommands(requestedUser);
+                const redemptions = viewerManager.getUserRedemptions(requestedUser);
                 const total = messages + commands + redemptions;
 
                 await twitchBot.sendMessage(channel,
@@ -153,8 +153,8 @@ function specialCommandHandlers(dependencies) {
 
         async topStats(twitchBot, channel, context, args) {
             try {
-                const topUsers = chatManager.getTopFiveUsers();
-                await twitchBot.sendMessage(channel, `Top 5 Most Active Chatters: ${topUsers.join(' | ')}`);
+                const topUsers = viewerManager.getTopFiveUsers();
+                await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
             } catch (error) {
                 console.error('❌ Error in topStats:', error);
                 await twitchBot.sendMessage(channel, 'An error occurred while fetching top stats.');
