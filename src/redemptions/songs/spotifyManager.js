@@ -136,7 +136,6 @@ class SpotifyManager {
     async getPlaybackState() {
         try {
             await this.ensureTokenValid();
-            
             const state = await this.spotifyApi.getMyCurrentPlaybackState();
             if (!state.body || !state.body.device) {
                 return 'CLOSED';
@@ -144,9 +143,6 @@ class SpotifyManager {
             
             return state.body.is_playing ? 'PLAYING' : 'PAUSED';
         } catch (error) {
-            if (!error.body?.error?.message?.includes('RequestTimeoutException')) {
-                console.error('❌ Error getting playback state:', error);
-            }
             return 'CLOSED';
         }
     }

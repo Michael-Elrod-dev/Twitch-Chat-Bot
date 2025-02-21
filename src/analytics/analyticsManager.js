@@ -1,27 +1,27 @@
 // src/analytics/analyticsManager.js
-const DbManager = require('../analytics/db/dbManager');
+const DbManager = require('./db/dbManager');
+const ViewerTracker = require('./viewers/viewerTracker');
 
 class AnalyticsManager {
    constructor() {
        this.dbManager = new DbManager();
+       this.currentStreamId = null;
+       this.viewerTracker = null;
    }
 
    async init() {
        try {
            await this.dbManager.connect();
+           this.viewerTracker = new ViewerTracker(this);
        } catch (error) {
            console.error('❌ Failed to initialize analytics manager:', error);
            throw error;
        }
    }
 
-   async trackChatMessage(userId, streamId, message) {
+   async trackChatMessage(username, userId, streamId, message, type = 'message') {
        try {
-           const sql = `
-               INSERT INTO chat_messages (user_id, stream_id, message_time, message_content) 
-               VALUES (?, ?, NOW(), ?)
-           `;
-           await this.dbManager.query(sql, [userId, streamId, message]);
+           await this.viewerTracker.trackInteraction(username, userId, streamId, type, message);
        } catch (error) {
            console.error('❌ Error tracking chat message:', error);
        }
@@ -54,6 +54,7 @@ class AnalyticsManager {
 
    async trackStreamStart(streamId, title, category) {
        try {
+           this.currentStreamId = streamId;
            const sql = `
                INSERT INTO streams (stream_id, start_time, title, category)
                VALUES (?, NOW(), ?, ?)
@@ -72,6 +73,7 @@ class AnalyticsManager {
                WHERE stream_id = ?
            `;
            await this.dbManager.query(sql, [streamId]);
+           this.currentStreamId = null;
        } catch (error) {
            console.error('❌ Error tracking stream end:', error);
        }

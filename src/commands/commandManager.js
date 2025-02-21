@@ -125,7 +125,9 @@ class CommandManager {
                     users: twitchBot.twitchAPI,
                     streams: {
                         getStreamByUserName: (username) => twitchBot.twitchAPI.getStreamByUserName(username)
-                    }
+                    },
+                    viewerManager: twitchBot.viewerManager,
+                    analyticsManager: twitchBot.analyticsManager
                 };
                 await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
             } else {

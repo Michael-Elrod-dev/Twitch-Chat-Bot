@@ -30,23 +30,35 @@ class ChatMessageHandler {
     
             // Check for emotes
             if (emoteResponses[messageText]) {
-                await this.viewerManager.incrementMessageCount(context.username, 'message');
+                await bot.analyticsManager.trackChatMessage(
+                    context.username, 
+                    context.userId, 
+                    bot.currentStreamId, 
+                    messageText, 
+                    'message'
+                );
                 await bot.sendMessage(bot.channelName, emoteResponses[messageText]);
                 return;
             }
     
             // Handle regular commands
             if (messageText.startsWith('!')) {
-                await this.viewerManager.incrementMessageCount(context.username, 'command');
+                await bot.analyticsManager.trackChatMessage(
+                    context.username, 
+                    context.userId, 
+                    bot.currentStreamId, 
+                    messageText, 
+                    'command'
+                );
                 await this.commandManager.handleCommand(bot, bot.channelName, context, event.message.text);
             } else {
-                await this.viewerManager.incrementMessageCount(context.username, 'message');
-            }
-
-            if (messageText === "!simulateend" && context.badges.broadcaster) {
-                console.log("Simulating stream end...");
-                await bot.cleanup();
-                process.exit(0);
+                await bot.analyticsManager.trackChatMessage(
+                    context.username, 
+                    context.userId, 
+                    bot.currentStreamId, 
+                    messageText, 
+                    'message'
+                );
             }
 
         } catch (error) {

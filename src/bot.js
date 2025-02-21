@@ -2,7 +2,6 @@
 const config = require('./config/config');
 const TwitchAPI = require('./tokens/twitchAPI');
 const TokenManager = require('./tokens/tokenManager');
-const ViewerManager = require('./viewers/viewerManager');
 const CommandManager = require('./commands/commandManager');
 const AnalyticsManager = require('./analytics/analyticsManager');
 const QuoteManager = require('./redemptions/quotes/quoteManager');
@@ -30,6 +29,7 @@ class Bot {
         try {
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init();
+            this.viewerManager = this.analyticsManager.viewerTracker;
     
             // Create stream session right after analytics initialization
             this.currentStreamId = Date.now().toString(); // Simple unique ID
@@ -47,7 +47,7 @@ class Bot {
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
     
-            this.viewerManager = new ViewerManager();
+            
             this.quoteManager = new QuoteManager();
             
             const handlers = specialCommandHandlers({

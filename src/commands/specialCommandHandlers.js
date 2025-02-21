@@ -135,12 +135,11 @@ function specialCommandHandlers(dependencies) {
         async combinedStats(twitchBot, channel, context, args) {
             try {
                 const requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
-
-                const messages = viewerManager.getUserMessages(requestedUser);
-                const commands = viewerManager.getUserCommands(requestedUser);
-                const redemptions = viewerManager.getUserRedemptions(requestedUser);
+                const messages = await twitchBot.viewerManager.getUserMessages(requestedUser);
+                const commands = await twitchBot.viewerManager.getUserCommands(requestedUser);
+                const redemptions = await twitchBot.viewerManager.getUserRedemptions(requestedUser);
                 const total = messages + commands + redemptions;
-
+        
                 await twitchBot.sendMessage(channel,
                     `@${requestedUser} has ${total} total interactions ` +
                     `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
@@ -153,7 +152,14 @@ function specialCommandHandlers(dependencies) {
 
         async topStats(twitchBot, channel, context, args) {
             try {
-                const topUsers = viewerManager.getTopFiveUsers();
+                if (!twitchBot.viewerManager && twitchBot.analyticsManager?.viewerTracker) {
+                    console.log('Using viewerTracker directly instead');
+                    const topUsers = await twitchBot.analyticsManager.viewerTracker.getTopUsers();
+                    await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
+                    return;
+                }
+        
+                const topUsers = await twitchBot.viewerManager.getTopUsers();
                 await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
             } catch (error) {
                 console.error('❌ Error in topStats:', error);
