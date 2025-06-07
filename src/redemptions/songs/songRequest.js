@@ -58,15 +58,14 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
             }
 
             if (isPriorityRequest) {
-                spotifyManager.queueManager.pendingTracks.unshift({
+                await spotifyManager.queueManager.addToPriorityQueue({
                     uri: trackUri,
                     name: trackName,
                     artist: artistName,
                     requestedBy: event.userDisplayName
                 });
-                spotifyManager.queueManager.saveQueue();
             } else {
-                spotifyManager.queueManager.addToPendingQueue({
+                await spotifyManager.queueManager.addToPendingQueue({
                     uri: trackUri,
                     name: trackName,
                     artist: artistName,

@@ -65,6 +65,7 @@ class Bot {
             );
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
+            await this.spotifyManager.init(this.dbManager);
             await this.spotifyManager.authenticate();
                 
             const handlers = specialCommandHandlers({

@@ -26,6 +26,10 @@ class SpotifyManager {
         this.monitorCurrentTrack();
     }
 
+    async init(dbManager) {
+        await this.queueManager.init(dbManager);
+    }
+
     startPlaybackMonitoring() {
         // Set initial state
         this.lastPlaybackState = 'NONE';
@@ -54,7 +58,7 @@ class SpotifyManager {
                     // If less than 5 seconds remaining
                     if (remaining <  config.spotifyInterval) {
                         // Get next song from pending queue
-                        const pendingTracks = this.queueManager.getPendingTracks();
+                        const pendingTracks = await this.queueManager.getPendingTracks();
                         if (pendingTracks.length > 0) {
                             const nextTrack = pendingTracks[0];
                             
@@ -63,7 +67,7 @@ class SpotifyManager {
                             console.log(`* Added next track to queue: ${nextTrack.name} by ${nextTrack.artist}`);
                             
                             // Remove from pending queue
-                            this.queueManager.removeFirstTrack();
+                            await this.queueManager.removeFirstTrack();
                             console.log('* Removed track from pending queue');
                         }
                     }
