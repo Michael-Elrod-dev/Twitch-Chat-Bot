@@ -1,27 +1,15 @@
-// src/analytics/db/dbManager.js
-const fs = require('fs');
+// src/database/dbManager.js
 const mysql = require('mysql2/promise');
-const config = require('../../config/config');
+const config = require('../config/config');
 
 class DbManager {
     constructor() {
         this.connection = null;
-        this.dbConfig = this.loadDbConfig();
-    }
-
-    loadDbConfig() {
-        try {
-            const configFile = fs.readFileSync(config.dbConfigPath, 'utf8');
-            return JSON.parse(configFile);
-        } catch (error) {
-            console.error('❌ Error reading database config:', error);
-            throw new Error('Unable to load database configuration from db.json');
-        }
     }
 
     async connect() {
         try {
-            this.connection = await mysql.createConnection(this.dbConfig);
+            this.connection = await mysql.createConnection(config.database);
             console.log('✅ Connected to SQL database');
         } catch (error) {
             console.error('❌ Failed to connect to database:', error);

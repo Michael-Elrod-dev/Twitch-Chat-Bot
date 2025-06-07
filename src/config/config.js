@@ -1,15 +1,19 @@
 // src/config/config.js
-const path = require('path');
+require('dotenv').config();
 
 class Config {
     constructor() {
         // Channel settings
         this.channelName = 'aimosthadme';
 
-        // Paths
-        this.dataPath = path.join(__dirname, '..', 'data');
-        this.dbConfigPath = path.join(this.dataPath, 'db.json');
-        this.tokensPath = path.join(this.dataPath, 'tokens.json');
+        // Database
+        this.database = {
+            host: process.env.DB_HOST,
+            port: parseInt(process.env.DB_PORT),
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            database: process.env.DB_NAME
+        };
 
         // WebSocket
         this.wsEndpoint = 'wss://eventsub.wss.twitch.tv/ws';

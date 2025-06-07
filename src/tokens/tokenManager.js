@@ -1,34 +1,67 @@
 // src/tokens/tokenManager.js
-const fs = require('fs');
 const https = require('https');
 const config = require('../config/config');
 
 class TokenManager {
-    constructor() {
-        this.tokens = this.readTokens();
-        this.checkAndRefreshTokens();
+    constructor(dbManager) {
+        this.dbManager = dbManager;
+        this.tokens = {};
+        this.isInitialized = false;
     }
 
-    readTokens() {
+    async init() {
+        await this.loadTokensFromDatabase();
+        await this.checkAndRefreshTokens();
+        this.isInitialized = true;
+    }
+
+    async loadTokensFromDatabase() {
         try {
-            const tokenFile = fs.readFileSync(config.tokensPath, 'utf8');
-            return JSON.parse(tokenFile);
+            const rows = await this.dbManager.query('SELECT token_key, token_value FROM tokens');
+            this.tokens = {};
+            
+            for (const row of rows) {
+                this.tokens[row.token_key] = row.token_value;
+            }
+            
+            console.log('✅ Loaded tokens from database');
         } catch (error) {
-            console.error('* Error reading tokens file:', error);
-            throw new Error('Unable to read tokens.json. Make sure the file exists in the files directory.');
+            console.error('❌ Error loading tokens from database:', error);
+            throw new Error('Unable to load tokens from database');
         }
     }
 
-    saveTokens() {
+    async saveTokens() {
         try {
-            fs.writeFileSync(config.tokensPath, JSON.stringify(this.tokens, null, 2));
+            for (const [key, value] of Object.entries(this.tokens)) {
+                await this.dbManager.query(`
+                    UPDATE tokens 
+                    SET token_value = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE token_key = ?
+                `, [value, key]);
+            }
         } catch (error) {
-            console.error('* Error saving tokens:', error);
+            console.error('❌ Error saving tokens to database:', error);
+            throw error;
+        }
+    }
+
+    async updateToken(tokenKey, tokenValue) {
+        try {
+            this.tokens[tokenKey] = tokenValue;
+            await this.dbManager.query(`
+                UPDATE tokens 
+                SET token_value = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE token_key = ?
+            `, [tokenValue, tokenKey]);
+        } catch (error) {
+            console.error(`❌ Error updating token ${tokenKey}:`, error);
+            throw error;
         }
     }
 
     getChannelName() {
-        return this.tokens.channelName;
+        return config.channelName;
     }
 
     async validateToken(type = 'bot') {
@@ -53,17 +86,16 @@ class TokenManager {
                 });
                 const newData = await newResponse.json();
                 if (type === 'bot') {
-                    this.tokens.botId = newData.user_id;
+                    await this.updateToken('botId', newData.user_id);
                 }
             } else {
                 if (type === 'bot') {
-                    this.tokens.botId = data.user_id;
+                    await this.updateToken('botId', data.user_id);
                 } else {
-                    this.tokens.userId = data.user_id;
+                    await this.updateToken('userId', data.user_id);
                 }
             }
             
-            this.saveTokens();
             return true;
         } catch (error) {
             console.error(`Token validation failed for ${type}:`, error);
@@ -103,22 +135,21 @@ class TokenManager {
                         const result = JSON.parse(data);
                         if (result.access_token && result.refresh_token) {
                             if (type === 'bot') {
-                                this.tokens.botAccessToken = result.access_token;
-                                this.tokens.botRefreshToken = result.refresh_token;
+                                await this.updateToken('botAccessToken', result.access_token);
+                                await this.updateToken('botRefreshToken', result.refresh_token);
                                 
                                 // Validate the new token to get the bot ID
-                                const validateResponse = await fetch(`${config.twitchApiEndpoint}/validate`, {
+                                const validateResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                                     headers: {
                                         'Authorization': `Bearer ${result.access_token}`
                                     }
                                 });
                                 const validateData = await validateResponse.json();
-                                this.tokens.botId = validateData.user_id;
+                                await this.updateToken('botId', validateData.user_id);
                             } else {
-                                this.tokens.broadcasterAccessToken = result.access_token;
-                                this.tokens.broadcasterRefreshToken = result.refresh_token;
+                                await this.updateToken('broadcasterAccessToken', result.access_token);
+                                await this.updateToken('broadcasterRefreshToken', result.refresh_token);
                             }
-                            this.saveTokens();
                             resolve(result.access_token);
                         } else {
                             reject(`* Failed to refresh ${type} tokens: ${result.message || 'Unknown error'}`);

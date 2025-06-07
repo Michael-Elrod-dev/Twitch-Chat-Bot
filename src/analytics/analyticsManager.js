@@ -1,10 +1,9 @@
 // src/analytics/analyticsManager.js
-const DbManager = require('./db/dbManager');
 const ViewerTracker = require('./viewers/viewerTracker');
 
 class AnalyticsManager {
-    constructor() {
-        this.dbManager = new DbManager();
+    constructor(dbManager) {
+        this.dbManager = dbManager;
         this.currentStreamId = null;
         this.viewerTracker = null;
     }

@@ -1,6 +1,7 @@
 // src/bot.js
 const config = require('./config/config');
 const TwitchAPI = require('./tokens/twitchAPI');
+const DbManager = require('./database/dbManager')
 const TokenManager = require('./tokens/tokenManager');
 const CommandManager = require('./commands/commandManager');
 const AnalyticsManager = require('./analytics/analyticsManager');
@@ -27,15 +28,18 @@ class Bot {
 
     async init() {
         try {
+            this.dbManager = new DbManager();
+            await this.dbManager.connect();
+
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init();
             this.viewerManager = this.analyticsManager.viewerTracker;
             
             this.quoteManager = new QuoteManager();
-            await this.quoteManager.init(this.analyticsManager.dbManager);
+            await this.quoteManager.init(this.dbManager);
     
             this.currentStreamId = Date.now().toString();
-            this.tokenManager = new TokenManager();
+            this.tokenManager = new TokenManager(this.dbManager);
             await this.tokenManager.checkAndRefreshTokens();
             
             this.twitchAPI = new TwitchAPI(this.tokenManager);
@@ -130,7 +134,7 @@ class Bot {
                         SET peak_viewers = GREATEST(peak_viewers, ?)
                         WHERE stream_id = ?
                     `;
-                    await this.analyticsManager.dbManager.query(updateSql, [streamData.viewer_count, this.currentStreamId]);
+                    await this.dbManager.query(updateSql, [streamData.viewer_count, this.currentStreamId]);
                 }
             } catch (error) {
                 console.error('❌ Error tracking viewer count:', error);
@@ -169,9 +173,9 @@ class Bot {
                 this.webSocketManager.close();
             }
             
-            if (this.analyticsManager && this.analyticsManager.dbManager) {
+            if (this.dbManager) {
                 console.log('Closing database connection...');
-                await this.analyticsManager.dbManager.close();
+                await this.dbManager.close();
             }
             
             console.log('Cleanup complete!');
