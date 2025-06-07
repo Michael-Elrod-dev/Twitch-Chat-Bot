@@ -7,3 +7,4 @@ tokens.json
 pendingQueue.json
 redemptionCreation.js
 db.json
+*.pem
