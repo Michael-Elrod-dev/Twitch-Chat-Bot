@@ -301,6 +301,29 @@ function specialCommandHandlers(dependencies) {
                 console.error('❌ Error skipping song:', error);
                 await twitchBot.sendMessage(channel, "Unable to skip song. Make sure Spotify is active.");
             }
+        },
+
+        async emoteAdd(twitchBot, channel, context, args) {
+            if (!context.mod && !context.badges?.broadcaster) return;
+            
+            if (args.length < 2) {
+                await twitchBot.sendMessage(channel, 'Usage: !emoteadd <trigger> <response>');
+                return;
+            }
+            
+            const trigger = args[0].toLowerCase();
+            const response = args.slice(1).join(' ');
+            
+            try {
+                const success = await twitchBot.emoteManager.addEmote(trigger, response);
+                if (success) {
+                    await twitchBot.sendMessage(channel, `Emote "${trigger}" added successfully!`);
+                } else {
+                    await twitchBot.sendMessage(channel, `Emote "${trigger}" already exists.`);
+                }
+            } catch (error) {
+                await twitchBot.sendMessage(channel, 'Error adding emote.');
+            }
         }
     };
 }

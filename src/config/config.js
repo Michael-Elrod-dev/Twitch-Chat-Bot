@@ -33,6 +33,7 @@ class Config {
         this.viewerTrackingInterval = 60000 // 1 minute
         this.steamingInterval = 10000; // 10 seconds
         this.spotifyInterval = 3000; // 3 seconds
+        this.emoteCacheInterval = 300000; // 5 minutes
     }
 }
 

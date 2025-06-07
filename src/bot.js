@@ -2,6 +2,7 @@
 const config = require('./config/config');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager')
+const EmoteManager = require('./emotes/emoteManager');
 const TokenManager = require('./tokens/tokenManager');
 const CommandManager = require('./commands/commandManager');
 const AnalyticsManager = require('./analytics/analyticsManager');
@@ -35,6 +36,9 @@ class Bot {
             await this.analyticsManager.init(this.dbManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
             
+            this.emoteManager = new EmoteManager();
+            await this.emoteManager.init(this.dbManager);
+
             this.quoteManager = new QuoteManager();
             await this.quoteManager.init(this.dbManager);
     
@@ -74,7 +78,8 @@ class Bot {
             
             this.chatMessageHandler = new ChatMessageHandler(
                 this.viewerManager,
-                this.commandManager
+                this.commandManager,
+                this.emoteManager
             );
             
             this.redemptionManager = new RedemptionManager(this, this.spotifyManager);
