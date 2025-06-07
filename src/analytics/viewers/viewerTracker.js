@@ -4,18 +4,26 @@ class ViewerTracker {
         this.analyticsManager = analyticsManager;
     }
 
-    async ensureUserExists(username, userId = null) {
+    async ensureUserExists(username, userId = null, isMod = false, isSubscriber = false, isBroadcaster = false) {
         try {
             if (!userId) {
-                userId = username; // Use username as ID if no Twitch ID available
+                userId = username;
             }
-
+    
             const sql = `
-                INSERT IGNORE INTO viewers (user_id, username, last_seen)
-                VALUES (?, ?, NOW())
-                ON DUPLICATE KEY UPDATE last_seen = NOW(), username = ?
+                INSERT IGNORE INTO viewers (user_id, username, is_moderator, is_subscriber, is_broadcaster, last_seen)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE 
+                    last_seen = NOW(), 
+                    username = ?,
+                    is_moderator = ?,
+                    is_subscriber = ?,
+                    is_broadcaster = ?
             `;
-            await this.analyticsManager.dbManager.query(sql, [userId, username, username]);
+            await this.analyticsManager.dbManager.query(sql, [
+                userId, username, isMod, isSubscriber, isBroadcaster, 
+                username, isMod, isSubscriber, isBroadcaster
+            ]);
             return userId;
         } catch (error) {
             console.error('❌ Error ensuring user exists:', error);
@@ -23,33 +31,79 @@ class ViewerTracker {
         }
     }
 
-    async trackInteraction(username, userId, streamId, type, content = null) {
+    async trackInteraction(username, userId, streamId, type, content = null, userContext = {}) {
         try {
             if (!username) {
                 console.error('Attempted to track interaction for undefined username');
                 return;
             }
-
-            // Ensure user exists in database
-            const dbUserId = await this.ensureUserExists(username, userId);
-
-            // Track in database
+    
+            const isMod = userContext.isMod || false;
+            const isSubscriber = userContext.isSubscriber || false;
+            const isBroadcaster = userContext.isBroadcaster || false;
+            const dbUserId = await this.ensureUserExists(username, userId, isMod, isSubscriber, isBroadcaster);
+        
+            const checkFirstMessageSql = `
+                SELECT COUNT(*) as count FROM chat_messages 
+                WHERE user_id = ? AND stream_id = ?
+            `;
+            const result = await this.analyticsManager.dbManager.query(checkFirstMessageSql, [dbUserId, streamId]);
+            
+            if (result[0].count === 0) {
+                const updateUniqueSql = `
+                    UPDATE streams
+                    SET unique_chatters = unique_chatters + 1
+                    WHERE stream_id = ?
+                `;
+                await this.analyticsManager.dbManager.query(updateUniqueSql, [streamId]);
+            }
+    
             const sql = `
                 INSERT INTO chat_messages (user_id, stream_id, message_time, message_type, message_content) 
                 VALUES (?, ?, NOW(), ?, ?)
             `;
             await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
-
-            // Update viewing session metrics
             await this.updateViewingSession(dbUserId, streamId);
+            await this.updateChatTotals(dbUserId, type);
         } catch (error) {
             console.error(`❌ Error tracking ${type} for ${username}:`, error);
+        }
+    }
+    
+    async updateChatTotals(userId, messageType) {
+        try {
+            let updateColumn;
+            switch (messageType) {
+                case 'message':
+                    updateColumn = 'message_count';
+                    break;
+                case 'command':
+                    updateColumn = 'command_count';
+                    break;
+                case 'redemption':
+                    updateColumn = 'redemption_count';
+                    break;
+                default:
+                    console.error(`Unknown message type: ${messageType}`);
+                    return;
+            }
+            
+            const sql = `
+                INSERT INTO chat_totals (user_id, ${updateColumn}, total_count)
+                VALUES (?, 1, 1)
+                ON DUPLICATE KEY UPDATE 
+                    ${updateColumn} = ${updateColumn} + 1,
+                    total_count = total_count + 1
+            `;
+            
+            await this.analyticsManager.dbManager.query(sql, [userId]);
+        } catch (error) {
+            console.error('❌ Error updating chat totals:', error);
         }
     }
 
     async updateViewingSession(userId, streamId) {
         try {
-            // Check if session exists
             const checkSql = `
                 SELECT session_id FROM viewing_sessions 
                 WHERE user_id = ? AND stream_id = ? AND end_time IS NULL
@@ -57,14 +111,12 @@ class ViewerTracker {
             const sessions = await this.analyticsManager.dbManager.query(checkSql, [userId, streamId]);
             
             if (sessions.length === 0) {
-                // Create new session
                 const insertSql = `
                     INSERT INTO viewing_sessions (user_id, stream_id, start_time, messages_sent)
                     VALUES (?, ?, NOW(), 1)
                 `;
                 await this.analyticsManager.dbManager.query(insertSql, [userId, streamId]);
             } else {
-                // Update existing session
                 const updateSql = `
                     UPDATE viewing_sessions 
                     SET messages_sent = messages_sent + 1
@@ -77,7 +129,6 @@ class ViewerTracker {
         }
     }
 
-    // Analytics retrieval methods
     async getUserStats(username) {
         try {
             const userId = await this.getUserId(username);
@@ -140,25 +191,25 @@ class ViewerTracker {
         return stats.messages + stats.commands + stats.redemptions;
     }
     
-    async getTopUsers() {
+    async getTopUsers(limit = 5) {
         try {
+            const limitNum = parseInt(limit);
+            const safeLimit = isNaN(limitNum) || limitNum <= 0 ? 5 : limitNum;
+            
             const sql = `
                 SELECT v.username, 
-                       SUM(CASE WHEN cm.message_type = 'message' THEN 1 ELSE 0 END) as messages,
-                       SUM(CASE WHEN cm.message_type = 'command' THEN 1 ELSE 0 END) as commands,
-                       SUM(CASE WHEN cm.message_type = 'redemption' THEN 1 ELSE 0 END) as redemptions,
                        COUNT(*) as total
                 FROM viewers v
                 JOIN chat_messages cm ON v.user_id = cm.user_id
                 GROUP BY v.username
                 ORDER BY total DESC
-                LIMIT 5
+                LIMIT ${safeLimit}
             `;
             
-            const results = await this.analyticsManager.dbManager.query(sql, [limit]);
+            const results = await this.analyticsManager.dbManager.query(sql);
             
             return results.map((user, index) => 
-                `${index + 1}. ${user.username}: ${user.total} total interactions`
+                `${index + 1}. ${user.username}`
             );
         } catch (error) {
             console.error('❌ Error getting top users:', error);

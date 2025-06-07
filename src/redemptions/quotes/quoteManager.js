@@ -1,67 +1,83 @@
 // src/redemptions/quotes/quoteManager.js
-const fs = require('fs');
-const path = require('path');
-const config = require('../../config/config');
-
 class QuoteManager {
     constructor() {
-        this.quotesFile = path.join(config.dataPath, 'quotes.json');
-        this.loadQuotes();
+        this.dbManager = null;
     }
 
-    loadQuotes() {
+    async init(dbManager) {
+        this.dbManager = dbManager;
+    }
+
+    async addQuote(quoteData) {
         try {
-            if (fs.existsSync(this.quotesFile)) {
-                const fileContent = fs.readFileSync(this.quotesFile, 'utf8');
-                this.quotes = fileContent.trim() ? JSON.parse(fileContent) : [];
-            } else {
-                this.quotes = [];
-                this.saveQuotes();
+            const sql = `
+                INSERT INTO quotes (quote_text, author, saved_by, saved_at)
+                VALUES (?, ?, ?, NOW())
+            `;
+            const result = await this.dbManager.query(sql, [
+                quoteData.quote,
+                quoteData.author,
+                quoteData.savedBy
+            ]);
+            
+            return result.insertId;
+        } catch (error) {
+            console.error('❌ Error adding quote to database:', error);
+            throw error;
+        }
+    }
+
+    async getQuoteById(id) {
+        try {
+            const sql = `
+                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt
+                FROM quotes
+                WHERE quote_id = ?
+            `;
+            const results = await this.dbManager.query(sql, [id]);
+            
+            if (results.length === 0) {
+                return null;
             }
+            
+            return results[0];
         } catch (error) {
-            console.error('❌ Error loading quotes:', error);
-            this.quotes = [];
-            this.saveQuotes();
-        }
-    }
-
-    saveQuotes() {
-        try {
-            fs.writeFileSync(this.quotesFile, JSON.stringify(this.quotes, null, 2));
-        } catch (error) {
-            console.error('❌ Error saving quotes:', error);
-        }
-    }
-
-    addQuote(quoteData) {
-        const quoteId = this.quotes.length + 1;
-        const newQuote = {
-            id: quoteId,
-            quote: quoteData.quote,
-            author: quoteData.author,
-            savedBy: quoteData.savedBy,
-            savedAt: new Date().toISOString(),
-        };
-
-        this.quotes.push(newQuote);
-        this.saveQuotes();
-        return quoteId;
-    }
-
-    getQuoteById(id) {
-        const quote = this.quotes.find(q => q.id === id);
-        return quote || null;
-    }
-
-    getRandomQuote() {
-        if (this.quotes.length === 0) {
+            console.error('❌ Error getting quote by ID:', error);
             return null;
         }
-        return this.quotes[Math.floor(Math.random() * this.quotes.length)];
     }
 
-    getTotalQuotes() {
-        return this.quotes.length;
+    async getRandomQuote() {
+        try {
+            const sql = `
+                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt
+                FROM quotes
+                ORDER BY RAND()
+                LIMIT 1
+            `;
+            const results = await this.dbManager.query(sql);
+            
+            if (results.length === 0) {
+                return null;
+            }
+            
+            return results[0];
+        } catch (error) {
+            console.error('❌ Error getting random quote:', error);
+            return null;
+        }
+    }
+
+    async getTotalQuotes() {
+        try {
+            const sql = `SELECT COUNT(*) as count FROM quotes`;
+            const results = await this.dbManager.query(sql);
+            
+            return results[0].count;
+        } catch (error) {
+            console.error('❌ Error getting total quotes count:', error);
+            return 0;
+        }
     }
 }
 

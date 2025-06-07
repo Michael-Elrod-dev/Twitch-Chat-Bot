@@ -34,11 +34,12 @@ class TwitchAPI {
                     'Client-Id': this.tokenManager.tokens.clientId
                 }
             });
-    
+        
             const data = await response.json();
             if (data.data && data.data[0]) {
                 return {
-                    startDate: data.data[0].started_at
+                    startDate: data.data[0].started_at,
+                    viewer_count: data.data[0].viewer_count
                 };
             }
             return null;
@@ -107,6 +108,26 @@ class TwitchAPI {
             throw new Error('❌ Failed to update reward');
         } catch (error) {
             console.error('❌ Failed to update custom reward:', error);
+            throw error;
+        }
+    }
+
+    async getChannelInfo(broadcasterId) {
+        try {
+            const response = await fetch(`${config.twitchApiEndpoint}/channels?broadcaster_id=${broadcasterId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Client-Id': this.tokenManager.tokens.clientId
+                }
+            });
+    
+            const data = await response.json();
+            if (data.data && data.data[0]) {
+                return data.data[0];
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Failed to get channel info:', error);
             throw error;
         }
     }

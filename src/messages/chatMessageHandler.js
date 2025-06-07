@@ -14,17 +14,28 @@ class ChatMessageHandler {
             const event = payload.event;
             if (event.chatter_user_id === bot.tokenManager.tokens.botId) return;
     
+            // Extract badge information
+            const isBroadcaster = event.badges?.some(badge => badge.set_id === "broadcaster") || false;
+            const isMod = event.badges?.some(badge => badge.set_id === "moderator") || false;
+            const isSubscriber = event.badges?.some(badge => badge.set_id === "subscriber") || false;
+            
+            const userContext = {
+                isMod: isMod,
+                isSubscriber: isSubscriber,
+                isBroadcaster: isBroadcaster
+            };
+    
             const context = {
                 username: event.chatter_user_name,
                 userId: event.chatter_user_id,
-                mod: event.chatter_is_mod,
+                mod: isMod,
                 badges: {
-                    broadcaster: event.chatter_user_id === bot.tokenManager.tokens.channelId
+                    broadcaster: isBroadcaster
                 },
-                'custom-reward-id': event.reward_id
+                'custom-reward-id': event.channel_points_custom_reward_id
             };
     
-            if (event.reward_id) return;
+            if (event.channel_points_custom_reward_id) return;
     
             const messageText = event.message.text.toLowerCase();
     
@@ -35,7 +46,8 @@ class ChatMessageHandler {
                     context.userId, 
                     bot.currentStreamId, 
                     messageText, 
-                    'message'
+                    'message',
+                    userContext
                 );
                 await bot.sendMessage(bot.channelName, emoteResponses[messageText]);
                 return;
@@ -48,7 +60,8 @@ class ChatMessageHandler {
                     context.userId, 
                     bot.currentStreamId, 
                     messageText, 
-                    'command'
+                    'command',
+                    userContext
                 );
                 await this.commandManager.handleCommand(bot, bot.channelName, context, event.message.text);
             } else {
@@ -57,10 +70,10 @@ class ChatMessageHandler {
                     context.userId, 
                     bot.currentStreamId, 
                     messageText, 
-                    'message'
+                    'message',
+                    userContext
                 );
             }
-
         } catch (error) {
             console.error('❌ Error handling chat message:', error);
         }

@@ -30,26 +30,35 @@ class Bot {
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init();
             this.viewerManager = this.analyticsManager.viewerTracker;
+            
+            this.quoteManager = new QuoteManager();
+            await this.quoteManager.init(this.analyticsManager.dbManager);
     
-            // Create stream session right after analytics initialization
-            this.currentStreamId = Date.now().toString(); // Simple unique ID
-            await this.analyticsManager.trackStreamStart(
-            this.currentStreamId,
-            null, // We can fetch title later if needed
-            null  // Same for category
-            );
-    
+            this.currentStreamId = Date.now().toString();
             this.tokenManager = new TokenManager();
             await this.tokenManager.checkAndRefreshTokens();
             
             this.twitchAPI = new TwitchAPI(this.tokenManager);
+            const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
+            let streamTitle = null;
+            let streamCategory = null;
+
+            if (streamInfo) {
+                const channelInfo = await this.twitchAPI.getChannelInfo(this.tokenManager.tokens.channelId);
+                if (channelInfo) {
+                    streamTitle = channelInfo.title;
+                    streamCategory = channelInfo.game_name;
+                }
+            }
+            await this.analyticsManager.trackStreamStart(
+                this.currentStreamId,
+                streamTitle,
+                streamCategory
+            );
             
             this.spotifyManager = new SpotifyManager(this.tokenManager);
             await this.spotifyManager.authenticate();
-    
-            
-            this.quoteManager = new QuoteManager();
-            
+                
             const handlers = specialCommandHandlers({
                 quoteManager: this.quoteManager,
                 spotifyManager: this.spotifyManager,
@@ -94,6 +103,7 @@ class Bot {
             };
             
             await this.webSocketManager.connect();
+            this.startViewerTracking();
     
             setInterval(async () => {
                 try {
@@ -108,6 +118,26 @@ class Bot {
         }
     }
 
+    startViewerTracking() {
+        setInterval(async () => {
+            try {
+                if (!this.currentStreamId) return;
+                
+                const streamData = await this.twitchAPI.getStreamByUserName(this.channelName);
+                if (streamData && streamData.viewer_count) {
+                    const updateSql = `
+                        UPDATE streams
+                        SET peak_viewers = GREATEST(peak_viewers, ?)
+                        WHERE stream_id = ?
+                    `;
+                    await this.analyticsManager.dbManager.query(updateSql, [streamData.viewer_count, this.currentStreamId]);
+                }
+            } catch (error) {
+                console.error('❌ Error tracking viewer count:', error);
+            }
+        }, config.viewerTrackingInterval);
+    }
+    
     async handleChatMessage(payload) {
         await this.chatMessageHandler.handleChatMessage(payload, this);
     }

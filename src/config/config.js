@@ -21,7 +21,8 @@ class Config {
         this.spotifyApiEndpoint = 'https://api.spotify.com/v1';
 
         // Intervals
-        this.tokenRefreshInterval = 5 * 60 * 1000; // 5 minutes
+        this.tokenRefreshInterval = 300000; // 5 minutes
+        this.viewerTrackingInterval = 60000 // 1 minute
         this.steamingInterval = 10000; // 10 seconds
         this.spotifyInterval = 3000; // 3 seconds
     }

@@ -108,28 +108,37 @@ function specialCommandHandlers(dependencies) {
         },
 
         async quoteHandler(twitchBot, channel, context, args) {
-            const totalQuotes = quoteManager.getTotalQuotes();
-
-            if (totalQuotes === 0) {
-                await twitchBot.sendMessage(channel, "No quotes saved yet!");
-                return;
-            }
-
-            let quote;
-            if (args.length > 0 && !isNaN(args[0])) {
-                const id = parseInt(args[0]);
-                quote = quoteManager.getQuoteById(id);
-
-                if (!quote) {
-                    await twitchBot.sendMessage(channel, `Quote #${id} not found!`);
+            try {
+                if (!quoteManager.dbManager) {
+                    await quoteManager.init(twitchBot.analyticsManager.dbManager);
+                }
+                
+                const totalQuotes = await quoteManager.getTotalQuotes();
+        
+                if (totalQuotes === 0) {
+                    await twitchBot.sendMessage(channel, "No quotes saved yet!");
                     return;
                 }
-            } else {
-                quote = quoteManager.getRandomQuote();
+        
+                let quote;
+                if (args.length > 0 && !isNaN(args[0])) {
+                    const id = parseInt(args[0]);
+                    quote = await quoteManager.getQuoteById(id);
+        
+                    if (!quote) {
+                        await twitchBot.sendMessage(channel, `Quote #${id} not found!`);
+                        return;
+                    }
+                } else {
+                    quote = await quoteManager.getRandomQuote();
+                }
+        
+                const year = new Date(quote.savedAt).getFullYear();
+                await twitchBot.sendMessage(channel, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
+            } catch (error) {
+                console.error('❌ Error in quote handler:', error);
+                await twitchBot.sendMessage(channel, "Sorry, there was an error retrieving quotes.");
             }
-
-            const year = new Date(quote.savedAt).getFullYear();
-            await twitchBot.sendMessage(channel, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
         },
 
         async combinedStats(twitchBot, channel, context, args) {
@@ -154,12 +163,12 @@ function specialCommandHandlers(dependencies) {
             try {
                 if (!twitchBot.viewerManager && twitchBot.analyticsManager?.viewerTracker) {
                     console.log('Using viewerTracker directly instead');
-                    const topUsers = await twitchBot.analyticsManager.viewerTracker.getTopUsers();
+                    const topUsers = await twitchBot.analyticsManager.viewerTracker.getTopUsers(5);
                     await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
                     return;
                 }
         
-                const topUsers = await twitchBot.viewerManager.getTopUsers();
+                const topUsers = await twitchBot.viewerManager.getTopUsers(5);
                 await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
             } catch (error) {
                 console.error('❌ Error in topStats:', error);

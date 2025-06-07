@@ -4,7 +4,5 @@ package-lock.json
 package.json
 tokens.json
 pendingQueue.json
-viewers.json
 redemptionCreation.js
-facts.json
 db.json

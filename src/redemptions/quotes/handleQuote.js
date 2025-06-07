@@ -1,6 +1,4 @@
 // src/redemptions/quotes/handleQuote.js
-const QuoteManager = require('./quoteManager');
-
 async function handleQuote(event, twitchBot, _, twitchBot2) {
     try {
         const input = event.input.trim();
@@ -34,7 +32,10 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
         }
 
         const [, quote, author] = match;
-        const quoteManager = new QuoteManager();
+        
+        if (!twitchBot.quoteManager.dbManager) {
+            await twitchBot.quoteManager.init(twitchBot.analyticsManager.dbManager);
+        }
         
         const quoteData = {
             quote: quote.trim(),
@@ -44,7 +45,7 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
 
         let quoteId;
         try {
-            quoteId = quoteManager.addQuote(quoteData);
+            quoteId = await twitchBot.quoteManager.addQuote(quoteData);
         } catch (saveError) {
             console.error('❌ Error saving quote:', saveError);
             await twitchBot.redemptionManager.updateRedemptionStatus(

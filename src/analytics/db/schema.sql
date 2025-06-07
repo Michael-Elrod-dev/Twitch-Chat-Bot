@@ -3,7 +3,7 @@ CREATE TABLE viewers (
     username VARCHAR(25) NOT NULL,
     is_moderator BOOLEAN DEFAULT FALSE,
     is_subscriber BOOLEAN DEFAULT FALSE,
-    subscriber_tier ENUM('none', 'tier1', 'tier2', 'tier3') DEFAULT 'none',
+    is_broadcaster BOOLEAN DEFAULT FALSE,
     last_seen DATETIME,
     UNIQUE KEY unique_username (username)
 );
@@ -41,11 +41,13 @@ CREATE TABLE chat_messages (
     FOREIGN KEY (stream_id) REFERENCES streams(stream_id)
 );
 
-CREATE TABLE message_totals (
-    user_id VARCHAR(50) NOT NULL,
+CREATE TABLE chat_totals (
+    user_id VARCHAR(50) PRIMARY KEY,
     message_count INT DEFAULT 0,
     command_count INT DEFAULT 0,
     redemption_count INT DEFAULT 0,
+    total_count INT DEFAULT 0,
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES viewers(user_id)
 );
 
