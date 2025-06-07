@@ -3,13 +3,14 @@ const https = require('https');
 const config = require('../config/config');
 
 class TokenManager {
-    constructor(dbManager) {
-        this.dbManager = dbManager;
+    constructor() {
+        this.dbManager = null;
         this.tokens = {};
         this.isInitialized = false;
     }
 
-    async init() {
+    async init(dbManager) {
+        this.dbManager = dbManager
         await this.loadTokensFromDatabase();
         await this.checkAndRefreshTokens();
         this.isInitialized = true;

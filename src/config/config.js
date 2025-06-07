@@ -1,10 +1,14 @@
 // src/config/config.js
 require('dotenv').config();
+const path = require('path');
 
 class Config {
     constructor() {
         // Channel settings
         this.channelName = 'aimosthadme';
+
+        // Paths
+        this.dataPath = path.join(__dirname, '..', 'data');
 
         // Database
         this.database = {

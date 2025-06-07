@@ -32,15 +32,15 @@ class Bot {
             await this.dbManager.connect();
 
             this.analyticsManager = new AnalyticsManager();
-            await this.analyticsManager.init();
+            await this.analyticsManager.init(this.dbManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
             
             this.quoteManager = new QuoteManager();
             await this.quoteManager.init(this.dbManager);
     
             this.currentStreamId = Date.now().toString();
-            this.tokenManager = new TokenManager(this.dbManager);
-            await this.tokenManager.checkAndRefreshTokens();
+            this.tokenManager = new TokenManager();
+            await this.tokenManager.init(this.dbManager);
             
             this.twitchAPI = new TwitchAPI(this.tokenManager);
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);

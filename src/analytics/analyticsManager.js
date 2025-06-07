@@ -2,15 +2,15 @@
 const ViewerTracker = require('./viewers/viewerTracker');
 
 class AnalyticsManager {
-    constructor(dbManager) {
-        this.dbManager = dbManager;
+    constructor() {
+        this.dbManager = null;
         this.currentStreamId = null;
         this.viewerTracker = null;
     }
 
-    async init() {
+    async init(dbManager) {
         try {
-            await this.dbManager.connect();
+            this.dbManager = dbManager
             this.viewerTracker = new ViewerTracker(this);
         } catch (error) {
             console.error('❌ Failed to initialize analytics manager:', error);
