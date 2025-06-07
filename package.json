@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "@twurple/api": "^7.2.0",
+    "@twurple/auth": "^7.2.0",
+    "@twurple/eventsub-ws": "^7.2.0",
+    "@twurple/pubsub": "^7.2.0",
+    "dotenv": "^16.5.0",
+    "mysql2": "^3.12.0",
+    "node-fetch": "^3.3.2",
+    "spotify-web-api-node": "^5.0.2",
+    "tmi.js": "^1.8.5"
+  },
+  "name": "almosthadai",
+  "version": "1.0.0",
+  "main": "src/bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

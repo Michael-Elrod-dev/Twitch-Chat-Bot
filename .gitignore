@@ -2,7 +2,6 @@
 files/
 node_modules/
 package-lock.json
-package.json
 tokens.json
 pendingQueue.json
 redemptionCreation.js
