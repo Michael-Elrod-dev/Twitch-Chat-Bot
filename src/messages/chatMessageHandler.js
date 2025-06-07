@@ -1,10 +1,10 @@
 // src/messages/chatMessageHandler.js
-const emoteResponses = require('../data/emotes.json');
 
 class ChatMessageHandler {
-    constructor(viewerManager, commandManager) {
+    constructor(viewerManager, commandManager, emoteManager) {
         this.viewerManager = viewerManager;
         this.commandManager = commandManager;
+        this.emoteManager = emoteManager;
     }
 
     async handleChatMessage(payload, bot) {
@@ -39,8 +39,9 @@ class ChatMessageHandler {
     
             const messageText = event.message.text.toLowerCase();
     
-            // Check for emotes
-            if (emoteResponses[messageText]) {
+            // Check for emotes using database (this code we already added)
+            const emoteResponse = await this.emoteManager.getEmoteResponse(messageText);
+            if (emoteResponse) {
                 await bot.analyticsManager.trackChatMessage(
                     context.username, 
                     context.userId, 
@@ -49,7 +50,7 @@ class ChatMessageHandler {
                     'message',
                     userContext
                 );
-                await bot.sendMessage(bot.channelName, emoteResponses[messageText]);
+                await bot.sendMessage(bot.channelName, emoteResponse);
                 return;
             }
     

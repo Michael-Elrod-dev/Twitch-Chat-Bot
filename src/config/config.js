@@ -34,6 +34,7 @@ class Config {
         this.steamingInterval = 10000; // 10 seconds
         this.spotifyInterval = 3000; // 3 seconds
         this.emoteCacheInterval = 300000; // 5 minutes
+        this.commandCacheInterval = 300000; // 5 minutes
     }
 }
 

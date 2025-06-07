@@ -14,6 +14,16 @@ CREATE TABLE emotes (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE commands (
+    command_id INT PRIMARY KEY AUTO_INCREMENT,
+    command_name VARCHAR(50) UNIQUE NOT NULL,
+    response_text TEXT NULL,
+    handler_name VARCHAR(50) NULL,
+    user_level ENUM('everyone', 'mod', 'broadcaster') NOT NULL DEFAULT 'everyone',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE viewers (
     user_id VARCHAR(50) PRIMARY KEY,
     username VARCHAR(25) NOT NULL,

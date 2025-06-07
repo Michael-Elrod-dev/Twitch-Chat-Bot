@@ -73,6 +73,7 @@ class Bot {
                 viewerManager: this.viewerManager
             });
             this.commandManager = new CommandManager(handlers);
+            await this.commandManager.init(this.dbManager);
     
             this.messageSender = new MessageSender(this.tokenManager);
             
@@ -87,7 +88,6 @@ class Bot {
                 this.viewerManager,
                 this.redemptionManager
             );
-            
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
@@ -103,14 +103,12 @@ class Bot {
                 this.handleRedemption.bind(this),
                 this.handleStreamOffline.bind(this)
             );
-            
             this.webSocketManager.onSessionReady = async (sessionId) => {
                 this.subscriptionManager.setSessionId(sessionId);
                 await this.subscriptionManager.subscribeToChatEvents();
                 await this.subscriptionManager.subscribeToChannelPoints();
                 await this.subscriptionManager.subscribeToStreamOffline();
             };
-            
             await this.webSocketManager.connect();
             this.startViewerTracking();
     

@@ -1,41 +1,57 @@
 // src/commands/commandManager.js
-const fs = require('fs');
-const path = require('path');
 const config = require('../config/config');
 
 class CommandManager {
     constructor(specialCommandHandlers) {
         this.specialCommandHandlers = specialCommandHandlers;
-        this.commandsPath = path.join(config.dataPath, 'commands.json');
-        this.loadCommands();
+        this.dbManager = null;
+        this.commandCache = new Map();
+        this.cacheExpiry = null;
+        this.cacheTimeout = config.commandCacheInterval;
     }
 
-    loadCommands() {
+    async init(dbManager) {
+        this.dbManager = dbManager;
+        await this.loadCommands();
+    }
+
+    async loadCommands() {
         try {
-            if (!fs.existsSync(this.commandsPath)) {
-                this.data = {
-                    commands: {},
-                    nonPrefixCommands: {}
-                };
-                this.saveCommands();
-            } else {
-                const fileContent = fs.readFileSync(this.commandsPath, 'utf8');
-                this.data = JSON.parse(fileContent);
+            const sql = `
+                SELECT command_name, response_text, handler_name, user_level 
+                FROM commands
+            `;
+            const results = await this.dbManager.query(sql);
+            
+            // Clear and rebuild cache
+            this.commandCache.clear();
+            for (const row of results) {
+                this.commandCache.set(row.command_name.toLowerCase(), {
+                    response: row.response_text,
+                    handler: row.handler_name,
+                    userLevel: row.user_level
+                });
             }
+            
+            this.cacheExpiry = Date.now() + this.cacheTimeout;
+            console.log(`✅ Loaded ${this.commandCache.size} commands`);
         } catch (error) {
             console.error('❌ Error loading commands:', error);
-            this.data = {
-                commands: {},
-                nonPrefixCommands: {}
-            };
+            throw error;
         }
     }
 
-    saveCommands() {
+    async getCommand(commandName) {
         try {
-            fs.writeFileSync(this.commandsPath, JSON.stringify(this.data, null, 4));
+            // Check if cache needs refresh
+            if (Date.now() > this.cacheExpiry) {
+                await this.loadCommands();
+            }
+            
+            return this.commandCache.get(commandName.toLowerCase()) || null;
         } catch (error) {
-            console.error('❌ Error saving commands:', error);
+            console.error('❌ Error getting command:', error);
+            return null;
         }
     }
 
@@ -72,7 +88,7 @@ class CommandManager {
                         return;
                     }
                     const response = args.slice(3).join(' ');
-                    if (this.addCommand(commandName, response)) {
+                    if (await this.addCommand(commandName, response)) {
                         await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been added.`);
                     } else {
                         await this.sendChatMessage(twitchBot, channel, `Command ${commandName} already exists.`);
@@ -85,7 +101,7 @@ class CommandManager {
                         return;
                     }
                     const response = args.slice(3).join(' ');
-                    if (this.editCommand(commandName, response)) {
+                    if (await this.editCommand(commandName, response)) {
                         await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been updated.`);
                     } else {
                         await this.sendChatMessage(twitchBot, channel, `Cannot edit ${commandName} (command doesn't exist or has special handling).`);
@@ -93,7 +109,7 @@ class CommandManager {
                     break;
                 }
                 case 'delete': {
-                    if (this.deleteCommand(commandName)) {
+                    if (await this.deleteCommand(commandName)) {
                         await this.sendChatMessage(twitchBot, channel, `Command ${commandName} has been deleted.`);
                     } else {
                         await this.sendChatMessage(twitchBot, channel, `Cannot delete ${commandName} (command doesn't exist or has special handling).`);
@@ -108,10 +124,11 @@ class CommandManager {
      
         const args = message.slice(1).split(' ');
         const commandName = '!' + args[0].toLowerCase();
-        const command = this.data.commands[commandName];
+        const command = await this.getCommand(commandName);
      
         if (!command) return;
         if (command.userLevel === 'mod' && !context.mod && !context.badges?.broadcaster) return;
+        if (command.userLevel === 'broadcaster' && !context.badges?.broadcaster) return;
      
         try {
             if (command.handler && this.specialCommandHandlers[command.handler]) {
@@ -127,7 +144,8 @@ class CommandManager {
                         getStreamByUserName: (username) => twitchBot.twitchAPI.getStreamByUserName(username)
                     },
                     viewerManager: twitchBot.viewerManager,
-                    analyticsManager: twitchBot.analyticsManager
+                    analyticsManager: twitchBot.analyticsManager,
+                    emoteManager: twitchBot.emoteManager
                 };
                 await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
             } else {
@@ -146,42 +164,100 @@ class CommandManager {
         }
     }
 
-    addCommand(name, response, userLevel = 'everyone') {
-        if (this.data.commands[name]) {
-            return false;
+    async addCommand(name, response, userLevel = 'everyone') {
+        try {
+            const sql = `
+                INSERT INTO commands (command_name, response_text, handler_name, user_level)
+                VALUES (?, ?, NULL, ?)
+            `;
+            await this.dbManager.query(sql, [name.toLowerCase(), response, userLevel]);
+            
+            // Update cache
+            this.commandCache.set(name.toLowerCase(), {
+                response: response,
+                handler: null,
+                userLevel: userLevel
+            });
+            
+            return true;
+        } catch (error) {
+            if (error.code === 'ER_DUP_ENTRY') {
+                return false; // Command already exists
+            }
+            console.error('❌ Error adding command:', error);
+            throw error;
         }
-        this.data.commands[name] = {
-            response,
-            handler: null,
-            userLevel
-        };
-        this.saveCommands();
-        return true;
     }
 
-    editCommand(name, response) {
-        if (this.data.commands[name]) {
-            if (this.data.commands[name].handler) {
+    async editCommand(name, response) {
+        try {
+            // Check if command exists and doesn't have a handler
+            const command = await this.getCommand(name);
+            if (!command || command.handler) {
                 return false;
             }
-            this.data.commands[name].response = response;
-            this.saveCommands();
-            return true;
+
+            const sql = `
+                UPDATE commands 
+                SET response_text = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE command_name = ? AND handler_name IS NULL
+            `;
+            const result = await this.dbManager.query(sql, [response, name.toLowerCase()]);
+            
+            if (result.affectedRows > 0) {
+                // Update cache
+                this.commandCache.set(name.toLowerCase(), {
+                    response: response,
+                    handler: null,
+                    userLevel: command.userLevel
+                });
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ Error editing command:', error);
+            throw error;
         }
-        return false;
     }
 
-    deleteCommand(name) {
-        if (this.data.commands[name] && !this.data.commands[name].handler) {
-            delete this.data.commands[name];
-            this.saveCommands();
-            return true;
+    async deleteCommand(name) {
+        try {
+            // Check if command exists and doesn't have a handler
+            const command = await this.getCommand(name);
+            if (!command || command.handler) {
+                return false;
+            }
+
+            const sql = `
+                DELETE FROM commands 
+                WHERE command_name = ? AND handler_name IS NULL
+            `;
+            const result = await this.dbManager.query(sql, [name.toLowerCase()]);
+            
+            if (result.affectedRows > 0) {
+                // Remove from cache
+                this.commandCache.delete(name.toLowerCase());
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ Error deleting command:', error);
+            throw error;
         }
-        return false;
     }
 
-    getAllCommands() {
-        return this.data.commands;
+    async getAllCommands() {
+        try {
+            const sql = `
+                SELECT command_name, response_text, handler_name, user_level, created_at, updated_at
+                FROM commands 
+                ORDER BY command_name
+            `;
+            return await this.dbManager.query(sql);
+        } catch (error) {
+            console.error('❌ Error getting all commands:', error);
+            return [];
+        }
     }
 }
 
