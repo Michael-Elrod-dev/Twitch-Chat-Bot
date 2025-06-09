@@ -6,6 +6,16 @@ CREATE TABLE tokens (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE song_queue (
+    queue_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    track_uri VARCHAR(255),
+    track_name VARCHAR(255),
+    artist_name VARCHAR(255),
+    requested_by VARCHAR(25),
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    queue_position INT
+);
+
 CREATE TABLE emotes (
     emote_id INT PRIMARY KEY AUTO_INCREMENT,
     trigger_text VARCHAR(50) UNIQUE NOT NULL,

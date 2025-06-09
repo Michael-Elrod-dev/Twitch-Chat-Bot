@@ -19,8 +19,18 @@ class DbManager {
 
     async query(sql, params = []) {
         try {
-            const [results] = await this.connection.execute(sql, params);
-            return results;
+            const transactionCommands = ['START TRANSACTION', 'COMMIT', 'ROLLBACK'];
+            const isTransactionCommand = transactionCommands.some(cmd => 
+                sql.trim().toUpperCase().startsWith(cmd)
+            );
+            
+            if (isTransactionCommand || params.length === 0) {
+                const [results] = await this.connection.query(sql, params);
+                return results;
+            } else {
+                const [results] = await this.connection.execute(sql, params);
+                return results;
+            }
         } catch (error) {
             console.error('Database query error:', error);
             throw error;
