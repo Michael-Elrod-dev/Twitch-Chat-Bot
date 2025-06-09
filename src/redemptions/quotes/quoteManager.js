@@ -11,13 +11,14 @@ class QuoteManager {
     async addQuote(quoteData) {
         try {
             const sql = `
-                INSERT INTO quotes (quote_text, author, saved_by, saved_at)
-                VALUES (?, ?, ?, NOW())
+                INSERT INTO quotes (quote_text, author, saved_by, saved_at, user_id)
+                VALUES (?, ?, ?, NOW(), ?)
             `;
             const result = await this.dbManager.query(sql, [
                 quoteData.quote,
                 quoteData.author,
-                quoteData.savedBy
+                quoteData.savedBy,
+                quoteData.userId
             ]);
             
             return result.insertId;
@@ -30,7 +31,7 @@ class QuoteManager {
     async getQuoteById(id) {
         try {
             const sql = `
-                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt
+                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt, user_id as userId
                 FROM quotes
                 WHERE quote_id = ?
             `;
@@ -50,7 +51,7 @@ class QuoteManager {
     async getRandomQuote() {
         try {
             const sql = `
-                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt
+                SELECT quote_id as id, quote_text as quote, author, saved_by as savedBy, saved_at as savedAt, user_id as userId
                 FROM quotes
                 ORDER BY RAND()
                 LIMIT 1

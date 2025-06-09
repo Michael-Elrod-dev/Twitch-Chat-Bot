@@ -40,7 +40,8 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
         const quoteData = {
             quote: quote.trim(),
             author: author.trim(),
-            savedBy: event.userDisplayName
+            savedBy: event.userDisplayName,
+            userId: event.userId
         };
 
         let quoteId;

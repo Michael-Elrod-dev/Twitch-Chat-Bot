@@ -79,7 +79,10 @@ CREATE TABLE chat_totals (
 
 CREATE TABLE quotes (
     quote_id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id VARCHAR(50) NOT NULL,
-    message_content TEXT,
+    quote_text TEXT,
+    author VARCHAR(100),
+    saved_by VARCHAR(50),
+    saved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id VARCHAR(50),
     FOREIGN KEY (user_id) REFERENCES viewers(user_id)
 );
