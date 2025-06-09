@@ -223,7 +223,7 @@ function specialCommandHandlers(dependencies) {
 
         async nextSong(twitchBot, channel) {
             try {
-                const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+                const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
 
                 if (pendingTracks.length === 0) {
                     await twitchBot.sendMessage(channel, "There are no songs in the queue.");
@@ -240,7 +240,7 @@ function specialCommandHandlers(dependencies) {
 
         async queueInfo(twitchBot, channel, context, args) {
             try {
-                const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+                const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
 
                 if (pendingTracks.length === 0) {
                     await twitchBot.sendMessage(channel, "The queue is currently empty.");
@@ -284,7 +284,7 @@ function specialCommandHandlers(dependencies) {
                 }
 
                 // Check if there's a song in the queue before skipping
-                const pendingTracks = spotifyManager.queueManager.getPendingTracks();
+                const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
                 if (pendingTracks.length > 0) {
                     // Add next song to Spotify queue before skipping
                     const nextTrack = pendingTracks[0];
