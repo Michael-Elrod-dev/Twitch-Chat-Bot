@@ -22,16 +22,76 @@ const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
 class Bot {
     constructor() {
-        this.currentStreamId = null;
         this.isStreaming = false;
+        this.currentStreamId = null;
+        this.viewerTrackingInterval = null;
         this.channelName = config.channelName;
     }
 
     async init() {
         try {
+            // Always connect to database and basic services
             this.dbManager = new DbManager();
             await this.dbManager.connect();
 
+            this.tokenManager = new TokenManager();
+            await this.tokenManager.init(this.dbManager);
+            
+            this.twitchAPI = new TwitchAPI(this.tokenManager);
+            
+            // Check if stream is live
+            const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
+            if (streamInfo) {
+                console.log('🔴 Stream is live! Starting full bot functionality...');
+                await this.startFullOperation();
+            } else {
+                console.log('⚫ Stream is offline. Bot will wait for stream to go live...');
+                await this.startMinimalOperation();
+            }
+
+        } catch (error) {
+            console.error('❌ Failed to initialize bot:', error);
+            throw error;
+        }
+    }
+
+    async startMinimalOperation() {
+        // Only start WebSocket connection to listen for stream events
+        this.webSocketManager = new WebSocketManager(
+            this.tokenManager,
+            null,
+            null,
+            this.handleStreamOffline.bind(this),
+            this.handleStreamOnline.bind(this)
+        );
+        
+        this.webSocketManager.onSessionReady = async (sessionId) => {
+            this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+            await this.subscriptionManager.subscribeToStreamOnline();
+            await this.subscriptionManager.subscribeToStreamOffline();
+        };
+        
+        await this.webSocketManager.connect();
+        
+        // Start token refresh interval even in minimal mode
+        setInterval(async () => {
+            try {
+                await this.tokenManager.checkAndRefreshTokens();
+            } catch (error) {
+                console.error('❌ Error in periodic token refresh:', error);
+            }
+        }, config.tokenRefreshInterval);
+    }
+
+    async startFullOperation() {
+        if (this.isStreaming) return; // Already running
+        
+        console.log('🚀 Starting full bot operation...');
+        
+        try {
+            this.isStreaming = true;
+
+            // Initialize all the analytics, commands, etc.
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init(this.dbManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
@@ -41,12 +101,10 @@ class Bot {
 
             this.quoteManager = new QuoteManager();
             await this.quoteManager.init(this.dbManager);
-    
+
             this.currentStreamId = Date.now().toString();
-            this.tokenManager = new TokenManager();
-            await this.tokenManager.init(this.dbManager);
             
-            this.twitchAPI = new TwitchAPI(this.tokenManager);
+            // Get stream info for analytics
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
             let streamTitle = null;
             let streamCategory = null;
@@ -58,6 +116,7 @@ class Bot {
                     streamCategory = channelInfo.game_name;
                 }
             }
+            
             await this.analyticsManager.trackStreamStart(
                 this.currentStreamId,
                 streamTitle,
@@ -75,7 +134,7 @@ class Bot {
             });
             this.commandManager = new CommandManager(handlers);
             await this.commandManager.init(this.dbManager);
-    
+
             this.messageSender = new MessageSender(this.tokenManager);
             
             this.chatMessageHandler = new ChatMessageHandler(
@@ -92,44 +151,62 @@ class Bot {
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
-    
-            this.subscriptionManager = new SubscriptionManager(
-                this.tokenManager,
-                null
-            );
-    
-            this.webSocketManager = new WebSocketManager(
-                this.tokenManager,
-                this.handleChatMessage.bind(this),
-                this.handleRedemption.bind(this),
-                this.handleStreamOffline.bind(this)
-            );
+
+            // Update WebSocket manager with full handlers or create new one
+            if (this.webSocketManager) {
+                // Update existing connection
+                this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
+                this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
+            } else {
+                // Create new connection (shouldn't happen, but safety check)
+                this.webSocketManager = new WebSocketManager(
+                    this.tokenManager,
+                    this.handleChatMessage.bind(this),
+                    this.handleRedemption.bind(this),
+                    this.handleStreamOffline.bind(this),
+                    this.handleStreamOnline.bind(this)
+                );
+                await this.webSocketManager.connect();
+            }
+
+            // Subscribe to all events
             this.webSocketManager.onSessionReady = async (sessionId) => {
+                if (!this.subscriptionManager) {
+                    this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+                }
                 this.subscriptionManager.setSessionId(sessionId);
                 await this.subscriptionManager.subscribeToChatEvents();
                 await this.subscriptionManager.subscribeToChannelPoints();
+                await this.subscriptionManager.subscribeToStreamOnline();
                 await this.subscriptionManager.subscribeToStreamOffline();
             };
-            await this.webSocketManager.connect();
+
             this.startViewerTracking();
-    
-            setInterval(async () => {
-                try {
-                    await this.tokenManager.checkAndRefreshTokens();
-                } catch (error) {
-                    console.error('❌ Error in periodic token refresh:', error);
-                }
-            }, config.tokenRefreshInterval);
+
+            console.log('✅ Bot is now fully operational!');
+            
+            // Send success message to chat ONLY if all checks passed
+            try {
+                await this.sendMessage(this.channelName, '🤖 Bot is now live and fully operational! All systems ready.');
+            } catch (messageError) {
+                console.error('❌ Error sending startup message to chat:', messageError);
+            }
+
         } catch (error) {
-            console.error('❌ Failed to initialize bot:', error);
+            console.error('❌ Error during full operation startup:', error);
+            this.isStreaming = false; // Reset flag on failure
             throw error;
         }
     }
 
     startViewerTracking() {
-        setInterval(async () => {
+        if (this.viewerTrackingInterval) {
+            clearInterval(this.viewerTrackingInterval); // Clear existing interval
+        }
+        
+        this.viewerTrackingInterval = setInterval(async () => {
             try {
-                if (!this.currentStreamId) return;
+                if (!this.currentStreamId || !this.isStreaming) return;
                 
                 const streamData = await this.twitchAPI.getStreamByUserName(this.channelName);
                 if (streamData && streamData.viewer_count) {
@@ -147,29 +224,77 @@ class Bot {
     }
     
     async handleChatMessage(payload) {
+        if (!this.isStreaming) return; // Only handle chat when streaming
         await this.chatMessageHandler.handleChatMessage(payload, this);
     }
 
     async handleRedemption(payload) {
+        if (!this.isStreaming) return; // Only handle redemptions when streaming
         await this.redemptionHandler.handleRedemption(payload, this);
     }
 
+    async handleStreamOnline() {
+        console.log('🔴 Stream went online! Starting full bot functionality...');
+        await this.startFullOperation();
+    }
+
     async handleStreamOffline() {
-        console.log('Stream detected as ended via EventSub');
-        await this.cleanup();
-        process.exit(0);
+        console.log('⚫ Stream went offline. Stopping full bot functionality...');
+        
+        try {
+            // Send offline message to chat BEFORE disabling functionality
+            if (this.isStreaming && this.messageSender) {
+                try {
+                    await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
+                } catch (messageError) {
+                    console.error('❌ Error sending offline message to chat:', messageError);
+                }
+            }
+            
+            if (this.currentStreamId && this.analyticsManager) {
+                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
+                this.currentStreamId = null;
+            }
+            
+            // Clear viewer tracking
+            if (this.viewerTrackingInterval) {
+                clearInterval(this.viewerTrackingInterval);
+                this.viewerTrackingInterval = null;
+            }
+            
+            // Reset to minimal operation
+            this.isStreaming = false;
+            
+            // Update WebSocket to remove chat/redemption handlers
+            if (this.webSocketManager) {
+                this.webSocketManager.chatHandler = null;
+                this.webSocketManager.redemptionHandler = null;
+            }
+            
+            console.log('🎯 Bot successfully transitioned to minimal mode. Waiting for next stream...');
+            
+        } catch (error) {
+            console.error('❌ Error during stream offline transition:', error);
+            // Still reset the flag even if cleanup fails
+            this.isStreaming = false;
+        }
     }
 
     async sendMessage(channel, message) {
+        if (!this.isStreaming || !this.messageSender) return; // Only send messages when streaming and messageSender is available
         return this.messageSender.sendMessage(channel, message);
     }
 
     async cleanup() {
         console.log('Starting cleanup process...');
         try {
-            if (this.currentStreamId) {
+            if (this.currentStreamId && this.analyticsManager) {
                 console.log('Ending stream session...');
                 await this.analyticsManager.trackStreamEnd(this.currentStreamId);
+            }
+            
+            if (this.viewerTrackingInterval) {
+                clearInterval(this.viewerTrackingInterval);
             }
             
             if (this.webSocketManager) {

@@ -3,12 +3,13 @@ const WebSocket = require('ws');
 const config = require('../config/config');
 
 class WebSocketManager {
-    constructor(tokenManager, chatHandler, redemptionHandler, streamOfflineHandler) {
+    constructor(tokenManager, chatHandler, redemptionHandler, streamOnlineHandler, streamOfflineHandler) {
         this.tokenManager = tokenManager;
         this.wsConnection = null;
         this.sessionId = null;
         this.chatHandler = chatHandler;
         this.redemptionHandler = redemptionHandler;
+        this.streamOnlineHandler = streamOnlineHandler;
         this.streamOfflineHandler = streamOfflineHandler;
         this.onSessionReady = null;
     }
@@ -60,6 +61,8 @@ class WebSocketManager {
                         await this.chatHandler(message.payload);
                     } else if (message.metadata.subscription_type === 'channel.channel_points_custom_reward_redemption.add') {
                         await this.redemptionHandler(message.payload);
+                    } else if (message.metadata.subscription_type === 'stream.online') {
+                        await this.streamOnlineHandler();
                     } else if (message.metadata.subscription_type === 'stream.offline') {
                         await this.streamOfflineHandler();
                     }
