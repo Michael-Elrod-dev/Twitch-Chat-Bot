@@ -1,4 +1,5 @@
 // src/tokens/twitchAPI.js
+const fetch = require('node-fetch');
 const config = require('../config/config');
 
 class TwitchAPI {

@@ -1,4 +1,5 @@
 // src/redemptions/redemptionManager.js
+const fetch = require('node-fetch');
 const config = require('../config/config');
 
 class RedemptionManager {

@@ -1,4 +1,5 @@
 // src/messages/messageSender.js
+const fetch = require('node-fetch');
 const config = require('../config/config');
 
 class MessageSender {
