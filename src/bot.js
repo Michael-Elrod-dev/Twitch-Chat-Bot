@@ -1,5 +1,6 @@
 // src/bot.js
 const config = require('./config/config');
+const AIManager = require('./ai/aiManager');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager')
 const EmoteManager = require('./emotes/emoteManager');
@@ -32,6 +33,75 @@ class Bot {
             this.dbManager = new DbManager();
             await this.dbManager.connect();
 
+<<<<<<< Updated upstream
+=======
+            this.tokenManager = new TokenManager();
+            await this.tokenManager.init(this.dbManager);
+            
+            this.twitchAPI = new TwitchAPI(this.tokenManager);
+
+            this.aiManager = new AIManager();
+            await this.aiManager.init(
+                this.dbManager, 
+                this.tokenManager.tokens.claudeApiKey,
+                this.tokenManager.tokens.openaiApiKey
+            );
+            
+            // Check if stream is live
+            const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
+            // if (streamInfo) {
+            //     console.log('🔴 Stream is live! Starting full bot functionality...');
+                
+            // } else {
+            //     console.log('⚫ Stream is offline. Bot will wait for stream to go live...');
+            //     await this.startMinimalOperation();
+            // }
+            await this.startFullOperation();
+
+        } catch (error) {
+            console.error('❌ Failed to initialize bot:', error);
+            throw error;
+        }
+    }
+
+    async startMinimalOperation() {
+        // Only start WebSocket connection to listen for stream events
+        this.webSocketManager = new WebSocketManager(
+            this.tokenManager,
+            null,
+            null,
+            this.handleStreamOffline.bind(this),
+            this.handleStreamOnline.bind(this)
+        );
+        
+        this.webSocketManager.onSessionReady = async (sessionId) => {
+            this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+            await this.subscriptionManager.subscribeToStreamOnline();
+            await this.subscriptionManager.subscribeToStreamOffline();
+        };
+        
+        await this.webSocketManager.connect();
+        
+        // Start token refresh interval even in minimal mode
+        setInterval(async () => {
+            try {
+                await this.tokenManager.checkAndRefreshTokens();
+            } catch (error) {
+                console.error('❌ Error in periodic token refresh:', error);
+            }
+        }, config.tokenRefreshInterval);
+    }
+
+    async startFullOperation() {
+        if (this.isStreaming) return; // Already running
+        
+        console.log('🚀 Starting full bot operation...');
+        
+        try {
+            this.isStreaming = true;
+
+            // Initialize all the analytics, commands, etc.
+>>>>>>> Stashed changes
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init(this.dbManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
@@ -81,7 +151,8 @@ class Bot {
             this.chatMessageHandler = new ChatMessageHandler(
                 this.viewerManager,
                 this.commandManager,
-                this.emoteManager
+                this.emoteManager,
+                this.aiManager
             );
             
             this.redemptionManager = new RedemptionManager(this, this.spotifyManager);
@@ -121,7 +192,13 @@ class Bot {
                 }
             }, config.tokenRefreshInterval);
         } catch (error) {
+<<<<<<< Updated upstream
             console.error('❌ Failed to initialize bot:', error);
+=======
+            console.error('❌ Error during full operation startup:', error);
+            this.isStreaming = false; // Reset flag on failure
+            this.isStreaming = true;
+>>>>>>> Stashed changes
             throw error;
         }
     }
@@ -147,17 +224,69 @@ class Bot {
     }
     
     async handleChatMessage(payload) {
+<<<<<<< Updated upstream
+=======
+        if (!this.isStreaming) return;
+>>>>>>> Stashed changes
         await this.chatMessageHandler.handleChatMessage(payload, this);
     }
 
     async handleRedemption(payload) {
+<<<<<<< Updated upstream
+=======
+        if (!this.isStreaming) return;
+>>>>>>> Stashed changes
         await this.redemptionHandler.handleRedemption(payload, this);
     }
 
     async handleStreamOffline() {
+<<<<<<< Updated upstream
         console.log('Stream detected as ended via EventSub');
         await this.cleanup();
         process.exit(0);
+=======
+        console.log('⚫ Stream went offline. Stopping full bot functionality...');
+        
+        try {
+            // Send offline message to chat BEFORE disabling functionality
+            if (this.isStreaming && this.messageSender) {
+                try {
+                    await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
+                } catch (messageError) {
+                    console.error('❌ Error sending offline message to chat:', messageError);
+                }
+            }
+            
+            if (this.currentStreamId && this.analyticsManager) {
+                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
+                this.currentStreamId = null;
+            }
+            
+            // Clear viewer tracking
+            if (this.viewerTrackingInterval) {
+                clearInterval(this.viewerTrackingInterval);
+                this.viewerTrackingInterval = null;
+            }
+            
+            // Reset to minimal operation
+            this.isStreaming = false;
+            this.isStreaming = true;
+            
+            // Update WebSocket to remove chat/redemption handlers
+            if (this.webSocketManager) {
+                this.webSocketManager.chatHandler = null;
+                this.webSocketManager.redemptionHandler = null;
+            }
+            
+            console.log('🎯 Bot successfully transitioned to minimal mode. Waiting for next stream...');
+            
+        } catch (error) {
+            console.error('❌ Error during stream offline transition:', error);
+            // Still reset the flag even if cleanup fails
+            this.isStreaming = false;
+            this.isStreaming = true;
+        }
+>>>>>>> Stashed changes
     }
 
     async sendMessage(channel, message) {
