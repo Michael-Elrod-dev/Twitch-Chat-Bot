@@ -1,5 +1,6 @@
 // src/bot.js
 const config = require('./config/config');
+const AIManager = require('./ai/aiManager');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager')
 const EmoteManager = require('./emotes/emoteManager');
@@ -24,7 +25,6 @@ class Bot {
     constructor() {
         this.isStreaming = false;
         this.currentStreamId = null;
-        this.viewerTrackingInterval = null;
         this.channelName = config.channelName;
     }
 
@@ -38,6 +38,13 @@ class Bot {
             await this.tokenManager.init(this.dbManager);
             
             this.twitchAPI = new TwitchAPI(this.tokenManager);
+
+            this.aiManager = new AIManager();
+            await this.aiManager.init(
+                this.dbManager, 
+                this.tokenManager.tokens.claudeApiKey,
+                this.tokenManager.tokens.openaiApiKey
+            );
             
             // Check if stream is live
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
@@ -140,7 +147,8 @@ class Bot {
             this.chatMessageHandler = new ChatMessageHandler(
                 this.viewerManager,
                 this.commandManager,
-                this.emoteManager
+                this.emoteManager,
+                this.aiManager
             );
             
             this.redemptionManager = new RedemptionManager(this, this.spotifyManager);
@@ -151,25 +159,19 @@ class Bot {
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
-
-            // Update WebSocket manager with full handlers or create new one
-            if (this.webSocketManager) {
-                // Update existing connection
-                this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
-                this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
-            } else {
-                // Create new connection (shouldn't happen, but safety check)
-                this.webSocketManager = new WebSocketManager(
-                    this.tokenManager,
-                    this.handleChatMessage.bind(this),
-                    this.handleRedemption.bind(this),
-                    this.handleStreamOffline.bind(this),
-                    this.handleStreamOnline.bind(this)
-                );
-                await this.webSocketManager.connect();
-            }
-
-            // Subscribe to all events
+    
+            this.subscriptionManager = new SubscriptionManager(
+                this.tokenManager,
+                null
+            );
+    
+            this.webSocketManager = new WebSocketManager(
+                this.tokenManager,
+                this.handleChatMessage.bind(this),
+                this.handleRedemption.bind(this),
+                this.handleStreamOffline.bind(this),
+                this.handleStreamOnline.bind(this)
+            );
             this.webSocketManager.onSessionReady = async (sessionId) => {
                 if (!this.subscriptionManager) {
                     this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
@@ -224,12 +226,12 @@ class Bot {
     }
     
     async handleChatMessage(payload) {
-        if (!this.isStreaming) return; // Only handle chat when streaming
+        if (!this.isStreaming) return;
         await this.chatMessageHandler.handleChatMessage(payload, this);
     }
 
     async handleRedemption(payload) {
-        if (!this.isStreaming) return; // Only handle redemptions when streaming
+        if (!this.isStreaming) return;
         await this.redemptionHandler.handleRedemption(payload, this);
     }
 
