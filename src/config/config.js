@@ -96,6 +96,7 @@ Keep responses under ${this.aiModels.claude.maxCharacters} characters. Don't tal
             image: ['!image']
         };
 
+        // Error Responses
         this.errorMessages = {
             ai: {
                 unavailable: "Sorry, I'm having trouble responding right now.",

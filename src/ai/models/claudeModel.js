@@ -9,11 +9,11 @@ class ClaudeModel {
 
     async getTextResponse(prompt, context = {}) {
         try {
-            const response = await fetch(`${config.aiModels.claude.apiEndpoint}/messages`, {
+            const response = await fetch(`${config.claudeApiEndpoint}/messages`, {
                 method: 'POST',
                 headers: {
                     'x-api-key': this.apiKey,
-                    'anthropic-version': config.apiVersions.anthropic,
+                    'anthropic-version': config.aiModels.claude.apiVersion,
                     'content-type': 'application/json'
                 },
                 body: JSON.stringify({
