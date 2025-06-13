@@ -23,8 +23,8 @@ const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
 class Bot {
     constructor() {
-        this.currentStreamId = null;
         this.isStreaming = false;
+        this.currentStreamId = null;
         this.channelName = config.channelName;
     }
 
@@ -47,14 +47,13 @@ class Bot {
             
             // Check if stream is live
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
-            // if (streamInfo) {
-            //     console.log('🔴 Stream is live! Starting full bot functionality...');
-                
-            // } else {
-            //     console.log('⚫ Stream is offline. Bot will wait for stream to go live...');
-            //     await this.startMinimalOperation();
-            // }
-            await this.startFullOperation();
+            if (streamInfo) {
+                console.log('🔴 Stream is live! Starting full bot functionality...');
+                await this.startFullOperation();
+            } else {
+                console.log('⚫ Stream is offline. Bot will wait for stream to go live...');
+                await this.startMinimalOperation();
+            }
 
         } catch (error) {
             console.error('❌ Failed to initialize bot:', error);
@@ -170,7 +169,8 @@ class Bot {
                 this.tokenManager,
                 this.handleChatMessage.bind(this),
                 this.handleRedemption.bind(this),
-                this.handleStreamOffline.bind(this)
+                this.handleStreamOffline.bind(this),
+                this.handleStreamOnline.bind(this)
             );
             this.webSocketManager.onSessionReady = async (sessionId) => {
                 this.subscriptionManager.setSessionId(sessionId);
@@ -191,7 +191,6 @@ class Bot {
         } catch (error) {
             console.error('❌ Error during full operation startup:', error);
             this.isStreaming = false; // Reset flag on failure
-            this.isStreaming = true;
             throw error;
         }
     }
@@ -226,6 +225,11 @@ class Bot {
         await this.redemptionHandler.handleRedemption(payload, this);
     }
 
+    async handleStreamOnline() {
+        console.log('🔴 Stream went online! Starting full bot functionality...');
+        await this.startFullOperation();
+    }
+
     async handleStreamOffline() {
         console.log('⚫ Stream went offline. Stopping full bot functionality...');
         
@@ -252,7 +256,6 @@ class Bot {
             
             // Reset to minimal operation
             this.isStreaming = false;
-            this.isStreaming = true;
             
             // Update WebSocket to remove chat/redemption handlers
             if (this.webSocketManager) {
@@ -266,7 +269,6 @@ class Bot {
             console.error('❌ Error during stream offline transition:', error);
             // Still reset the flag even if cleanup fails
             this.isStreaming = false;
-            this.isStreaming = true;
         }
     }
 

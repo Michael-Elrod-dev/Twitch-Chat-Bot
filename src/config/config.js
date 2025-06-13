@@ -16,6 +16,9 @@ class Config {
             database: process.env.DB_NAME
         };
 
+        // Discord Webhook
+        this.discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+
         // WebSocket
         this.wsEndpoint = 'wss://eventsub.wss.twitch.tv/ws';
         this.wsReconnectDelay = 5000; // 5 seconds
@@ -45,8 +48,7 @@ class Config {
                 apiVersion: '2023-06-01',
             },
             openai: {
-                model: 'gpt-4',
-                maxTokens: 1000,
+                model: 'dall-e-3',
                 temperature: 0.7,
                 imageSize: '1024x1024',
                 imageQuality: 'standard'
@@ -84,9 +86,9 @@ Users will mention you in chat for various reasons like random questions, treati
 Keep responses under ${this.aiModels.claude.maxCharacters} characters. Don't talk like an AI - you're just another person in chat.`
             },
             openai: {
-                imagePromptPrefix: "Create a fun, stream-appropriate image for AiMostHadMe's Twitch chat. Style should be engaging and entertaining. Prompt: ",
-                styleInstructions: "cartoon style, colorful, family-friendly, gaming/streaming themed when possible",
-                safetyGuidelines: "no violence, no inappropriate content, no copyrighted characters, keep it wholesome and fun"
+                imagePromptPrefix: "",
+                styleInstructions: "(cartoon style unless otherwise mentioned in prompt)",
+                safetyGuidelines: ""
             }
         };
 

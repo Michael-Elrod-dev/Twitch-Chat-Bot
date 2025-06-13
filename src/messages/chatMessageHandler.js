@@ -45,6 +45,10 @@ class ChatMessageHandler {
             if (bot.aiManager && bot.aiManager.shouldTriggerImage(messageText)) {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'image');
                 if (prompt) {
+                    userContext.username = context.username;
+
+                    await bot.sendMessage(bot.channelName, `@${context.username} Generating...`);
+
                     const result = await bot.aiManager.handleImageRequest(prompt, context.userId, bot.currentStreamId, userContext);
                     
                     if (result.success) {

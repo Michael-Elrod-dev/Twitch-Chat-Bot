@@ -3,6 +3,7 @@ const config = require('../config/config');
 const RateLimiter = require('./rateLimiter');
 const ClaudeModel = require('./models/claudeModel');
 const OpenAIModel = require('./models/openaiModel');
+const DiscordUploader = require('./discordUploader');
 
 class AIManager {
     constructor() {
@@ -10,6 +11,7 @@ class AIManager {
         this.claudeModel = null;
         this.openaiModel = null;
         this.rateLimiter = null;
+        this.discordUploader = null;
     }
 
     async init(dbManager, claudeApiKey, openaiApiKey) {
@@ -17,6 +19,7 @@ class AIManager {
         this.claudeModel = new ClaudeModel(claudeApiKey);
         this.openaiModel = new OpenAIModel(openaiApiKey);
         this.rateLimiter = new RateLimiter(dbManager);
+        this.discordUploader = new DiscordUploader(config.discordWebhookUrl);
         console.log('✅ AIManager initialized');
     }
 
@@ -70,26 +73,31 @@ class AIManager {
             };
         }
 
-        // Generate image with OpenAI (placeholder for now)
-        const response = await this.openaiModel.generateImage(prompt, userContext);
+        // Generate image with DALL-E 3
+        const openaiImageUrl = await this.openaiModel.generateImage(prompt, userContext);
         
-        if (response) {
-            await this.rateLimiter.updateUsage(userId, 'openai_image', streamId);
+        if (openaiImageUrl) {
+            // Upload to Discord and get CDN URL
+            const discordImageUrl = await this.discordUploader.uploadImage(openaiImageUrl, userContext.username || 'Unknown', prompt);
             
-            // Get updated usage stats for display
-            const usageStats = await this.rateLimiter.getUserStats(userId, 'openai_image', streamId);
-            const userLimits = this.rateLimiter.getUserLimits('openai_image', userContext);
-            
-            // Add usage counter (unless broadcaster has unlimited)
-            let finalResponse = response;
-            if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
-                finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
+            if (discordImageUrl) {
+                await this.rateLimiter.updateUsage(userId, 'openai_image', streamId);
+                
+                // Get updated usage stats for display
+                const usageStats = await this.rateLimiter.getUserStats(userId, 'openai_image', streamId);
+                const userLimits = this.rateLimiter.getUserLimits('openai_image', userContext);
+                
+                // Add usage counter (unless broadcaster has unlimited)
+                let finalResponse = `Here's your image: ${discordImageUrl}`;
+                if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
+                    finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) Here's your image: ${discordImageUrl}`;
+                }
+                
+                return {
+                    success: true,
+                    response: finalResponse
+                };
             }
-            
-            return {
-                success: true,
-                response: finalResponse
-            };
         }
 
         return {
