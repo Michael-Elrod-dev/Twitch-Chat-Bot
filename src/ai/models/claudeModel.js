@@ -13,7 +13,7 @@ class ClaudeModel {
                 method: 'POST',
                 headers: {
                     'x-api-key': this.apiKey,
-                    'anthropic-version': '2023-06-01',
+                    'anthropic-version': config.apiVersions.anthropic,
                     'content-type': 'application/json'
                 },
                 body: JSON.stringify({

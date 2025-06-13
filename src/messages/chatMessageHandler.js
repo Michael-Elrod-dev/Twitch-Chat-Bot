@@ -45,7 +45,7 @@ class ChatMessageHandler {
             if (bot.aiManager && bot.aiManager.shouldTriggerImage(messageText)) {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'image');
                 if (prompt) {
-                    const result = await bot.aiManager.handleImageRequest(prompt, context.userId, userContext);
+                    const result = await bot.aiManager.handleImageRequest(prompt, context.userId, bot.currentStreamId, userContext);
                     
                     if (result.success) {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);
@@ -70,7 +70,7 @@ class ChatMessageHandler {
             if (bot.aiManager && bot.aiManager.shouldTriggerText(messageText)) {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'text');
                 if (prompt) {
-                    const result = await bot.aiManager.handleTextRequest(prompt, context.userId, userContext);
+                    const result = await bot.aiManager.handleTextRequest(prompt, context.userId, bot.currentStreamId, userContext);
                     
                     if (result.success) {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);

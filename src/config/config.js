@@ -38,14 +38,13 @@ class Config {
         // AI Model Settings
         this.aiModels = {
             claude: {
-                apiEndpoint: this.claudeApiEndpoint,
                 model: 'claude-4-sonnet-20250514',
                 maxTokens: 200,
                 temperature: 0.7,
-                maxCharacters: 400
+                maxCharacters: 400,
+                apiVersion: '2023-06-01',
             },
             openai: {
-                apiEndpoint: this.openaiApiEndpoint,
                 model: 'gpt-4',
                 maxTokens: 1000,
                 temperature: 0.7,
@@ -57,29 +56,15 @@ class Config {
         // Rate Limits
         this.rateLimits = {
             claude: {
-                globalMaxPerMinute: 20,
-                cooldowns: {
-                    broadcaster: 0,        // No cooldown
-                    mod: 10000,           // 10 seconds
-                    subscriber: 20000,    // 20 seconds
-                    everyone: 45000       // 45 seconds
-                },
-                dailyLimits: {
-                    broadcaster: 999999,  // Unlimited
-                    mod: 100,            // 100 per day
-                    subscriber: 50,      // 50 per day
-                    everyone: 20         // 20 per day
+                streamLimits: {
+                    broadcaster: 999999,
+                    mod: 50,
+                    subscriber: 50,
+                    everyone: 5
                 }
             },
             openai_image: {
-                globalMaxPerMinute: 5,   // Images are expensive/slow
-                cooldowns: {
-                    broadcaster: 0,
-                    mod: 30000,          // 30 seconds
-                    subscriber: 60000,   // 1 minute
-                    everyone: 120000     // 2 minutes
-                },
-                dailyLimits: {
+                streamLimits: {
                     broadcaster: 999999,
                     mod: 20,
                     subscriber: 10,
@@ -109,6 +94,15 @@ Keep responses under ${this.aiModels.claude.maxCharacters} characters. Don't tal
         this.aiTriggers = {
             text: ['@almosthadai', 'almosthadai'],
             image: ['!image']
+        };
+
+        this.errorMessages = {
+            ai: {
+                unavailable: "Sorry, I'm having trouble responding right now.",
+                imageUnavailable: "Sorry, I can't generate images right now.",
+                rateLimited: "Please wait before using AI again.",
+                globalLimit: "AI is temporarily busy. Please try again in a moment."
+            }
         };
     }
 }

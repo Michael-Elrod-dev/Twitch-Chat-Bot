@@ -20,9 +20,9 @@ class AIManager {
         console.log('✅ AIManager initialized');
     }
 
-    async handleTextRequest(prompt, userId, userContext = {}) {
+    async handleTextRequest(prompt, userId, streamId, userContext = {}) {
         // Check rate limits for Claude
-        const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'claude', userContext);
+        const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'claude', streamId, userContext);
         
         if (!rateLimitResult.allowed) {
             return {
@@ -35,10 +35,21 @@ class AIManager {
         const response = await this.claudeModel.getTextResponse(prompt, userContext);
         
         if (response) {
-            await this.rateLimiter.updateUsage(userId, 'claude');
+            await this.rateLimiter.updateUsage(userId, 'claude', streamId);
+            
+            // Get updated usage stats for display
+            const usageStats = await this.rateLimiter.getUserStats(userId, 'claude', streamId);
+            const userLimits = this.rateLimiter.getUserLimits('claude', userContext);
+            
+            // Add usage counter (unless broadcaster has unlimited)
+            let finalResponse = response;
+            if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
+                finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
+            }
+            
             return {
                 success: true,
-                response: response
+                response: finalResponse
             };
         }
 
@@ -48,9 +59,9 @@ class AIManager {
         };
     }
 
-    async handleImageRequest(prompt, userId, userContext = {}) {
+    async handleImageRequest(prompt, userId, streamId, userContext = {}) {
         // Check rate limits for OpenAI images
-        const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'openai_image', userContext);
+        const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'openai_image', streamId, userContext);
         
         if (!rateLimitResult.allowed) {
             return {
@@ -63,10 +74,21 @@ class AIManager {
         const response = await this.openaiModel.generateImage(prompt, userContext);
         
         if (response) {
-            await this.rateLimiter.updateUsage(userId, 'openai_image');
+            await this.rateLimiter.updateUsage(userId, 'openai_image', streamId);
+            
+            // Get updated usage stats for display
+            const usageStats = await this.rateLimiter.getUserStats(userId, 'openai_image', streamId);
+            const userLimits = this.rateLimiter.getUserLimits('openai_image', userContext);
+            
+            // Add usage counter (unless broadcaster has unlimited)
+            let finalResponse = response;
+            if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
+                finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
+            }
+            
             return {
                 success: true,
-                response: response
+                response: finalResponse
             };
         }
 

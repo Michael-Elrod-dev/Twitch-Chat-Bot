@@ -4,7 +4,6 @@ const config = require('../config/config');
 class RateLimiter {
     constructor(dbManager) {
         this.dbManager = dbManager;
-        this.globalQueues = new Map(); // Track global limits per service
     }
 
     getUserLimits(service, userContext = {}) {
@@ -19,81 +18,32 @@ class RateLimiter {
         else if (userContext.isSubscriber) userType = 'subscriber';
 
         return {
-            cooldownMs: serviceConfig.cooldowns[userType],
-            dailyLimit: serviceConfig.dailyLimits[userType]
+            streamLimit: serviceConfig.streamLimits[userType]
         };
     }
 
-    getGlobalLimits(service) {
-        const serviceConfig = config.rateLimits[service];
-        if (!serviceConfig) {
-            return { maxPerMinute: 10 }; // Default fallback
-        }
-        return { maxPerMinute: serviceConfig.globalMaxPerMinute };
-    }
-
-    async checkRateLimit(userId, service, userContext = {}) {
+    async checkRateLimit(userId, service, streamId, userContext = {}) {
         try {
-            // Get user-specific limits from config
             const userLimits = this.getUserLimits(service, userContext);
             
-            // Check database for user's usage
+            // Get current usage for this user/service/stream
             const sql = `
-                SELECT last_used, daily_count, reset_date 
+                SELECT stream_count
                 FROM api_usage 
-                WHERE user_id = ? AND api_type = ?
+                WHERE user_id = ? AND api_type = ? AND stream_id = ?
             `;
-            const results = await this.dbManager.query(sql, [userId, service]);
+            const results = await this.dbManager.query(sql, [userId, service, streamId]);
             
-            if (results.length === 0) {
-                // First time user - check global limit only
-                if (!this.checkGlobalRateLimit(service)) {
-                    return { 
-                        allowed: false, 
-                        reason: 'global_limit',
-                        message: `${service.toUpperCase()} is temporarily busy. Please try again in a moment.`
-                    };
-                }
-                return { allowed: true, reason: null };
-            }
+            const currentCount = results.length > 0 ? results[0].stream_count : 0;
             
-            const usage = results[0];
-            const now = new Date();
-            const lastUsed = new Date(usage.last_used);
-            
-            // Check cooldown
-            const timeSinceLastUse = now - lastUsed;
-            if (timeSinceLastUse < userLimits.cooldownMs) {
-                const remainingSeconds = Math.ceil((userLimits.cooldownMs - timeSinceLastUse) / 1000);
+            // Check stream limit
+            if (currentCount >= userLimits.streamLimit) {
                 return { 
                     allowed: false, 
-                    reason: 'cooldown',
-                    remainingSeconds,
-                    message: `Please wait ${remainingSeconds} seconds before using ${service.toUpperCase()} again.`
-                };
-            }
-            
-            // Check daily limit
-            const resetDate = new Date(usage.reset_date);
-            const isToday = resetDate.toDateString() === now.toDateString();
-            const dailyCount = isToday ? usage.daily_count : 0;
-            
-            if (dailyCount >= userLimits.dailyLimit) {
-                return { 
-                    allowed: false, 
-                    reason: 'daily_limit',
-                    dailyCount,
-                    dailyLimit: userLimits.dailyLimit,
-                    message: `You've reached your daily ${service.toUpperCase()} limit (${dailyCount}/${userLimits.dailyLimit}). Try again tomorrow!`
-                };
-            }
-            
-            // Check global rate limit
-            if (!this.checkGlobalRateLimit(service)) {
-                return { 
-                    allowed: false, 
-                    reason: 'global_limit',
-                    message: `${service.toUpperCase()} is temporarily busy. Please try again in a moment.`
+                    reason: 'stream_limit',
+                    streamCount: currentCount,
+                    streamLimit: userLimits.streamLimit,
+                    message: `You've reached your ${service.toUpperCase()} limit for this stream (${currentCount}/${userLimits.streamLimit}).`
                 };
             }
             
@@ -109,76 +59,35 @@ class RateLimiter {
         }
     }
 
-    checkGlobalRateLimit(service) {
-        const limits = this.getGlobalLimits(service);
-        const now = Date.now();
-        const oneMinuteAgo = now - 60000;
-        
-        // Initialize queue for service if it doesn't exist
-        if (!this.globalQueues.has(service)) {
-            this.globalQueues.set(service, []);
-        }
-        
-        const queue = this.globalQueues.get(service);
-        
-        // Remove old requests
-        const filteredQueue = queue.filter(time => time > oneMinuteAgo);
-        this.globalQueues.set(service, filteredQueue);
-        
-        // Check if we're under the limit
-        if (filteredQueue.length >= limits.maxPerMinute) {
-            return false;
-        }
-        
-        // Add current request
-        filteredQueue.push(now);
-        return true;
-    }
-
-    async updateUsage(userId, service) {
+    async updateUsage(userId, service, streamId) {
         try {
             const sql = `
-                INSERT INTO api_usage (user_id, api_type, last_used, daily_count, reset_date)
-                VALUES (?, ?, NOW(), 1, CURDATE())
+                INSERT INTO api_usage (user_id, api_type, stream_id, stream_count)
+                VALUES (?, ?, ?, 1)
                 ON DUPLICATE KEY UPDATE 
-                    last_used = NOW(),
-                    daily_count = CASE 
-                        WHEN reset_date = CURDATE() THEN daily_count + 1
-                        ELSE 1
-                    END,
-                    reset_date = CURDATE()
+                    stream_count = stream_count + 1
             `;
-            await this.dbManager.query(sql, [userId, service]);
+            await this.dbManager.query(sql, [userId, service, streamId]);
         } catch (error) {
             console.error(`❌ Error updating usage for ${service}:`, error);
         }
     }
 
-    async getUserStats(userId, service) {
+    async getUserStats(userId, service, streamId) {
         try {
             const sql = `
-                SELECT daily_count, reset_date, last_used
+                SELECT stream_count
                 FROM api_usage 
-                WHERE user_id = ? AND api_type = ?
+                WHERE user_id = ? AND api_type = ? AND stream_id = ?
             `;
-            const results = await this.dbManager.query(sql, [userId, service]);
-            
-            if (results.length === 0) {
-                return { dailyCount: 0, lastUsed: null };
-            }
-            
-            const usage = results[0];
-            const resetDate = new Date(usage.reset_date);
-            const now = new Date();
-            const isToday = resetDate.toDateString() === now.toDateString();
+            const results = await this.dbManager.query(sql, [userId, service, streamId]);
             
             return {
-                dailyCount: isToday ? usage.daily_count : 0,
-                lastUsed: usage.last_used
+                streamCount: results.length > 0 ? results[0].stream_count : 0
             };
         } catch (error) {
             console.error(`❌ Error getting user stats for ${service}:`, error);
-            return { dailyCount: 0, lastUsed: null };
+            return { streamCount: 0 };
         }
     }
 }

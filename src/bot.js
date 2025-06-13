@@ -33,8 +33,6 @@ class Bot {
             this.dbManager = new DbManager();
             await this.dbManager.connect();
 
-<<<<<<< Updated upstream
-=======
             this.tokenManager = new TokenManager();
             await this.tokenManager.init(this.dbManager);
             
@@ -101,7 +99,6 @@ class Bot {
             this.isStreaming = true;
 
             // Initialize all the analytics, commands, etc.
->>>>>>> Stashed changes
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init(this.dbManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
@@ -192,13 +189,9 @@ class Bot {
                 }
             }, config.tokenRefreshInterval);
         } catch (error) {
-<<<<<<< Updated upstream
-            console.error('❌ Failed to initialize bot:', error);
-=======
             console.error('❌ Error during full operation startup:', error);
             this.isStreaming = false; // Reset flag on failure
             this.isStreaming = true;
->>>>>>> Stashed changes
             throw error;
         }
     }
@@ -224,27 +217,16 @@ class Bot {
     }
     
     async handleChatMessage(payload) {
-<<<<<<< Updated upstream
-=======
         if (!this.isStreaming) return;
->>>>>>> Stashed changes
         await this.chatMessageHandler.handleChatMessage(payload, this);
     }
 
     async handleRedemption(payload) {
-<<<<<<< Updated upstream
-=======
         if (!this.isStreaming) return;
->>>>>>> Stashed changes
         await this.redemptionHandler.handleRedemption(payload, this);
     }
 
     async handleStreamOffline() {
-<<<<<<< Updated upstream
-        console.log('Stream detected as ended via EventSub');
-        await this.cleanup();
-        process.exit(0);
-=======
         console.log('⚫ Stream went offline. Stopping full bot functionality...');
         
         try {
@@ -286,7 +268,6 @@ class Bot {
             this.isStreaming = false;
             this.isStreaming = true;
         }
->>>>>>> Stashed changes
     }
 
     async sendMessage(channel, message) {

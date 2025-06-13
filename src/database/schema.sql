@@ -87,9 +87,9 @@ CREATE TABLE quotes (
 CREATE TABLE api_usage (
     user_id VARCHAR(50),
     api_type ENUM('claude', 'openai_image') NOT NULL,
-    last_used DATETIME,
-    daily_count INT DEFAULT 0,
-    reset_date DATE,
-    PRIMARY KEY (user_id, api_type),
-    FOREIGN KEY (user_id) REFERENCES viewers(user_id)
+    stream_id VARCHAR(50) NOT NULL,
+    stream_count INT DEFAULT 0,
+    PRIMARY KEY (user_id, api_type, stream_id),
+    FOREIGN KEY (user_id) REFERENCES viewers(user_id),
+    FOREIGN KEY (stream_id) REFERENCES streams(stream_id)
 );
