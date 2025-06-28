@@ -176,6 +176,80 @@ class SubscriptionManager {
             throw error;
         }
     }
+
+    async unsubscribeFromChatEvents() {
+        try {
+            await this.unsubscribeFromEventType('channel.chat.message');
+            console.log('✅ Unsubscribed from chat events');
+        } catch (error) {
+            console.error('❌ Error unsubscribing from chat events:', error);
+            throw error;
+        }
+    }
+
+    async unsubscribeFromChannelPoints() {
+        try {
+            await this.unsubscribeFromEventType('channel.channel_points_custom_reward_redemption.add');
+            console.log('✅ Unsubscribed from channel point redemptions');
+        } catch (error) {
+            console.error('❌ Error unsubscribing from channel points:', error);
+            throw error;
+        }
+    }
+
+    // Helper method to handle the actual unsubscription logic
+    async unsubscribeFromEventType(eventType) {
+        try {
+            // First, get all subscriptions to find the one we want to delete
+            const subscriptionsResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
+                method: 'GET',
+                headers: {
+                    'Client-Id': this.tokenManager.tokens.clientId,
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!subscriptionsResponse.ok) {
+                const errorData = await subscriptionsResponse.json();
+                throw new Error(`Failed to get subscriptions: ${JSON.stringify(errorData)}`);
+            }
+
+            const subscriptionsData = await subscriptionsResponse.json();
+            
+            // Find the subscription for this event type and session
+            const subscription = subscriptionsData.data.find(sub => 
+                sub.type === eventType && 
+                sub.transport.session_id === this.sessionId
+            );
+
+            if (!subscription) {
+                console.log(`ℹ️ No subscription found for ${eventType} with session ${this.sessionId}`);
+                return;
+            }
+
+            // Delete the subscription
+            const deleteResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions?id=${subscription.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Client-Id': this.tokenManager.tokens.clientId,
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!deleteResponse.ok) {
+                const errorData = await deleteResponse.json();
+                throw new Error(`Failed to delete subscription ${subscription.id}: ${JSON.stringify(errorData)}`);
+            }
+
+            console.log(`✅ Successfully unsubscribed from ${eventType} (ID: ${subscription.id})`);
+            
+        } catch (error) {
+            console.error(`❌ Error unsubscribing from ${eventType}:`, error);
+            throw error;
+        }
+    }
 }
 
 module.exports = SubscriptionManager;

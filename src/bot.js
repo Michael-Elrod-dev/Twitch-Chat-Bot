@@ -159,35 +159,48 @@ class Bot {
             this.redemptionManager.registerHandler("Song Request", handleSongRequest);
             this.redemptionManager.registerHandler("Skip Song Queue", handleSongRequest);
             this.redemptionManager.registerHandler("Add a quote", handleQuote);
-    
-            this.subscriptionManager = new SubscriptionManager(
-                this.tokenManager,
-                null
-            );
-    
-            this.webSocketManager = new WebSocketManager(
-                this.tokenManager,
-                this.handleChatMessage.bind(this),
-                this.handleRedemption.bind(this),
-                this.handleStreamOffline.bind(this),
-                this.handleStreamOnline.bind(this)
-            );
-            this.webSocketManager.onSessionReady = async (sessionId) => {
-                if (!this.subscriptionManager) {
-                    this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+
+            // REUSE existing WebSocket connection
+            if (this.webSocketManager) {
+                // Update handlers
+                this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
+                this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
+                
+                // Add new subscriptions
+                if (this.subscriptionManager) {
+                    await this.subscriptionManager.subscribeToChatEvents();
+                    await this.subscriptionManager.subscribeToChannelPoints();
                 }
-                this.subscriptionManager.setSessionId(sessionId);
-                await this.subscriptionManager.subscribeToChatEvents();
-                await this.subscriptionManager.subscribeToChannelPoints();
-                await this.subscriptionManager.subscribeToStreamOnline();
-                await this.subscriptionManager.subscribeToStreamOffline();
-            };
+            } else {
+                logger.system('BOT', 'WEBSOCKET_MISSING', 'No existing WebSocket found, creating new one');
+                
+                this.webSocketManager = new WebSocketManager(
+                    this.tokenManager,
+                    this.handleChatMessage.bind(this),
+                    this.handleRedemption.bind(this),
+                    this.handleStreamOffline.bind(this),
+                    this.handleStreamOnline.bind(this)
+                );
+                
+                this.webSocketManager.onSessionReady = async (sessionId) => {
+                    if (!this.subscriptionManager) {
+                        this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+                    }
+                    this.subscriptionManager.setSessionId(sessionId);
+                    await this.subscriptionManager.subscribeToChatEvents();
+                    await this.subscriptionManager.subscribeToChannelPoints();
+                    await this.subscriptionManager.subscribeToStreamOnline();
+                    await this.subscriptionManager.subscribeToStreamOffline();
+                };
+                
+                await this.webSocketManager.connect();
+            }
 
             this.startViewerTracking();
 
             logger.system('BOT', 'FULL_OPERATION_READY', 'Bot is now fully operational');
             
-            // Send success message to chat ONLY if all checks passed
+            // Send success message to chat if all checks passed
             try {
                 await this.sendMessage(this.channelName, '🤖 Bot is now live and fully operational! All systems ready.');
             } catch (messageError) {
@@ -196,7 +209,7 @@ class Bot {
 
         } catch (error) {
             logger.error('BOT', 'full_operation_failed', 'Error during full operation startup', null, error);
-            this.isStreaming = false; // Reset flag on failure
+            this.isStreaming = false;
             throw error;
         }
     }
@@ -271,13 +284,23 @@ class Bot {
             if (this.webSocketManager) {
                 this.webSocketManager.chatHandler = null;
                 this.webSocketManager.redemptionHandler = null;
+                // Note: streamOnlineHandler and streamOfflineHandler remain active
             }
             
+            // Unsubscribe from chat/redemption events but keep stream events
+            if (this.subscriptionManager) {
+                try {
+                    await this.subscriptionManager.unsubscribeFromChatEvents();
+                    await this.subscriptionManager.unsubscribeFromChannelPoints();
+                    // Keep stream online/offline subscriptions active
+                } catch (unsubError) {
+                    logger.error('BOT', 'unsubscribe_failed', 'Error unsubscribing from events', null, unsubError);
+                }
+            }            
             logger.system('BOT', 'minimal_mode', 'Bot successfully transitioned to minimal mode. Waiting for next stream...');
             
         } catch (error) {
             logger.error('BOT', 'offline_transition_failed', 'Error during stream offline transition', null, error);
-            // Still reset the flag even if cleanup fails
             this.isStreaming = false;
         }
     }
