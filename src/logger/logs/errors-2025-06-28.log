@@ -1,0 +1,78 @@
+2025-06-28T03:51:02.903Z [ERROR ] [BOT            ] initialization_failed - Failed to initialize bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+2025-06-28T03:51:02.905Z [ERROR ] [BOT            ] startup_failed - Failed to start bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+2025-06-28T03:54:05.387Z [ERROR ] [BOT            ] initialization_failed - Failed to initialize bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+2025-06-28T03:54:05.388Z [ERROR ] [BOT            ] startup_failed - Failed to start bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+2025-06-28T03:54:35.538Z [ERROR ] [BOT            ] initialization_failed - Failed to initialize bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+2025-06-28T03:54:35.539Z [ERROR ] [BOT            ] startup_failed - Failed to start bot
+Stack Trace:
+Error
+    at Object.createConnectionPromise [as createConnection] (D:\Code\AlmostHadAI\node_modules\mysql2\promise.js:18:31)
+    at DbManager.connect (D:\Code\AlmostHadAI\src\database\dbManager.js:12:43)
+    at Bot.init (D:\Code\AlmostHadAI\src\bot.js:36:34)
+    at startBot (D:\Code\AlmostHadAI\src\bot.js:294:19)
+    at Object.<anonymous> (D:\Code\AlmostHadAI\src\bot.js:300:1)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)

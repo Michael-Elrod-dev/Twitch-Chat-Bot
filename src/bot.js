@@ -1,6 +1,6 @@
 // src/bot.js
 const config = require('./config/config');
-const logger = require('../logger/logger');
+const logger = require('./logger/logger');
 const AIManager = require('./ai/aiManager');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager')
@@ -58,7 +58,7 @@ class Bot {
             }
 
         } catch (error) {
-            console.error('❌ Failed to initialize bot:', error);
+            logger.error('BOT', 'initialization_failed', 'Failed to initialize bot', null, error);
             throw error;
         }
     }
@@ -86,7 +86,7 @@ class Bot {
             try {
                 await this.tokenManager.checkAndRefreshTokens();
             } catch (error) {
-                console.error('❌ Error in periodic token refresh:', error);
+                logger.error('TOKEN_MANAGER', 'refresh_failed', 'Error in periodic token refresh', null, error);
             }
         }, config.tokenRefreshInterval);
     }
@@ -191,11 +191,11 @@ class Bot {
             try {
                 await this.sendMessage(this.channelName, '🤖 Bot is now live and fully operational! All systems ready.');
             } catch (messageError) {
-                console.error('❌ Error sending startup message to chat:', messageError);
+                logger.error('BOT', 'startup_message_failed', 'Error sending startup message to chat', null, messageError);
             }
 
         } catch (error) {
-            console.error('❌ Error during full operation startup:', error);
+            logger.error('BOT', 'full_operation_failed', 'Error during full operation startup', null, error);
             this.isStreaming = false; // Reset flag on failure
             throw error;
         }
@@ -220,7 +220,7 @@ class Bot {
                     await this.dbManager.query(updateSql, [streamData.viewer_count, this.currentStreamId]);
                 }
             } catch (error) {
-                console.error('❌ Error tracking viewer count:', error);
+                logger.error('ANALYTICS', 'viewer_tracking_failed', 'Error tracking viewer count', null, error);
             }
         }, config.viewerTrackingInterval);
     }
@@ -236,12 +236,12 @@ class Bot {
     }
 
     async handleStreamOnline() {
-        console.log('🔴 Stream went online! Starting full bot functionality...');
+        logger.system('BOT', 'stream_online', 'Stream went online! Starting full bot functionality...');
         await this.startFullOperation();
     }
 
     async handleStreamOffline() {
-        console.log('⚫ Stream went offline. Stopping full bot functionality...');
+        logger.system('BOT', 'stream_offline', 'Stream went offline. Stopping full bot functionality...');
         
         try {
             // Send offline message to chat BEFORE disabling functionality
@@ -249,7 +249,7 @@ class Bot {
                 try {
                     await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
                 } catch (messageError) {
-                    console.error('❌ Error sending offline message to chat:', messageError);
+                    logger.error('BOT', 'offline_message_failed', 'Error sending offline message to chat', null, messageError);
                 }
             }
             
@@ -273,56 +273,18 @@ class Bot {
                 this.webSocketManager.redemptionHandler = null;
             }
             
-            console.log('🎯 Bot successfully transitioned to minimal mode. Waiting for next stream...');
+            logger.system('BOT', 'minimal_mode', 'Bot successfully transitioned to minimal mode. Waiting for next stream...');
             
         } catch (error) {
-            console.error('❌ Error during stream offline transition:', error);
+            logger.error('BOT', 'offline_transition_failed', 'Error during stream offline transition', null, error);
             // Still reset the flag even if cleanup fails
             this.isStreaming = false;
         }
     }
 
     async sendMessage(channel, message) {
-        if (!this.isStreaming || !this.messageSender) return; // Only send messages when streaming and messageSender is available
+        if (!this.isStreaming || !this.messageSender) return;
         return this.messageSender.sendMessage(channel, message);
-    }
-
-    async cleanup() {
-        console.log('Starting cleanup process...');
-        try {
-            if (this.currentStreamId && this.analyticsManager) {
-                console.log('Ending stream session...');
-                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
-            }
-            
-            if (this.viewerTrackingInterval) {
-                clearInterval(this.viewerTrackingInterval);
-            }
-            
-            if (this.webSocketManager) {
-                console.log('Closing WebSocket connection...');
-                this.webSocketManager.close();
-            }
-            
-            if (this.dbManager) {
-                console.log('Closing database connection...');
-                await this.dbManager.close();
-            }
-            
-            console.log('Cleanup complete!');
-            console.log('Press any key to exit...');
-            
-            // Wait for keypress before exiting
-            process.stdin.setRawMode(true);
-            process.stdin.resume();
-            process.stdin.on('data', process.exit.bind(process, 0));
-        } catch (error) {
-            console.error('Error during cleanup:', error);
-            console.log('Press any key to exit...');
-            process.stdin.setRawMode(true);
-            process.stdin.resume();
-            process.stdin.on('data', process.exit.bind(process, 1));
-        }
     }
 }
 
@@ -331,7 +293,7 @@ async function startBot() {
     try {
         await bot.init();
     } catch (error) {
-        console.error('❌ Failed to start bot:', error);
+        logger.error('BOT', 'startup_failed', 'Failed to start bot', null, error);
         process.exit(1);
     }
 }
