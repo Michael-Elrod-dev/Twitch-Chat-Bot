@@ -16,6 +16,12 @@ class Config {
             database: process.env.DB_NAME
         };
 
+        // Logging Configuration
+        this.logging = {
+            level: 2, // 0=ERROR, 1=USER, 2=SYSTEM
+            maxLogFiles: 20 // Keep last 20 days of logs
+        };
+
         // Discord Webhook
         this.discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
 

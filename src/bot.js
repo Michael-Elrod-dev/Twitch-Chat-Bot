@@ -1,5 +1,6 @@
 // src/bot.js
 const config = require('./config/config');
+const logger = require('../logger/logger');
 const AIManager = require('./ai/aiManager');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager')
@@ -49,10 +50,10 @@ class Bot {
             // Check if stream is live
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
             if (streamInfo) {
-                console.log('🔴 Stream is live! Starting full bot functionality...');
+                logger.system('BOT', 'STREAM_DETECTED', 'Stream is live! Starting full bot functionality');
                 await this.startFullOperation();
             } else {
-                console.log('⚫ Stream is offline. Bot will wait for stream to go live...');
+                logger.system('BOT', 'STREAM_OFFLINE', 'Stream is offline. Bot will wait for stream to go live');
                 await this.startMinimalOperation();
             }
 
@@ -92,8 +93,7 @@ class Bot {
 
     async startFullOperation() {
         if (this.isStreaming) return; // Already running
-        
-        console.log('🚀 Starting full bot operation...');
+        logger.system('BOT', 'FULL_OPERATION_START', 'Starting full bot operation');
         
         try {
             this.isStreaming = true;
@@ -185,7 +185,7 @@ class Bot {
 
             this.startViewerTracking();
 
-            console.log('✅ Bot is now fully operational!');
+            logger.system('BOT', 'FULL_OPERATION_READY', 'Bot is now fully operational');
             
             // Send success message to chat ONLY if all checks passed
             try {
