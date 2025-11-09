@@ -1,4 +1,5 @@
-// src/models/claudeModel.js
+// src/ai/models/claudeModel.js
+
 const fetch = require('node-fetch');
 const config = require('../../config/config');
 
@@ -31,7 +32,7 @@ class ClaudeModel {
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(`Claude API error: ${data.error?.message || 'Unknown error'}`);
             }

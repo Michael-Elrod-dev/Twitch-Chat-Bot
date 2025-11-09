@@ -1,4 +1,5 @@
 // src/tokens/twitchAPI.js
+
 const fetch = require('node-fetch');
 const config = require('../config/config');
 
@@ -35,7 +36,7 @@ class TwitchAPI {
                     'Client-Id': this.tokenManager.tokens.clientId
                 }
             });
-        
+
             const data = await response.json();
             if (data.data && data.data[0]) {
                 return {
@@ -49,7 +50,7 @@ class TwitchAPI {
             throw error;
         }
     }
-    
+
     async getUserByName(username) {
         try {
             const response = await fetch(`${config.twitchApiEndpoint}/users?login=${username}`, {
@@ -121,7 +122,7 @@ class TwitchAPI {
                     'Client-Id': this.tokenManager.tokens.clientId
                 }
             });
-    
+
             const data = await response.json();
             if (data.data && data.data[0]) {
                 return data.data[0];

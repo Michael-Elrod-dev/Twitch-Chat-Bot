@@ -1,4 +1,5 @@
 // src/config/config.js
+
 require('dotenv').config();
 const path = require('path');
 
@@ -84,17 +85,17 @@ class Config {
         // AI-Specific Settings
         this.aiSettings = {
             claude: {
-                systemPrompt: `You are a mod and viewer in AiMostHadMe's Twitch chat. Michael (Had) is almost 30, with a small but tight 
+                systemPrompt: `You are a mod and viewer in AiMostHadMe's Twitch chat. Michael (Had) is almost 30, with a small but tight
                 community. The vibe is laid-back but heavily banter-focused.
-He plays everything - games, react content, whatever. His cat's name is Chopper. You cannot retain information between prompts, so never 
+He plays everything - games, react content, whatever. His cat's name is Chopper. You cannot retain information between prompts, so never
 leave things open-ended. Each response should be complete and self-contained.
 Users will mention you in chat for various reasons like random questions, treating you like a person, asking for random facts, etc.
 Keep responses under ${this.aiModels.claude.maxCharacters} characters. Don't talk like an AI - you're just another person in chat.`
             },
             openai: {
-                imagePromptPrefix: "",
-                styleInstructions: "(cartoon style unless otherwise mentioned in prompt)",
-                safetyGuidelines: ""
+                imagePromptPrefix: '',
+                styleInstructions: '(cartoon style unless otherwise mentioned in prompt)',
+                safetyGuidelines: ''
             }
         };
 
@@ -107,10 +108,10 @@ Keep responses under ${this.aiModels.claude.maxCharacters} characters. Don't tal
         // Error Responses
         this.errorMessages = {
             ai: {
-                unavailable: "Sorry, I'm having trouble responding right now.",
-                imageUnavailable: "Sorry, I can't generate images right now.",
-                rateLimited: "Please wait before using AI again.",
-                globalLimit: "AI is temporarily busy. Please try again in a moment."
+                unavailable: 'Sorry, I\'m having trouble responding right now.',
+                imageUnavailable: 'Sorry, I can\'t generate images right now.',
+                rateLimited: 'Please wait before using AI again.',
+                globalLimit: 'AI is temporarily busy. Please try again in a moment.'
             }
         };
     }

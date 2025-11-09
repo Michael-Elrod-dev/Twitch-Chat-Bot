@@ -1,4 +1,5 @@
 // src/database/dbManager.js
+
 const mysql = require('mysql2/promise');
 const config = require('../config/config');
 
@@ -20,10 +21,10 @@ class DbManager {
     async query(sql, params = []) {
         try {
             const transactionCommands = ['START TRANSACTION', 'COMMIT', 'ROLLBACK'];
-            const isTransactionCommand = transactionCommands.some(cmd => 
+            const isTransactionCommand = transactionCommands.some(cmd =>
                 sql.trim().toUpperCase().startsWith(cmd)
             );
-            
+
             if (isTransactionCommand || params.length === 0) {
                 const [results] = await this.connection.query(sql, params);
                 return results;

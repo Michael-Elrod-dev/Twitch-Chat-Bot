@@ -1,4 +1,5 @@
-// src/models/rateLimiter.js
+// src/ai/rateLimiter.js
+
 const config = require('../config/config');
 
 class RateLimiter {
@@ -25,34 +26,34 @@ class RateLimiter {
     async checkRateLimit(userId, service, streamId, userContext = {}) {
         try {
             const userLimits = this.getUserLimits(service, userContext);
-            
+
             // Get current usage for this user/service/stream
             const sql = `
                 SELECT stream_count
-                FROM api_usage 
+                FROM api_usage
                 WHERE user_id = ? AND api_type = ? AND stream_id = ?
             `;
             const results = await this.dbManager.query(sql, [userId, service, streamId]);
-            
+
             const currentCount = results.length > 0 ? results[0].stream_count : 0;
-            
+
             // Check stream limit
             if (currentCount >= userLimits.streamLimit) {
-                return { 
-                    allowed: false, 
+                return {
+                    allowed: false,
                     reason: 'stream_limit',
                     streamCount: currentCount,
                     streamLimit: userLimits.streamLimit,
                     message: `You've reached your ${service.toUpperCase()} limit for this stream (${currentCount}/${userLimits.streamLimit}).`
                 };
             }
-            
+
             return { allowed: true, reason: null };
-            
+
         } catch (error) {
             console.error(`❌ Error checking rate limit for ${service}:`, error);
-            return { 
-                allowed: false, 
+            return {
+                allowed: false,
                 reason: 'error',
                 message: `${service.toUpperCase()} is temporarily unavailable.`
             };
@@ -64,7 +65,7 @@ class RateLimiter {
             const sql = `
                 INSERT INTO api_usage (user_id, api_type, stream_id, stream_count)
                 VALUES (?, ?, ?, 1)
-                ON DUPLICATE KEY UPDATE 
+                ON DUPLICATE KEY UPDATE
                     stream_count = stream_count + 1
             `;
             await this.dbManager.query(sql, [userId, service, streamId]);
@@ -77,11 +78,11 @@ class RateLimiter {
         try {
             const sql = `
                 SELECT stream_count
-                FROM api_usage 
+                FROM api_usage
                 WHERE user_id = ? AND api_type = ? AND stream_id = ?
             `;
             const results = await this.dbManager.query(sql, [userId, service, streamId]);
-            
+
             return {
                 streamCount: results.length > 0 ? results[0].stream_count : 0
             };

@@ -1,9 +1,10 @@
 // src/redemptions/songs/songRequest.js
+
 async function handleSongRequest(event, twitchBot, spotifyManager) {
     try {
         const input = event.input.trim();
         const isPriorityRequest = event.rewardTitle.toLowerCase().includes('skip song queue');
-        
+
         if (!input) {
             console.log('* Redemption cancelled: No input provided');
             try {
@@ -13,7 +14,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                     [event.id],
                     'CANCELED'
                 );
-                
+
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
@@ -32,7 +33,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                     [event.id],
                     'CANCELED'
                 );
-                
+
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a valid Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
@@ -102,7 +103,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                     [event.id],
                     'CANCELED'
                 );
-                
+
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Sorry, I couldn't process your request. Your points have been refunded.`);
                 console.log('* Points refunded successfully');
@@ -132,7 +133,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 [event.id],
                 'CANCELED'
             );
-            
+
             await twitchBot.sendMessage(event.broadcasterDisplayName,
                 `@${event.userDisplayName} Sorry, there was an error processing your request. Your points have been refunded.`);
             console.log('* Points refunded successfully after fatal error');

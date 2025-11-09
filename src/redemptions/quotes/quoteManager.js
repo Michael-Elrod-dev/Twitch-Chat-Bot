@@ -1,4 +1,5 @@
 // src/redemptions/quotes/quoteManager.js
+
 class QuoteManager {
     constructor() {
         this.dbManager = null;
@@ -20,7 +21,7 @@ class QuoteManager {
                 quoteData.savedBy,
                 quoteData.userId
             ]);
-            
+
             return result.insertId;
         } catch (error) {
             console.error('❌ Error adding quote to database:', error);
@@ -36,11 +37,11 @@ class QuoteManager {
                 WHERE quote_id = ?
             `;
             const results = await this.dbManager.query(sql, [id]);
-            
+
             if (results.length === 0) {
                 return null;
             }
-            
+
             return results[0];
         } catch (error) {
             console.error('❌ Error getting quote by ID:', error);
@@ -57,11 +58,11 @@ class QuoteManager {
                 LIMIT 1
             `;
             const results = await this.dbManager.query(sql);
-            
+
             if (results.length === 0) {
                 return null;
             }
-            
+
             return results[0];
         } catch (error) {
             console.error('❌ Error getting random quote:', error);
@@ -71,9 +72,9 @@ class QuoteManager {
 
     async getTotalQuotes() {
         try {
-            const sql = `SELECT COUNT(*) as count FROM quotes`;
+            const sql = 'SELECT COUNT(*) as count FROM quotes';
             const results = await this.dbManager.query(sql);
-            
+
             return results[0].count;
         } catch (error) {
             console.error('❌ Error getting total quotes count:', error);

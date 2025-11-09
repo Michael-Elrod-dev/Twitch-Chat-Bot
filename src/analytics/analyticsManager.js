@@ -1,4 +1,5 @@
 // src/analytics/analyticsManager.js
+
 const ViewerTracker = require('./viewers/viewerTracker');
 
 class AnalyticsManager {
@@ -10,7 +11,7 @@ class AnalyticsManager {
 
     async init(dbManager) {
         try {
-            this.dbManager = dbManager
+            this.dbManager = dbManager;
             this.viewerTracker = new ViewerTracker(this);
         } catch (error) {
             console.error('❌ Failed to initialize analytics manager:', error);
@@ -21,10 +22,10 @@ class AnalyticsManager {
     async trackChatMessage(username, userId, streamId, message, type = 'message', userContext = {}) {
         try {
             await this.viewerTracker.trackInteraction(username, userId, streamId, type, message, userContext);
-            
+
             if (streamId) {
                 const updateSql = `
-                    UPDATE streams 
+                    UPDATE streams
                     SET total_messages = total_messages + 1
                     WHERE stream_id = ?
                 `;
@@ -50,7 +51,7 @@ class AnalyticsManager {
     async endViewerSession(userId, streamId) {
         try {
             const sql = `
-               UPDATE viewing_sessions 
+               UPDATE viewing_sessions
                SET end_time = NOW()
                WHERE user_id = ? AND stream_id = ? AND end_time IS NULL
            `;
@@ -76,7 +77,7 @@ class AnalyticsManager {
     async trackStreamEnd(streamId) {
         try {
             const sql = `
-               UPDATE streams 
+               UPDATE streams
                SET end_time = NOW()
                WHERE stream_id = ?
            `;

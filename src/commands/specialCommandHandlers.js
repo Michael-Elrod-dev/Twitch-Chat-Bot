@@ -1,4 +1,5 @@
 // src/commands/specialCommandHandlers.js
+
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 function specialCommandHandlers(dependencies) {
@@ -85,11 +86,11 @@ function specialCommandHandlers(dependencies) {
                     const artistName = currentTrack.body.item.artists[0].name;
                     await twitchBot.sendMessage(channel, `Currently playing: ${trackName} by ${artistName}`);
                 } else {
-                    await twitchBot.sendMessage(channel, "No song is currently playing in Spotify.");
+                    await twitchBot.sendMessage(channel, 'No song is currently playing in Spotify.');
                 }
             } catch (error) {
                 console.error('❌ Error fetching current song:', error);
-                await twitchBot.sendMessage(channel, "Unable to fetch current song information.");
+                await twitchBot.sendMessage(channel, 'Unable to fetch current song information.');
             }
         },
 
@@ -99,11 +100,11 @@ function specialCommandHandlers(dependencies) {
                     const { name, artist } = spotifyManager.previousTrack;
                     await twitchBot.sendMessage(channel, `Last played song: ${name} by ${artist}`);
                 } else {
-                    await twitchBot.sendMessage(channel, "No previous song information available yet.");
+                    await twitchBot.sendMessage(channel, 'No previous song information available yet.');
                 }
             } catch (error) {
                 console.error('❌ Error fetching last song:', error);
-                await twitchBot.sendMessage(channel, "Unable to fetch last song information.");
+                await twitchBot.sendMessage(channel, 'Unable to fetch last song information.');
             }
         },
 
@@ -112,19 +113,19 @@ function specialCommandHandlers(dependencies) {
                 if (!quoteManager.dbManager) {
                     await quoteManager.init(twitchBot.analyticsManager.dbManager);
                 }
-                
+
                 const totalQuotes = await quoteManager.getTotalQuotes();
-        
+
                 if (totalQuotes === 0) {
-                    await twitchBot.sendMessage(channel, "No quotes saved yet!");
+                    await twitchBot.sendMessage(channel, 'No quotes saved yet!');
                     return;
                 }
-        
+
                 let quote;
                 if (args.length > 0 && !isNaN(args[0])) {
                     const id = parseInt(args[0]);
                     quote = await quoteManager.getQuoteById(id);
-        
+
                     if (!quote) {
                         await twitchBot.sendMessage(channel, `Quote #${id} not found!`);
                         return;
@@ -132,12 +133,12 @@ function specialCommandHandlers(dependencies) {
                 } else {
                     quote = await quoteManager.getRandomQuote();
                 }
-        
+
                 const year = new Date(quote.savedAt).getFullYear();
                 await twitchBot.sendMessage(channel, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
             } catch (error) {
                 console.error('❌ Error in quote handler:', error);
-                await twitchBot.sendMessage(channel, "Sorry, there was an error retrieving quotes.");
+                await twitchBot.sendMessage(channel, 'Sorry, there was an error retrieving quotes.');
             }
         },
 
@@ -148,7 +149,7 @@ function specialCommandHandlers(dependencies) {
                 const commands = await twitchBot.viewerManager.getUserCommands(requestedUser);
                 const redemptions = await twitchBot.viewerManager.getUserRedemptions(requestedUser);
                 const total = messages + commands + redemptions;
-        
+
                 await twitchBot.sendMessage(channel,
                     `@${requestedUser} has ${total} total interactions ` +
                     `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
@@ -167,7 +168,7 @@ function specialCommandHandlers(dependencies) {
                     await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
                     return;
                 }
-        
+
                 const topUsers = await twitchBot.viewerManager.getTopUsers(5);
                 await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
             } catch (error) {
@@ -188,11 +189,11 @@ function specialCommandHandlers(dependencies) {
 
                 // Get all channel rewards
                 const rewards = await twitchBot.channelPoints.getCustomRewards(channelId.id);
-                const songReward = rewards.find(reward => reward.title.toLowerCase() === "song request");
-                const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === "skip song queue");
+                const songReward = rewards.find(reward => reward.title.toLowerCase() === 'song request');
+                const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === 'skip song queue');
 
                 if (!songReward || !skipQueueReward) {
-                    await twitchBot.sendMessage(channel, "Could not find one or both song-related rewards!");
+                    await twitchBot.sendMessage(channel, 'Could not find one or both song-related rewards!');
                     return;
                 }
 
@@ -226,7 +227,7 @@ function specialCommandHandlers(dependencies) {
                 const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
 
                 if (pendingTracks.length === 0) {
-                    await twitchBot.sendMessage(channel, "There are no songs in the queue.");
+                    await twitchBot.sendMessage(channel, 'There are no songs in the queue.');
                     return;
                 }
 
@@ -234,7 +235,7 @@ function specialCommandHandlers(dependencies) {
                 await twitchBot.sendMessage(channel, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
             } catch (error) {
                 console.error('❌ Error fetching next song:', error);
-                await twitchBot.sendMessage(channel, "Unable to fetch next song information.");
+                await twitchBot.sendMessage(channel, 'Unable to fetch next song information.');
             }
         },
 
@@ -243,7 +244,7 @@ function specialCommandHandlers(dependencies) {
                 const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
 
                 if (pendingTracks.length === 0) {
-                    await twitchBot.sendMessage(channel, "The queue is currently empty.");
+                    await twitchBot.sendMessage(channel, 'The queue is currently empty.');
                     return;
                 }
 
@@ -268,7 +269,7 @@ function specialCommandHandlers(dependencies) {
                 await twitchBot.sendMessage(channel, response);
             } catch (error) {
                 console.error('❌ Error fetching queue information:', error);
-                await twitchBot.sendMessage(channel, "Unable to fetch queue information.");
+                await twitchBot.sendMessage(channel, 'Unable to fetch queue information.');
             }
         },
 
@@ -277,9 +278,9 @@ function specialCommandHandlers(dependencies) {
             try {
                 await spotifyManager.ensureTokenValid();
                 const state = await spotifyManager.getPlaybackState();
-                
+
                 if (state === 'CLOSED') {
-                    await twitchBot.sendMessage(channel, "Spotify is not currently active.");
+                    await twitchBot.sendMessage(channel, 'Spotify is not currently active.');
                     return;
                 }
 
@@ -295,25 +296,25 @@ function specialCommandHandlers(dependencies) {
 
                 // Skip the current song
                 await spotifyManager.spotifyApi.skipToNext();
-                await twitchBot.sendMessage(channel, "Skipped to next song!");
+                await twitchBot.sendMessage(channel, 'Skipped to next song!');
 
             } catch (error) {
                 console.error('❌ Error skipping song:', error);
-                await twitchBot.sendMessage(channel, "Unable to skip song. Make sure Spotify is active.");
+                await twitchBot.sendMessage(channel, 'Unable to skip song. Make sure Spotify is active.');
             }
         },
 
         async emoteAdd(twitchBot, channel, context, args) {
             if (!context.mod && !context.badges?.broadcaster) return;
-            
+
             if (args.length < 2) {
                 await twitchBot.sendMessage(channel, 'Usage: !emoteadd <trigger> <response>');
                 return;
             }
-            
+
             const trigger = args[0].toLowerCase();
             const response = args.slice(1).join(' ');
-            
+
             try {
                 const success = await twitchBot.emoteManager.addEmote(trigger, response);
                 if (success) {

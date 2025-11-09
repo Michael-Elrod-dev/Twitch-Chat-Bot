@@ -1,4 +1,5 @@
 // src/logger/logLevels.js
+
 const LOG_LEVELS = {
     ERROR: { level: 0, name: 'ERROR', color: '\x1b[31m' },    // Red - Errors & Warnings
     USER:  { level: 1, name: 'USER',  color: '\x1b[35m' },    // Magenta - User actions

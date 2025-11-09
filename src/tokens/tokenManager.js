@@ -1,4 +1,5 @@
 // src/tokens/tokenManager.js
+
 const https = require('https');
 const fetch = require('node-fetch');
 const config = require('../config/config');
@@ -11,7 +12,7 @@ class TokenManager {
     }
 
     async init(dbManager) {
-        this.dbManager = dbManager
+        this.dbManager = dbManager;
         await this.loadTokensFromDatabase();
         await this.checkAndRefreshTokens();
         this.isInitialized = true;
@@ -21,11 +22,11 @@ class TokenManager {
         try {
             const rows = await this.dbManager.query('SELECT token_key, token_value FROM tokens');
             this.tokens = {};
-            
+
             for (const row of rows) {
                 this.tokens[row.token_key] = row.token_value;
             }
-            
+
             console.log('✅ Loaded tokens from database');
         } catch (error) {
             console.error('❌ Error loading tokens from database:', error);
@@ -37,8 +38,8 @@ class TokenManager {
         try {
             for (const [key, value] of Object.entries(this.tokens)) {
                 await this.dbManager.query(`
-                    UPDATE tokens 
-                    SET token_value = ?, updated_at = CURRENT_TIMESTAMP 
+                    UPDATE tokens
+                    SET token_value = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE token_key = ?
                 `, [value, key]);
             }
@@ -52,8 +53,8 @@ class TokenManager {
         try {
             this.tokens[tokenKey] = tokenValue;
             await this.dbManager.query(`
-                UPDATE tokens 
-                SET token_value = ?, updated_at = CURRENT_TIMESTAMP 
+                UPDATE tokens
+                SET token_value = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE token_key = ?
             `, [tokenValue, tokenKey]);
         } catch (error) {
@@ -74,12 +75,12 @@ class TokenManager {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok) {
                 await this.refreshToken(type);
-                
+
                 // After refresh, validate again to get the user ID
                 const newResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                     headers: {
@@ -97,7 +98,7 @@ class TokenManager {
                     await this.updateToken('userId', data.user_id);
                 }
             }
-            
+
             return true;
         } catch (error) {
             console.error(`Token validation failed for ${type}:`, error);
@@ -113,7 +114,7 @@ class TokenManager {
             client_id: this.tokens.clientId,
             client_secret: this.tokens.clientSecret,
         }).toString();
-    
+
         const options = {
             hostname: 'id.twitch.tv',
             path: '/oauth2/token',
@@ -123,15 +124,15 @@ class TokenManager {
                 'Content-Length': postData.length,
             },
         };
-    
+
         return new Promise((resolve, reject) => {
             const req = https.request(options, (res) => {
                 let data = '';
-    
+
                 res.on('data', (chunk) => {
                     data += chunk;
                 });
-    
+
                 res.on('end', async () => {
                     try {
                         const result = JSON.parse(data);
@@ -139,7 +140,7 @@ class TokenManager {
                             if (type === 'bot') {
                                 await this.updateToken('botAccessToken', result.access_token);
                                 await this.updateToken('botRefreshToken', result.refresh_token);
-                                
+
                                 // Validate the new token to get the bot ID
                                 const validateResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                                     headers: {
@@ -161,11 +162,11 @@ class TokenManager {
                     }
                 });
             });
-    
+
             req.on('error', (error) => {
                 reject(`* Network error during ${type} token refresh: ${error.message}`);
             });
-    
+
             req.write(postData);
             req.end();
         });
@@ -183,13 +184,13 @@ class TokenManager {
                     throw new Error('Broadcaster token refresh failed');
                 })
             ]);
-    
+
             // Add validation after refresh to get user IDs
             await Promise.all([
                 this.validateToken('bot'),
                 this.validateToken('broadcaster')
             ]);
-    
+
             console.log('✅ Tokens refreshed');
         } catch (error) {
             console.error('* Critical error refreshing tokens:', error);

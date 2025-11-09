@@ -1,11 +1,42 @@
+# Environment and secrets
 .env
-files/
+*.pem
+tokens.json
+
+# Dependencies
 node_modules/
 package-lock.json
-tokens.json
-pendingQueue.json
-redemptionCreation.js
+
+# Database and runtime state
 db.json
-*.pem
+pendingQueue.json
 insert.sql
+
+# Project specific
+files/
+redemptionCreation.js
+
+# IDE
 .idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing and coverage
+coverage/
+.nyc_output/
+
+# Build outputs
+dist/
+build/

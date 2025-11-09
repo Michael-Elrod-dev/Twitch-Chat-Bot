@@ -1,4 +1,5 @@
 // src/redemptions/songs/spotifyManager.js
+
 const config = require('../../config/config');
 const QueueManager = require('./queueManager');
 const SpotifyWebApi = require('spotify-web-api-node');
@@ -33,7 +34,7 @@ class SpotifyManager {
     startPlaybackMonitoring() {
         // Set initial state
         this.lastPlaybackState = 'NONE';
-        
+
         setInterval(async () => {
             try {
                 const currentState = await this.getPlaybackState();
@@ -49,23 +50,23 @@ class SpotifyManager {
             try {
                 await this.ensureTokenValid();
                 const currentPlayback = await this.spotifyApi.getMyCurrentPlaybackState();
-                
+
                 if (currentPlayback.body && currentPlayback.body.item) {
                     const totalDuration = currentPlayback.body.item.duration_ms;
                     const progress = currentPlayback.body.progress_ms;
                     const remaining = totalDuration - progress;
-                    
+
                     // If less than 5 seconds remaining
                     if (remaining <  config.spotifyInterval) {
                         // Get next song from pending queue
                         const pendingTracks = await this.queueManager.getPendingTracks();
                         if (pendingTracks.length > 0) {
                             const nextTrack = pendingTracks[0];
-                            
+
                             // Add to Spotify queue
                             await this.spotifyApi.addToQueue(nextTrack.uri);
                             console.log(`* Added next track to queue: ${nextTrack.name} by ${nextTrack.artist}`);
-                            
+
                             // Remove from pending queue
                             await this.queueManager.removeFirstTrack();
                             console.log('* Removed track from pending queue');
@@ -77,7 +78,7 @@ class SpotifyManager {
             }
         }, config.spotifyInterval);
     }
-    
+
     startLastSongTracking() {
         setInterval(async () => {
             try {
@@ -85,13 +86,13 @@ class SpotifyManager {
                 if (state === 'CLOSED') {
                     return;
                 }
-    
+
                 await this.ensureTokenValid();
                 const currentTrack = await this.spotifyApi.getMyCurrentPlayingTrack();
-                
+
                 if (currentTrack.body && currentTrack.body.item) {
                     // If current track is different from what we last stored
-                    if (!this.lastPlayedTrack || 
+                    if (!this.lastPlayedTrack ||
                         this.lastPlayedTrack.id !== currentTrack.body.item.id) {
                         // Store the previous track before updating
                         if (this.lastPlayedTrack) {
@@ -144,7 +145,7 @@ class SpotifyManager {
             if (!state.body || !state.body.device) {
                 return 'CLOSED';
             }
-            
+
             return state.body.is_playing ? 'PLAYING' : 'PAUSED';
         } catch (error) {
             return 'CLOSED';
@@ -153,7 +154,7 @@ class SpotifyManager {
 
     async addToQueue(trackUri) {
         try {
-            await this.ensureTokenValid();    
+            await this.ensureTokenValid();
             await this.spotifyApi.addToQueue(trackUri);
             return true;
         } catch (error) {
@@ -215,33 +216,33 @@ class SpotifyManager {
         try {
             await this.ensureTokenValid();
             const playlistId = await this.getOrCreateRequestsPlaylist();
-    
+
             // Initialize variables for pagination
             let offset = 0;
             const limit = 100; // Spotify's max limit per request
             let trackExists = false;
             let hasMoreTracks = true;
-    
+
             // Check all pages of the playlist
             while (hasMoreTracks && !trackExists) {
                 const response = await this.spotifyApi.getPlaylistTracks(playlistId, {
                     offset: offset,
                     limit: limit
                 });
-    
+
                 // Check if track exists in current page
                 trackExists = response.body.items.some(item => item.track?.uri === trackUri);
-    
+
                 // Update pagination variables
                 hasMoreTracks = response.body.items.length === limit;
                 offset += limit;
             }
-    
+
             if (!trackExists) {
                 await this.spotifyApi.addTracksToPlaylist(playlistId, [trackUri]);
                 return true;
             }
-    
+
             return false;
         } catch (error) {
             console.error('❌ Error adding to requests playlist:', error);

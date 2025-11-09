@@ -1,4 +1,5 @@
-// src/models/aiManager.js
+// src/ai/aiManager.js
+
 const config = require('../config/config');
 const RateLimiter = require('./rateLimiter');
 const ClaudeModel = require('./models/claudeModel');
@@ -26,7 +27,7 @@ class AIManager {
     async handleTextRequest(prompt, userId, streamId, userContext = {}) {
         // Check rate limits for Claude
         const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'claude', streamId, userContext);
-        
+
         if (!rateLimitResult.allowed) {
             return {
                 success: false,
@@ -36,20 +37,20 @@ class AIManager {
 
         // Get response from Claude
         const response = await this.claudeModel.getTextResponse(prompt, userContext);
-        
+
         if (response) {
             await this.rateLimiter.updateUsage(userId, 'claude', streamId);
-            
+
             // Get updated usage stats for display
             const usageStats = await this.rateLimiter.getUserStats(userId, 'claude', streamId);
             const userLimits = this.rateLimiter.getUserLimits('claude', userContext);
-            
+
             // Add usage counter (unless broadcaster has unlimited)
             let finalResponse = response;
             if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
                 finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
             }
-            
+
             return {
                 success: true,
                 response: finalResponse
@@ -58,14 +59,14 @@ class AIManager {
 
         return {
             success: false,
-            message: "Sorry, I'm having trouble responding right now."
+            message: 'Sorry, I\'m having trouble responding right now.'
         };
     }
 
     async handleImageRequest(prompt, userId, streamId, userContext = {}) {
         // Check rate limits for OpenAI images
         const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'openai_image', streamId, userContext);
-        
+
         if (!rateLimitResult.allowed) {
             return {
                 success: false,
@@ -75,24 +76,24 @@ class AIManager {
 
         // Generate image with DALL-E 3
         const openaiImageUrl = await this.openaiModel.generateImage(prompt, userContext);
-        
+
         if (openaiImageUrl) {
             // Upload to Discord and get CDN URL
             const discordImageUrl = await this.discordUploader.uploadImage(openaiImageUrl, userContext.username || 'Unknown', prompt);
-            
+
             if (discordImageUrl) {
                 await this.rateLimiter.updateUsage(userId, 'openai_image', streamId);
-                
+
                 // Get updated usage stats for display
                 const usageStats = await this.rateLimiter.getUserStats(userId, 'openai_image', streamId);
                 const userLimits = this.rateLimiter.getUserLimits('openai_image', userContext);
-                
+
                 // Add usage counter (unless broadcaster has unlimited)
                 let finalResponse = `Here's your image: ${discordImageUrl}`;
                 if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
                     finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) Here's your image: ${discordImageUrl}`;
                 }
-                
+
                 return {
                     success: true,
                     response: finalResponse
@@ -102,14 +103,14 @@ class AIManager {
 
         return {
             success: false,
-            message: "Sorry, I can't generate images right now."
+            message: 'Sorry, I can\'t generate images right now.'
         };
     }
 
     // Helper methods to check triggers
     shouldTriggerText(message) {
         const lowerMessage = message.toLowerCase();
-        return config.aiTriggers.text.some(trigger => 
+        return config.aiTriggers.text.some(trigger =>
             lowerMessage.includes(trigger) || lowerMessage.startsWith(trigger)
         );
     }
@@ -121,7 +122,7 @@ class AIManager {
 
     extractPrompt(message, triggerType) {
         let prompt = message;
-        
+
         if (triggerType === 'text') {
             // Remove bot mentions - just the two we still use
             prompt = prompt.replace(/@almosthadai/gi, '').trim();
@@ -134,7 +135,7 @@ class AIManager {
                 }
             });
         }
-        
+
         return prompt || null;
     }
 }

@@ -1,4 +1,5 @@
 // src/messages/messageSender.js
+
 const fetch = require('node-fetch');
 const config = require('../config/config');
 
@@ -16,14 +17,14 @@ class MessageSender {
                 });
                 return;
             }
-    
+
             try {
                 await this.tokenManager.validateToken('bot');
             } catch (error) {
                 console.error('❌ Error validating bot token:', error);
                 throw error;
             }
-    
+
             const response = await fetch(`${config.twitchApiEndpoint}/chat/messages`, {
                 method: 'POST',
                 headers: {
@@ -37,7 +38,7 @@ class MessageSender {
                     message: message
                 })
             });
-    
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(`Failed to send chat message: ${JSON.stringify(errorData)}`);

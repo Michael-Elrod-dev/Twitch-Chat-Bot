@@ -11,21 +11,21 @@ class ChatMessageHandler {
     async handleChatMessage(payload, bot) {
         try {
             if (!payload.event) return;
-    
+
             const event = payload.event;
             if (event.chatter_user_id === bot.tokenManager.tokens.botId) return;
-    
+
             // Extract badge information
-            const isBroadcaster = event.badges?.some(badge => badge.set_id === "broadcaster") || false;
-            const isMod = event.badges?.some(badge => badge.set_id === "moderator") || false;
-            const isSubscriber = event.badges?.some(badge => badge.set_id === "subscriber") || false;
-            
+            const isBroadcaster = event.badges?.some(badge => badge.set_id === 'broadcaster') || false;
+            const isMod = event.badges?.some(badge => badge.set_id === 'moderator') || false;
+            const isSubscriber = event.badges?.some(badge => badge.set_id === 'subscriber') || false;
+
             const userContext = {
                 isMod: isMod,
                 isSubscriber: isSubscriber,
                 isBroadcaster: isBroadcaster
             };
-    
+
             const context = {
                 username: event.chatter_user_name,
                 userId: event.chatter_user_id,
@@ -35,9 +35,9 @@ class ChatMessageHandler {
                 },
                 'custom-reward-id': event.channel_points_custom_reward_id
             };
-    
+
             if (event.channel_points_custom_reward_id) return;
-    
+
             const messageText = event.message.text;
             const lowerMessage = messageText.toLowerCase();
 
@@ -50,19 +50,19 @@ class ChatMessageHandler {
                     await bot.sendMessage(bot.channelName, `@${context.username} Generating...`);
 
                     const result = await bot.aiManager.handleImageRequest(prompt, context.userId, bot.currentStreamId, userContext);
-                    
+
                     if (result.success) {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);
                     } else {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.message}`);
                     }
-                    
+
                     // Track analytics
                     await bot.analyticsManager.trackChatMessage(
-                        context.username, 
-                        context.userId, 
-                        bot.currentStreamId, 
-                        messageText, 
+                        context.username,
+                        context.userId,
+                        bot.currentStreamId,
+                        messageText,
                         'command',
                         userContext
                     );
@@ -75,19 +75,19 @@ class ChatMessageHandler {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'text');
                 if (prompt) {
                     const result = await bot.aiManager.handleTextRequest(prompt, context.userId, bot.currentStreamId, userContext);
-                    
+
                     if (result.success) {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);
                     } else {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.message}`);
                     }
-                    
+
                     // Track analytics
                     await bot.analyticsManager.trackChatMessage(
-                        context.username, 
-                        context.userId, 
-                        bot.currentStreamId, 
-                        messageText, 
+                        context.username,
+                        context.userId,
+                        bot.currentStreamId,
+                        messageText,
                         'message',
                         userContext
                     );
@@ -99,34 +99,34 @@ class ChatMessageHandler {
             const emoteResponse = await this.emoteManager.getEmoteResponse(lowerMessage);
             if (emoteResponse) {
                 await bot.analyticsManager.trackChatMessage(
-                    context.username, 
-                    context.userId, 
-                    bot.currentStreamId, 
-                    messageText, 
+                    context.username,
+                    context.userId,
+                    bot.currentStreamId,
+                    messageText,
                     'message',
                     userContext
                 );
                 await bot.sendMessage(bot.channelName, emoteResponse);
                 return;
             }
-    
+
             // Handle regular commands
             if (lowerMessage.startsWith('!')) {
                 await bot.analyticsManager.trackChatMessage(
-                    context.username, 
-                    context.userId, 
-                    bot.currentStreamId, 
-                    messageText, 
+                    context.username,
+                    context.userId,
+                    bot.currentStreamId,
+                    messageText,
                     'command',
                     userContext
                 );
                 await this.commandManager.handleCommand(bot, bot.channelName, context, event.message.text);
             } else {
                 await bot.analyticsManager.trackChatMessage(
-                    context.username, 
-                    context.userId, 
-                    bot.currentStreamId, 
-                    messageText, 
+                    context.username,
+                    context.userId,
+                    bot.currentStreamId,
+                    messageText,
                     'message',
                     userContext
                 );

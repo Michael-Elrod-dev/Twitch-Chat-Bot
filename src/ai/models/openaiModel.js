@@ -1,4 +1,5 @@
 // src/ai/models/openaiModel.js
+
 const fetch = require('node-fetch');
 const config = require('../../config/config');
 
@@ -10,10 +11,10 @@ class OpenAIModel {
     async generateImage(prompt, context = {}) {
         try {
             console.log(`🎨 Generating image for prompt: "${prompt}"`);
-            
+
             // Enhance the prompt with safety and style guidelines
             const enhancedPrompt = `${config.aiSettings.openai.imagePromptPrefix}${prompt}. ${config.aiSettings.openai.styleInstructions}`;
-            
+
             const response = await fetch(`${config.openaiApiEndpoint}/images/generations`, {
                 method: 'POST',
                 headers: {
@@ -31,7 +32,7 @@ class OpenAIModel {
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 console.error('❌ OpenAI API error:', data);
                 throw new Error(`OpenAI API error: ${data.error?.message || 'Unknown error'}`);

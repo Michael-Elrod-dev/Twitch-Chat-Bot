@@ -1,4 +1,5 @@
 // src/logger/logger.js
+
 const fs = require('fs');
 const path = require('path');
 const { LOG_LEVELS, RESET_COLOR } = require('./logLevels');
@@ -9,7 +10,7 @@ class Logger {
         this.logLevel = options.logLevel || config.logging.level;
         this.logDirectory = options.logDirectory || path.join(__dirname, 'logs');
         this.maxLogFiles = options.maxLogFiles || config.logging.maxLogFiles;
-        
+
         this.ensureLogDirectory();
         this.currentDate = this.getCurrentDate();
         this.cleanupOldLogs();
@@ -29,12 +30,12 @@ class Logger {
     cleanupOldLogs() {
         try {
             const files = fs.readdirSync(this.logDirectory);
-            
-            const botLogFiles = files.filter(file => 
+
+            const botLogFiles = files.filter(file =>
                 /^bot-\d{4}-\d{2}-\d{2}\.log$/.test(file)
             ).sort();
-            
-            const errorLogFiles = files.filter(file => 
+
+            const errorLogFiles = files.filter(file =>
                 /^errors-\d{4}-\d{2}-\d{2}\.log$/.test(file)
             ).sort();
 
@@ -62,7 +63,7 @@ class Logger {
                 const filePath = path.join(this.logDirectory, file);
                 const stats = fs.statSync(filePath);
                 const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-                
+
                 fs.unlinkSync(filePath);
                 console.log(`   ✅ Deleted: ${file} (${fileSizeMB}MB)`);
             } catch (error) {
@@ -76,18 +77,18 @@ class Logger {
     getLogFilesSummary() {
         try {
             const files = fs.readdirSync(this.logDirectory);
-            
-            const botLogFiles = files.filter(file => 
+
+            const botLogFiles = files.filter(file =>
                 /^bot-\d{4}-\d{2}-\d{2}\.log$/.test(file)
             );
-            
-            const errorLogFiles = files.filter(file => 
+
+            const errorLogFiles = files.filter(file =>
                 /^errors-\d{4}-\d{2}-\d{2}\.log$/.test(file)
             );
 
             let totalSize = 0;
             const allLogFiles = [...botLogFiles, ...errorLogFiles];
-            
+
             allLogFiles.forEach(file => {
                 try {
                     const filePath = path.join(this.logDirectory, file);
@@ -120,11 +121,11 @@ class Logger {
             this.currentDate = today;
             this.cleanupOldLogs();
         }
-        
+
         this.mainLogFile = path.join(this.logDirectory, `bot-${this.currentDate}.log`);
         this.errorLogFile = path.join(this.logDirectory, `errors-${this.currentDate}.log`);
         this.latestLogFile = path.join(this.logDirectory, 'latest.log');
-        
+
         // Create symlink to latest log
         try {
             if (fs.existsSync(this.latestLogFile)) {
@@ -149,12 +150,12 @@ class Logger {
         const timestamp = new Date().toISOString();
         const levelName = LOG_LEVELS[level].name.padEnd(6);
         const moduleFormatted = module.padEnd(15);
-        
+
         let userInfo = '';
         if (userId) {
             userInfo = `[${userId}] `;
         }
-        
+
         return `${timestamp} [${levelName}] [${moduleFormatted}] ${userInfo}${action} - ${details}`;
     }
 
@@ -168,10 +169,10 @@ class Logger {
         if (today !== this.currentDate) {
             this.setupLogFiles();
         }
-        
+
         try {
             fs.appendFileSync(this.mainLogFile, message + '\n');
-            
+
             if (isError) {
                 fs.appendFileSync(this.errorLogFile, message + '\n');
             }
@@ -182,17 +183,17 @@ class Logger {
 
     log(level, module, action, details, userId = null, error = null) {
         const levelConfig = LOG_LEVELS[level];
-        
+
         if (levelConfig.level > this.logLevel) return;
-        
+
         const message = this.formatMessage(level, module, action, details, userId);
         const isError = level === 'ERROR';
-        
+
         let fullMessage = message;
         if (error && error.stack) {
             fullMessage += `\nStack Trace:\n${error.stack}`;
         }
-        
+
         this.writeToConsole(level, message);
         this.writeToFile(fullMessage, isError);
     }
