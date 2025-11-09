@@ -75,7 +75,9 @@ CREATE TABLE chat_messages (
     message_content TEXT,
     message_type ENUM('message', 'command', 'redemption') NOT NULL DEFAULT 'message',
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
-    FOREIGN KEY (stream_id) REFERENCES streams(stream_id)
+    FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
+    INDEX user_id (user_id),
+    INDEX stream_id (stream_id)
 );
 
 CREATE TABLE chat_totals (
@@ -90,20 +92,22 @@ CREATE TABLE chat_totals (
 
 CREATE TABLE quotes (
     quote_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(50) NOT NULL,
     quote_text TEXT,
     author VARCHAR(100),
     saved_by VARCHAR(50),
     saved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    user_id VARCHAR(50),
-    FOREIGN KEY (user_id) REFERENCES viewers(user_id)
+    FOREIGN KEY (user_id) REFERENCES viewers(user_id),
+    INDEX user_id (user_id)
 );
 
 CREATE TABLE api_usage (
     user_id VARCHAR(50),
-    api_type ENUM('claude') NOT NULL,
+    api_type ENUM('claude', 'openai_image') NOT NULL,
     stream_id VARCHAR(50) NOT NULL,
     stream_count INT DEFAULT 0,
     PRIMARY KEY (user_id, api_type, stream_id),
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
-    FOREIGN KEY (stream_id) REFERENCES streams(stream_id)
+    FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
+    INDEX stream_id (stream_id)
 );

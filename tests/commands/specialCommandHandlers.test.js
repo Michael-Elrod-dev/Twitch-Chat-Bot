@@ -572,12 +572,12 @@ describe('SpecialCommandHandlers', () => {
             mockContext.mod = true;
         });
 
-        it('should enable AI when using !aion', async () => {
+        it('should enable AI when using !ai on', async () => {
             mockTwitchBot.analyticsManager.dbManager.query
                 .mockResolvedValueOnce([{ token_value: 'false' }])
                 .mockResolvedValueOnce({});
 
-            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, [], '!aion');
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['on']);
 
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
@@ -585,12 +585,12 @@ describe('SpecialCommandHandlers', () => {
             );
         });
 
-        it('should disable AI when using !aioff', async () => {
+        it('should disable AI when using !ai off', async () => {
             mockTwitchBot.analyticsManager.dbManager.query
                 .mockResolvedValueOnce([{ token_value: 'true' }])
                 .mockResolvedValueOnce({});
 
-            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, [], '!aioff');
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['off']);
 
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
@@ -601,7 +601,7 @@ describe('SpecialCommandHandlers', () => {
         it('should not toggle if already in desired state', async () => {
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([{ token_value: 'true' }]);
 
-            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, [], '!aion');
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['on']);
 
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
@@ -609,11 +609,29 @@ describe('SpecialCommandHandlers', () => {
             );
         });
 
+        it('should show usage when no argument provided', async () => {
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                'Usage: !ai <on|off>'
+            );
+        });
+
+        it('should show usage when invalid argument provided', async () => {
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['toggle']);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                'Usage: !ai <on|off>'
+            );
+        });
+
         it('should require mod permissions', async () => {
             mockContext.mod = false;
             mockContext.badges = {};
 
-            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, [], '!aion');
+            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['on']);
 
             expect(mockTwitchBot.analyticsManager.dbManager.query).not.toHaveBeenCalled();
         });

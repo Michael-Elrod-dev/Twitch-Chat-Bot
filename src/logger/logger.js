@@ -40,6 +40,21 @@ class Logger {
             format: winston.format.combine(
                 winston.format.colorize(),
                 winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+                // Filter to only show startup/shutdown messages and warnings/errors
+                winston.format((info) => {
+                    // Always show WARN and ERROR from any module
+                    if (info.level === 'warn' || info.level === 'error') {
+                        return info;
+                    }
+
+                    // For INFO level, only show messages from Bot and Logger modules (startup/shutdown)
+                    if (info.level === 'info' && (info.module === 'Bot' || info.module === 'Logger')) {
+                        return info;
+                    }
+
+                    // Filter out everything else (runtime operations from other modules)
+                    return false;
+                })(),
                 winston.format.printf(({ timestamp, level, message, module }) => {
                     const moduleStr = module ? `[${module}]` : '';
                     return `${timestamp} ${level} ${moduleStr} ${message}`;

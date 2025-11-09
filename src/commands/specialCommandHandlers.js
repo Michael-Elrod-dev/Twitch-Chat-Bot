@@ -239,9 +239,17 @@ function specialCommandHandlers(dependencies) {
             }
         },
 
-        async toggleSongs(twitchBot, channel, context, args, command) {
+        async toggleSongs(twitchBot, channel, context, args) {
             try {
                 if (!context.mod && !context.badges?.broadcaster) return;
+
+                // Parse the on/off argument
+                if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
+                    await twitchBot.sendMessage(channel, 'Usage: !songs <on|off>');
+                    return;
+                }
+
+                const enable = args[0].toLowerCase() === 'on';
 
                 const channelId = await twitchBot.users.getUserByName(channel);
                 if (!channelId) {
@@ -263,8 +271,6 @@ function specialCommandHandlers(dependencies) {
                     });
                     return;
                 }
-
-                const enable = command === '!songson';
 
                 // Check if both rewards are already in the desired state
                 if (songReward.isEnabled === enable && skipQueueReward.isEnabled === enable) {
@@ -289,8 +295,8 @@ function specialCommandHandlers(dependencies) {
                     requestedBy: context.username
                 });
             } catch (error) {
-                logger.error('SpecialCommandHandlers', 'Error toggling songs', { error: error.message, stack: error.stack, channel, command });
-                await twitchBot.sendMessage(channel, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
+                logger.error('SpecialCommandHandlers', 'Error toggling songs', { error: error.message, stack: error.stack, channel });
+                await twitchBot.sendMessage(channel, `Failed to ${args[0]?.toLowerCase() === 'on' ? 'enable' : 'disable'} song requests: ${error.message}`);
             }
         },
 
@@ -437,11 +443,17 @@ function specialCommandHandlers(dependencies) {
             }
         },
 
-        async toggleAI(twitchBot, channel, context, args, command) {
+        async toggleAI(twitchBot, channel, context, args) {
             try {
                 if (!context.mod && !context.badges?.broadcaster) return;
 
-                const enable = command === '!aion';
+                // Parse the on/off argument
+                if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
+                    await twitchBot.sendMessage(channel, 'Usage: !ai <on|off>');
+                    return;
+                }
+
+                const enable = args[0].toLowerCase() === 'on';
 
                 // Get current AI state from database
                 const getCurrentStateSql = 'SELECT token_value FROM tokens WHERE token_key = ?';
@@ -470,8 +482,8 @@ function specialCommandHandlers(dependencies) {
                     requestedBy: context.username
                 });
             } catch (error) {
-                logger.error('SpecialCommandHandlers', 'Error toggling AI', { error: error.message, stack: error.stack, channel, command });
-                await twitchBot.sendMessage(channel, `Failed to ${command === '!aion' ? 'enable' : 'disable'} AI responses: ${error.message}`);
+                logger.error('SpecialCommandHandlers', 'Error toggling AI', { error: error.message, stack: error.stack, channel });
+                await twitchBot.sendMessage(channel, `Failed to ${args[0]?.toLowerCase() === 'on' ? 'enable' : 'disable'} AI responses: ${error.message}`);
             }
         }
     };
