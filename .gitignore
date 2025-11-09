@@ -3,8 +3,9 @@
 *.pem
 tokens.json
 
-# Claude Code context
+# Claude Code context and settings
 CLAUDE_CONTEXT.md
+.claude/
 
 # Dependencies
 node_modules/
