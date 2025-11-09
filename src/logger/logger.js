@@ -145,10 +145,8 @@ class Logger {
                 this.recentErrors.set(errorHash, errorInfo);
 
                 // Log a summary every 10 occurrences
-                if (errorInfo.count % 10 === 0) {
-                    return false; // Allow logging the summary
-                }
-                return true; // Skip logging
+                return errorInfo.count % 10 !== 0;
+                // Skip logging
             } else {
                 // Outside window, reset
                 this.recentErrors.set(errorHash, { count: 1, firstSeen: now, lastSeen: now });

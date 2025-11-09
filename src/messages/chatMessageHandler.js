@@ -51,6 +51,26 @@ class ChatMessageHandler {
 
             // Check for TEXT AI requests
             if (bot.aiManager && bot.aiManager.shouldTriggerText(messageText)) {
+                // Check if AI is enabled
+                const aiEnabledResult = await this.isAIEnabled(bot);
+
+                if (!aiEnabledResult) {
+                    logger.debug('ChatMessageHandler', 'AI request ignored - AI is disabled', {
+                        userId: context.userId,
+                        userName: context.username
+                    });
+                    // Track the message but don't process AI
+                    await bot.analyticsManager.trackChatMessage(
+                        context.username,
+                        context.userId,
+                        bot.currentStreamId,
+                        messageText,
+                        'message',
+                        userContext
+                    );
+                    return;
+                }
+
                 const prompt = bot.aiManager.extractPrompt(messageText, 'text');
                 if (prompt) {
                     logger.debug('ChatMessageHandler', 'Processing AI text request', {
@@ -144,6 +164,27 @@ class ChatMessageHandler {
                 error: error.message,
                 stack: error.stack
             });
+        }
+    }
+
+    async isAIEnabled(bot) {
+        try {
+            const sql = 'SELECT token_value FROM tokens WHERE token_key = ?';
+            const result = await bot.analyticsManager.dbManager.query(sql, ['aiEnabled']);
+
+            // Default to true if not set (backwards compatibility)
+            if (result.length === 0) {
+                return true;
+            }
+
+            return result[0].token_value === 'true';
+        } catch (error) {
+            logger.error('ChatMessageHandler', 'Error checking AI enabled status', {
+                error: error.message,
+                stack: error.stack
+            });
+            // Default to true on error to avoid breaking functionality
+            return true;
         }
     }
 }

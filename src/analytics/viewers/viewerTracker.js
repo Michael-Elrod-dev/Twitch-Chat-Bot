@@ -46,6 +46,18 @@ class ViewerTracker {
         }
     }
 
+    /**
+     * Track a user interaction
+     * @param {string} username - The username
+     * @param {string} userId - The user ID
+     * @param {string} streamId - The stream ID
+     * @param {string} type - The type of interaction
+     * @param {string|null} content - The content of the interaction
+     * @param {Object} userContext - User context object
+     * @param {boolean} userContext.isMod - Whether user is a moderator
+     * @param {boolean} userContext.isSubscriber - Whether user is a subscriber
+     * @param {boolean} userContext.isBroadcaster - Whether user is the broadcaster
+     */
     async trackInteraction(username, userId, streamId, type, content = null, userContext = {}) {
         try {
             if (!username) {
@@ -293,10 +305,9 @@ class ViewerTracker {
             }
 
             const sql = `
-                SELECT
-                    SUM(CASE WHEN message_type = 'message' THEN 1 ELSE 0 END) as messages,
-                    SUM(CASE WHEN message_type = 'command' THEN 1 ELSE 0 END) as commands,
-                    SUM(CASE WHEN message_type = 'redemption' THEN 1 ELSE 0 END) as redemptions
+                SELECT SUM(IF(message_type = 'message', 1, 0)) as messages,
+                       SUM(IF(message_type = 'command', 1, 0)) as commands,
+                       SUM(IF(message_type = 'redemption', 1, 0)) as redemptions
                 FROM chat_messages
                 WHERE user_id = ?
             `;

@@ -14,8 +14,8 @@ class QuoteManager {
     async addQuote(quoteData) {
         try {
             const sql = `
-                INSERT INTO quotes (quote_text, author, saved_by, saved_at, user_id)
-                VALUES (?, ?, ?, NOW(), ?)
+                INSERT INTO quotes (quote_text, author, saved_by, user_id)
+                VALUES (?, ?, ?, ?)
             `;
             const result = await this.dbManager.query(sql, [
                 quoteData.quote,

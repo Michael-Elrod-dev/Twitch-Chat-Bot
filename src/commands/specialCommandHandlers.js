@@ -3,6 +3,21 @@
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const logger = require('../logger/logger');
 
+// Helper function for generating consistent hash codes from usernames
+function hashCode(str) {
+    return str.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+    }, 0);
+}
+
+// Helper function to get username-based seed
+function getUserSeed(username, minValue, maxValue) {
+    const range = maxValue - minValue;
+    const seed = (minValue + Math.abs(hashCode(username)) % range).toString().padStart(5, '0');
+    return seed;
+}
+
 function specialCommandHandlers(dependencies) {
     const { quoteManager, spotifyManager } = dependencies;
     return {
@@ -69,26 +84,16 @@ function specialCommandHandlers(dependencies) {
         },
 
         async fursona(twitchBot, channel, context, args) {
-            const hashCode = s => s.split('').reduce((a, b) => {
-                a = ((a << 5) - a) + b.charCodeAt(0);
-                return a & a;
-            }, 0);
-
             const username = args[0]?.replace('@', '') || context.username;
-            const seed = (1 + Math.abs(hashCode(username)) % 99999).toString().padStart(5, '0');
+            const seed = getUserSeed(username, 1, 100000);
             const url = `https://thisfursonadoesnotexist.com/v2/jpgs-2x/seed${seed}.jpg`;
 
             await twitchBot.sendMessage(channel, `@${username}, here is your fursona ${url}`);
         },
 
         async waifu(twitchBot, channel, context, args) {
-            const hashCode = s => s.split('').reduce((a, b) => {
-                a = ((a << 5) - a) + b.charCodeAt(0);
-                return a & a;
-            }, 0);
-
             const username = args[0]?.replace('@', '') || context.username;
-            const seed = (10000 + Math.abs(hashCode(username)) % 89999).toString().padStart(5, '0');
+            const seed = getUserSeed(username, 10000, 100000);
             const url = `https://arfa.dev/waifu-ed/editor_d6a3dae.html?seed=${seed}`;
 
             await twitchBot.sendMessage(channel, `@${username}, here is your waifu ${url}`);
@@ -373,7 +378,7 @@ function specialCommandHandlers(dependencies) {
                     // Add next song to Spotify queue before skipping
                     const nextTrack = pendingTracks[0];
                     await spotifyManager.spotifyApi.addToQueue(nextTrack.uri);
-                    spotifyManager.queueManager.removeFirstTrack();
+                    await spotifyManager.queueManager.removeFirstTrack();
                     logger.debug('SpecialCommandHandlers', 'Added next track to queue before skip', {
                         trackName: nextTrack.name,
                         artist: nextTrack.artist
@@ -429,6 +434,44 @@ function specialCommandHandlers(dependencies) {
                     trigger
                 });
                 await twitchBot.sendMessage(channel, 'Error adding emote.');
+            }
+        },
+
+        async toggleAI(twitchBot, channel, context, args, command) {
+            try {
+                if (!context.mod && !context.badges?.broadcaster) return;
+
+                const enable = command === '!aion';
+
+                // Get current AI state from database
+                const getCurrentStateSql = 'SELECT token_value FROM tokens WHERE token_key = ?';
+                const result = await twitchBot.analyticsManager.dbManager.query(getCurrentStateSql, ['aiEnabled']);
+
+                const currentState = result.length > 0 && result[0].token_value === 'true';
+
+                // Check if AI is already in the desired state
+                if (currentState === enable) {
+                    await twitchBot.sendMessage(channel, `AI responses are already turned ${enable ? 'on' : 'off'}`);
+                    return;
+                }
+
+                // Update AI state in database
+                const updateStateSql = `
+                    INSERT INTO tokens (token_key, token_value)
+                    VALUES ('aiEnabled', ?)
+                    ON DUPLICATE KEY UPDATE token_value = ?, updated_at = CURRENT_TIMESTAMP
+                `;
+                await twitchBot.analyticsManager.dbManager.query(updateStateSql, [enable.toString(), enable.toString()]);
+
+                await twitchBot.sendMessage(channel, `AI responses have been turned ${enable ? 'on' : 'off'}`);
+                logger.info('SpecialCommandHandlers', 'AI responses toggled', {
+                    channel,
+                    enabled: enable,
+                    requestedBy: context.username
+                });
+            } catch (error) {
+                logger.error('SpecialCommandHandlers', 'Error toggling AI', { error: error.message, stack: error.stack, channel, command });
+                await twitchBot.sendMessage(channel, `Failed to ${command === '!aion' ? 'enable' : 'disable'} AI responses: ${error.message}`);
             }
         }
     };

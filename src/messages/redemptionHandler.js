@@ -38,7 +38,8 @@ class RedemptionHandler {
                 event.userId,
                 bot.currentStreamId,
                 event.input || event.rewardTitle,
-                'redemption'
+                'redemption',
+                {} // userContext - redemptions don't have mod/subscriber info in this context
             );
 
             await this.redemptionManager.handleRedemption(event);
