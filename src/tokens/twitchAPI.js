@@ -133,6 +133,26 @@ class TwitchAPI {
             throw error;
         }
     }
+
+    async getChatters(broadcasterId, moderatorId) {
+        try {
+            const response = await fetch(`${config.twitchApiEndpoint}/chat/chatters?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Client-Id': this.tokenManager.tokens.clientId
+                }
+            });
+
+            const data = await response.json();
+            if (data.data) {
+                return data.data; // Returns array of {user_id, user_login, user_name}
+            }
+            return [];
+        } catch (error) {
+            console.error('❌ Failed to get chatters:', error);
+            return [];
+        }
+    }
 }
 
 module.exports = TwitchAPI;

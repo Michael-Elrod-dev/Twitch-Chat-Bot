@@ -64,7 +64,6 @@ class ViewerTracker {
                 VALUES (?, ?, NOW(), ?, ?)
             `;
             await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
-            await this.updateViewingSession(dbUserId, streamId);
             await this.updateChatTotals(dbUserId, type);
         } catch (error) {
             console.error(`❌ Error tracking ${type} for ${username}:`, error);
@@ -103,30 +102,98 @@ class ViewerTracker {
         }
     }
 
-    async updateViewingSession(userId, streamId) {
+    async getActiveSession(userId, streamId) {
         try {
-            const checkSql = `
+            const sql = `
                 SELECT session_id FROM viewing_sessions
                 WHERE user_id = ? AND stream_id = ? AND end_time IS NULL
             `;
-            const sessions = await this.analyticsManager.dbManager.query(checkSql, [userId, streamId]);
+            const sessions = await this.analyticsManager.dbManager.query(sql, [userId, streamId]);
+            return sessions.length > 0 ? sessions[0].session_id : null;
+        } catch (error) {
+            console.error('❌ Error getting active session:', error);
+            return null;
+        }
+    }
 
-            if (sessions.length === 0) {
-                const insertSql = `
-                    INSERT INTO viewing_sessions (user_id, stream_id, start_time, messages_sent)
-                    VALUES (?, ?, NOW(), 1)
-                `;
-                await this.analyticsManager.dbManager.query(insertSql, [userId, streamId]);
-            } else {
-                const updateSql = `
-                    UPDATE viewing_sessions
-                    SET messages_sent = messages_sent + 1
-                    WHERE session_id = ?
-                `;
-                await this.analyticsManager.dbManager.query(updateSql, [sessions[0].session_id]);
+    async startSession(userId, streamId) {
+        try {
+            const sql = `
+                INSERT INTO viewing_sessions (user_id, stream_id, start_time)
+                VALUES (?, ?, NOW())
+            `;
+            await this.analyticsManager.dbManager.query(sql, [userId, streamId]);
+        } catch (error) {
+            console.error('❌ Error starting session:', error);
+        }
+    }
+
+    async endSession(sessionId) {
+        try {
+            const sql = `
+                UPDATE viewing_sessions
+                SET end_time = NOW()
+                WHERE session_id = ?
+            `;
+            await this.analyticsManager.dbManager.query(sql, [sessionId]);
+        } catch (error) {
+            console.error('❌ Error ending session:', error);
+        }
+    }
+
+    async endAllSessionsForStream(streamId) {
+        try {
+            const sql = `
+                UPDATE viewing_sessions
+                SET end_time = NOW()
+                WHERE stream_id = ? AND end_time IS NULL
+            `;
+            await this.analyticsManager.dbManager.query(sql, [streamId]);
+            console.log(`✅ Closed all viewing sessions for stream ${streamId}`);
+        } catch (error) {
+            console.error('❌ Error ending all sessions for stream:', error);
+        }
+    }
+
+    async processViewerList(viewers, streamId) {
+        try {
+            if (!viewers || viewers.length === 0) return;
+
+            // Create a set of current viewer IDs for quick lookup
+            const currentViewerIds = new Set(viewers.map(v => v.user_id));
+
+            // 1. Process current viewers - start sessions for new viewers
+            for (const viewer of viewers) {
+                const userId = viewer.user_id;
+                const username = viewer.user_login;
+
+                // Ensure user exists in viewers table
+                await this.ensureUserExists(username, userId);
+
+                // Check if user has active session
+                const activeSession = await this.getActiveSession(userId, streamId);
+
+                // If no active session, start one
+                if (!activeSession) {
+                    await this.startSession(userId, streamId);
+                }
+            }
+
+            // 2. Find viewers who left - end their sessions
+            const activeSql = `
+                SELECT session_id, user_id FROM viewing_sessions
+                WHERE stream_id = ? AND end_time IS NULL
+            `;
+            const activeSessions = await this.analyticsManager.dbManager.query(activeSql, [streamId]);
+
+            for (const session of activeSessions) {
+                // If user no longer in current viewer list, end their session
+                if (!currentViewerIds.has(session.user_id)) {
+                    await this.endSession(session.session_id);
+                }
             }
         } catch (error) {
-            console.error('❌ Error updating viewing session:', error);
+            console.error('❌ Error processing viewer list:', error);
         }
     }
 

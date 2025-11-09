@@ -55,7 +55,7 @@ class RateLimiter {
             return {
                 allowed: false,
                 reason: 'error',
-                message: `${service.toUpperCase()} is temporarily unavailable.`
+                message: config.errorMessages.ai.globalLimit
             };
         }
     }

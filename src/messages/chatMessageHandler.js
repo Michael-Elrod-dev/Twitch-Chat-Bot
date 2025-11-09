@@ -41,35 +41,6 @@ class ChatMessageHandler {
             const messageText = event.message.text;
             const lowerMessage = messageText.toLowerCase();
 
-            // Check for IMAGE requests FIRST
-            if (bot.aiManager && bot.aiManager.shouldTriggerImage(messageText)) {
-                const prompt = bot.aiManager.extractPrompt(messageText, 'image');
-                if (prompt) {
-                    userContext.username = context.username;
-
-                    await bot.sendMessage(bot.channelName, `@${context.username} Generating...`);
-
-                    const result = await bot.aiManager.handleImageRequest(prompt, context.userId, bot.currentStreamId, userContext);
-
-                    if (result.success) {
-                        await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);
-                    } else {
-                        await bot.sendMessage(bot.channelName, `@${context.username} ${result.message}`);
-                    }
-
-                    // Track analytics
-                    await bot.analyticsManager.trackChatMessage(
-                        context.username,
-                        context.userId,
-                        bot.currentStreamId,
-                        messageText,
-                        'command',
-                        userContext
-                    );
-                    return;
-                }
-            }
-
             // Check for TEXT AI requests
             if (bot.aiManager && bot.aiManager.shouldTriggerText(messageText)) {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'text');

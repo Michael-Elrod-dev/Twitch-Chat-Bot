@@ -1,6 +1,6 @@
 # AlmostHadAI Twitch Bot
 
-A Twitch chat bot featuring AI-powered chat responses, Spotify queue automation, channel point redemptions, dynamic commands, and comprehensive database-driven analytics.
+A Twitch chat bot featuring AI-powered chat responses (via Claude), Spotify queue automation, channel point redemptions, dynamic commands, and comprehensive database-driven analytics.
 
 ## Directory Structure
 
@@ -8,10 +8,8 @@ A Twitch chat bot featuring AI-powered chat responses, Spotify queue automation,
 src/
 ├── ai/                        # AI integration and management
 │   ├── models/                # AI model implementations
-│   │   ├── claudeModel.js     # Claude text generation
-│   │   └── openaiModel.js     # DALL-E image generation
+│   │   └── claudeModel.js     # Claude text generation
 │   ├── aiManager.js           # Central AI coordination and rate limiting
-│   ├── discordUploader.js     # Image hosting via Discord webhooks
 │   └── rateLimiter.js         # Per-user AI usage limits and tracking
 ├── analytics/                 # Stream and chat analytics
 │   ├── viewers/               # Viewer tracking and statistics
@@ -63,8 +61,6 @@ src/
 ### AI Integration (`ai/`)
 - **aiManager.js**: Coordinates AI requests with rate limiting and user permission handling
 - **models/claudeModel.js**: Handles Claude API for contextual chat responses
-- **models/openaiModel.js**: Manages DALL-E 3 for image generation
-- **discordUploader.js**: Uploads generated images to Discord for permanent hosting
 - **rateLimiter.js**: Enforces per-user AI usage limits with database tracking
 
 ### Database Layer (`database/`)
@@ -87,7 +83,7 @@ src/
 
 ### Commands (`commands/`)
 - **commandManager.js**: Manages custom commands with database storage, caching, and permission levels
-- **specialCommandHandlers.js**: Implements built-in commands including stats, quotes, Spotify controls, and AI toggles
+- **specialCommandHandlers.js**: Implements built-in commands including stats, quotes, and Spotify controls
 
 ### Emote System (`emotes/`)
 - **emoteManager.js**: Handles automatic emote responses with database storage and caching
@@ -110,9 +106,8 @@ src/
 
 ### AI-Powered Responses
 - **Text Responses**: Context-aware chat responses via Claude AI with @mentions
-- **Image Generation**: DALL-E 3 powered image creation with `!image` commands
 - **Rate Limiting**: Per-user usage limits with different tiers for mods/subscribers
-- **Permanent Hosting**: Generated images uploaded to Discord for reliable access
+- **Smart Triggers**: Responds to @almosthadai mentions in chat
 
 ### Chat Management
 - **Custom Commands**: Create, edit, and manage chat commands with permission levels

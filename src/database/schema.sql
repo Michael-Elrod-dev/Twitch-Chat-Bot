@@ -61,9 +61,10 @@ CREATE TABLE viewing_sessions (
     stream_id VARCHAR(50) NOT NULL,
     start_time DATETIME NOT NULL,
     end_time DATETIME,
-    messages_sent INT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
-    FOREIGN KEY (stream_id) REFERENCES streams(stream_id)
+    FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
+    INDEX idx_user_stream (user_id, stream_id),
+    INDEX idx_stream_active (stream_id, end_time)
 );
 
 CREATE TABLE chat_messages (
@@ -99,7 +100,7 @@ CREATE TABLE quotes (
 
 CREATE TABLE api_usage (
     user_id VARCHAR(50),
-    api_type ENUM('claude', 'openai_image') NOT NULL,
+    api_type ENUM('claude') NOT NULL,
     stream_id VARCHAR(50) NOT NULL,
     stream_count INT DEFAULT 0,
     PRIMARY KEY (user_id, api_type, stream_id),

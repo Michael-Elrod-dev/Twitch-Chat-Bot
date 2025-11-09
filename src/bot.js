@@ -44,8 +44,7 @@ class Bot {
             this.aiManager = new AIManager();
             await this.aiManager.init(
                 this.dbManager,
-                this.tokenManager.tokens.claudeApiKey,
-                this.tokenManager.tokens.openaiApiKey
+                this.tokenManager.tokens.claudeApiKey
             );
 
             // Check if stream is live
@@ -224,6 +223,15 @@ class Bot {
             try {
                 if (!this.currentStreamId || !this.isStreaming) return;
 
+                const broadcasterId = this.tokenManager.tokens.channelId;
+
+                // Get current chatters list
+                const chatters = await this.twitchAPI.getChatters(broadcasterId, broadcasterId);
+
+                // Process viewer sessions
+                await this.viewerManager.processViewerList(chatters, this.currentStreamId);
+
+                // Still update peak viewer count
                 const streamData = await this.twitchAPI.getStreamByUserName(this.channelName);
                 if (streamData && streamData.viewer_count) {
                     const updateSql = `
@@ -234,7 +242,7 @@ class Bot {
                     await this.dbManager.query(updateSql, [streamData.viewer_count, this.currentStreamId]);
                 }
             } catch (error) {
-                logger.error('ANALYTICS', 'viewer_tracking_failed', 'Error tracking viewer count', null, error);
+                logger.error('ANALYTICS', 'viewer_tracking_failed', 'Error tracking viewer sessions and count', null, error);
             }
         }, config.viewerTrackingInterval);
     }
@@ -268,6 +276,8 @@ class Bot {
             }
 
             if (this.currentStreamId && this.analyticsManager) {
+                // Close all active viewing sessions before ending stream
+                await this.viewerManager.endAllSessionsForStream(this.currentStreamId);
                 await this.analyticsManager.trackStreamEnd(this.currentStreamId);
                 this.currentStreamId = null;
             }

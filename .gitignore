@@ -3,6 +3,9 @@
 *.pem
 tokens.json
 
+# Claude Code context
+CLAUDE_CONTEXT.md
+
 # Dependencies
 node_modules/
 package-lock.json
