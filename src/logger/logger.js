@@ -3,11 +3,27 @@
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
+const fs = require('fs');
 const config = require('../config/config');
 
 class Logger {
     constructor() {
         this.logDirectory = path.join(__dirname, 'logs');
+        this.configDirectory = path.join(__dirname, 'config');
+
+        // Create directories if they don't exist
+        if (!fs.existsSync(this.logDirectory)) {
+            fs.mkdirSync(this.logDirectory, { recursive: true });
+        }
+        if (!fs.existsSync(this.configDirectory)) {
+            fs.mkdirSync(this.configDirectory, { recursive: true });
+        }
+
+        // Error deduplication - track recent errors to prevent spam
+        this.recentErrors = new Map(); // key: error hash, value: { count, firstSeen, lastSeen }
+        this.errorDedupeWindow = 60000; // 60 seconds - don't log identical errors within this window
+        this.errorRateLimit = 10; // Max errors per second
+        this.errorTimestamps = []; // Track recent error timestamps
 
         // Define custom format for log messages
         const customFormat = winston.format.printf(({ timestamp, level, message, module, userId, ...metadata }) => {
@@ -35,7 +51,8 @@ class Logger {
         const mainFileTransport = new DailyRotateFile({
             filename: 'bot-%DATE%.log',
             dirname: this.logDirectory,
-            datePattern: 'YYYY-MM-DD-HHmmss', // Timestamp when app starts (unique per run)
+            auditFile: path.join(this.configDirectory, 'bot-audit.json'),
+            datePattern: 'YYYY-MM-DD', // Daily rotation
             maxSize: config.logging.maxSize || '20m', // Rotate when file reaches this size
             maxFiles: config.logging.maxFiles || 10, // Keep max 10 files total
             zippedArchive: false, // Don't compress old files
@@ -50,7 +67,8 @@ class Logger {
         const errorFileTransport = new DailyRotateFile({
             filename: 'error-%DATE%.log',
             dirname: this.logDirectory,
-            datePattern: 'YYYY-MM-DD-HHmmss', // Timestamp when app starts
+            auditFile: path.join(this.configDirectory, 'error-audit.json'),
+            datePattern: 'YYYY-MM-DD', // Daily rotation
             maxSize: config.logging.maxSize || '20m',
             maxFiles: config.logging.maxFiles || 10,
             zippedArchive: false,
@@ -81,13 +99,121 @@ class Logger {
     }
 
     /**
-     * Log an error message
+     * Create a hash for error deduplication
+     * @param {string} module - Module name
+     * @param {string} message - Error message
+     * @returns {string} Hash key for deduplication
+     */
+    _createErrorHash(module, message) {
+        // Simple hash based on module and message (ignore metadata for deduplication)
+        return `${module}:${message}`;
+    }
+
+    /**
+     * Check if we should rate limit this error
+     * @returns {boolean} True if we should skip logging due to rate limit
+     */
+    _shouldRateLimit() {
+        const now = Date.now();
+        // Remove timestamps older than 1 second
+        this.errorTimestamps = this.errorTimestamps.filter(ts => now - ts < 1000);
+
+        if (this.errorTimestamps.length >= this.errorRateLimit) {
+            return true; // Rate limit exceeded
+        }
+
+        this.errorTimestamps.push(now);
+        return false;
+    }
+
+    /**
+     * Check if this error should be deduplicated
+     * @param {string} errorHash - Hash of the error
+     * @returns {boolean} True if we should skip logging due to deduplication
+     */
+    _shouldDeduplicate(errorHash) {
+        const now = Date.now();
+        const errorInfo = this.recentErrors.get(errorHash);
+
+        if (errorInfo) {
+            const timeSinceFirst = now - errorInfo.firstSeen;
+
+            // If within deduplication window, increment count and update lastSeen
+            if (timeSinceFirst < this.errorDedupeWindow) {
+                errorInfo.count++;
+                errorInfo.lastSeen = now;
+                this.recentErrors.set(errorHash, errorInfo);
+
+                // Log a summary every 10 occurrences
+                if (errorInfo.count % 10 === 0) {
+                    return false; // Allow logging the summary
+                }
+                return true; // Skip logging
+            } else {
+                // Outside window, reset
+                this.recentErrors.set(errorHash, { count: 1, firstSeen: now, lastSeen: now });
+                return false;
+            }
+        } else {
+            // First time seeing this error
+            this.recentErrors.set(errorHash, { count: 1, firstSeen: now, lastSeen: now });
+            return false;
+        }
+    }
+
+    /**
+     * Clean up old error tracking data
+     */
+    _cleanupErrorTracking() {
+        const now = Date.now();
+        for (const [hash, info] of this.recentErrors.entries()) {
+            if (now - info.lastSeen > this.errorDedupeWindow) {
+                // Log final summary if there were multiple occurrences
+                if (info.count > 1) {
+                    const [module, message] = hash.split(':', 2);
+                    this.winstonLogger.error(`[DEDUPE SUMMARY] Error occurred ${info.count} times in ${Math.round((info.lastSeen - info.firstSeen) / 1000)}s`, {
+                        module,
+                        originalMessage: message
+                    });
+                }
+                this.recentErrors.delete(hash);
+            }
+        }
+    }
+
+    /**
+     * Log an error message with deduplication and rate limiting
      * @param {string} module - Module name (e.g., 'WebSocketManager')
      * @param {string} message - Log message
      * @param {Object} metadata - Additional metadata (error object, userId, etc.)
      */
     error(module, message, metadata = {}) {
+        // Check rate limiting
+        if (this._shouldRateLimit()) {
+            // Silently drop - we're being flooded
+            return;
+        }
+
+        // Check deduplication
+        const errorHash = this._createErrorHash(module, message);
+        const errorInfo = this.recentErrors.get(errorHash);
+
+        if (this._shouldDeduplicate(errorHash)) {
+            // Skip logging, but error is tracked
+            return;
+        }
+
+        // Add repetition count to metadata if this is a repeated error
+        if (errorInfo && errorInfo.count > 1) {
+            metadata.repetitions = errorInfo.count;
+        }
+
         this.winstonLogger.error(message, { module, ...metadata });
+
+        // Periodically clean up old tracking data
+        if (Math.random() < 0.01) { // 1% chance to trigger cleanup
+            this._cleanupErrorTracking();
+        }
     }
 
     /**
