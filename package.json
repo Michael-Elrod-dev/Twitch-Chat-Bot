@@ -22,6 +22,7 @@
   "main": "src/bot.js",
   "scripts": {
     "start": "node src/bot.js",
+    "debug": "node src/bot.js --debug",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

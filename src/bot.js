@@ -36,7 +36,16 @@ class Bot {
 
     async init() {
         try {
-            logger.info('Bot', 'Starting bot initialization');
+            logger.info('Bot', 'Starting bot initialization', { debugMode: config.isDebugMode });
+
+            // Setup debug database if in debug mode
+            if (config.isDebugMode) {
+                logger.info('Bot', '=== DEBUG MODE ENABLED ===');
+                logger.info('Bot', 'Setting up debug database and logs');
+                const DebugDbSetup = require('./database/debugDbSetup');
+                const debugDbSetup = new DebugDbSetup();
+                await debugDbSetup.setupDebugDatabase();
+            }
 
             // Always connect to database and basic services
             logger.debug('Bot', 'Initializing database connection');
@@ -60,15 +69,21 @@ class Bot {
                 this.tokenManager.tokens.claudeApiKey
             );
 
-            // Check if stream is live
-            logger.info('Bot', 'Checking stream status');
-            const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
-            if (streamInfo) {
-                logger.info('Bot', 'Stream is live! Starting full bot functionality', { streamId: streamInfo.id });
+            // In debug mode, force full operation regardless of stream status
+            if (config.isDebugMode) {
+                logger.info('Bot', 'Debug mode - forcing full operation (stream status ignored)');
                 await this.startFullOperation();
             } else {
-                logger.info('Bot', 'Stream is offline. Bot will wait for stream to go live');
-                await this.startMinimalOperation();
+                // Check if stream is live
+                logger.info('Bot', 'Checking stream status');
+                const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
+                if (streamInfo) {
+                    logger.info('Bot', 'Stream is live! Starting full bot functionality', { streamId: streamInfo.id });
+                    await this.startFullOperation();
+                } else {
+                    logger.info('Bot', 'Stream is offline. Bot will wait for stream to go live');
+                    await this.startMinimalOperation();
+                }
             }
 
             logger.info('Bot', 'Bot initialization complete');
@@ -598,6 +613,14 @@ class Bot {
                 } catch (error) {
                     logger.error('Bot', 'Error closing database connection', { error: error.message, stack: error.stack });
                 }
+            }
+
+            // Log debug database preservation notice
+            if (config.isDebugMode) {
+                const debugDbName = process.env.DB_NAME + '_debug';
+                logger.info('Bot', '=== DEBUG MODE SHUTDOWN ===');
+                logger.info('Bot', `Debug database preserved for review: ${debugDbName}`);
+                logger.info('Bot', 'Debug database will be recreated on next debug startup');
             }
 
             logger.info('Bot', '=== Graceful shutdown complete ===');

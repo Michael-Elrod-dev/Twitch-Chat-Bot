@@ -4,6 +4,9 @@ require('dotenv').config();
 
 class Config {
     constructor() {
+        // Debug Mode Detection
+        this.isDebugMode = process.argv.includes('--debug');
+
         // Channel settings
         this.channelName = 'aimosthadme';
 
@@ -13,7 +16,7 @@ class Config {
             port: parseInt(process.env.DB_PORT),
             user: process.env.DB_USER,
             password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME
+            database: this.isDebugMode ? process.env.DB_NAME + '_debug' : process.env.DB_NAME
         };
 
         // Logging Configuration
@@ -44,7 +47,7 @@ class Config {
         // AI Model Settings
         this.aiModels = {
             claude: {
-                model: 'claude-4-sonnet-20250929',
+                model: 'claude-sonnet-4-5-20250929',
                 maxTokens: 200,
                 temperature: 0.7,
                 maxCharacters: 400,

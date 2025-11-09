@@ -47,11 +47,14 @@ class Logger {
             )
         });
 
+        // Use different log filenames for debug mode
+        const logPrefix = config.isDebugMode ? 'debug-' : '';
+
         // Main log file - all logs with size-based rotation
         const mainFileTransport = new DailyRotateFile({
-            filename: 'bot-%DATE%.log',
+            filename: `${logPrefix}bot-%DATE%.log`,
             dirname: this.logDirectory,
-            auditFile: path.join(this.configDirectory, 'bot-audit.json'),
+            auditFile: path.join(this.configDirectory, `${logPrefix}bot-audit.json`),
             datePattern: 'YYYY-MM-DD', // Daily rotation
             maxSize: config.logging.maxSize || '20m', // Rotate when file reaches this size
             maxFiles: config.logging.maxFiles || 10, // Keep max 10 files total
@@ -65,9 +68,9 @@ class Logger {
 
         // Error log file - errors only with size-based rotation
         const errorFileTransport = new DailyRotateFile({
-            filename: 'error-%DATE%.log',
+            filename: `${logPrefix}error-%DATE%.log`,
             dirname: this.logDirectory,
-            auditFile: path.join(this.configDirectory, 'error-audit.json'),
+            auditFile: path.join(this.configDirectory, `${logPrefix}error-audit.json`),
             datePattern: 'YYYY-MM-DD', // Daily rotation
             maxSize: config.logging.maxSize || '20m',
             maxFiles: config.logging.maxFiles || 10,
@@ -91,6 +94,7 @@ class Logger {
 
         // Log initialization
         this.info('Logger', 'Logger initialized', {
+            debugMode: config.isDebugMode,
             logLevel: config.logging.level || 'info',
             maxSize: config.logging.maxSize || '20m',
             maxFiles: config.logging.maxFiles || 10,
