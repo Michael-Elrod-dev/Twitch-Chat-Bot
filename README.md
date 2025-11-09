@@ -25,6 +25,9 @@ src/
 │   └── schema.sql             # Database schema including AI usage tracking
 ├── emotes/                    # Emote response system
 │   └── emoteManager.js        # Emote trigger and response handling
+├── logger/                    # Logging system
+│   ├── logger.js              # Winston-based structured logging
+│   └── logs/                  # Log file directory (gitignored)
 ├── messages/                  # Message handling
 │   ├── chatMessageHandler.js  # Chat message processing with AI integration
 │   ├── messageSender.js       # Message sending to Twitch
@@ -55,7 +58,9 @@ src/
 - Coordinates between components via dependency injection
 - Establishes event subscriptions and message routing
 - Handles stream start/end detection with automatic resource management
-- Manages database connections and SQL-based data persistence
+- **Graceful Shutdown**: 30-minute auto-shutdown after stream offline or Ctrl+C for immediate shutdown
+- **Crash Recovery**: Automatically cleans up orphaned sessions from previous crashes on startup
+- Manages database connections and SQL-based data persistence with guaranteed integrity
 - Tracks current stream sessions and comprehensive viewer analytics
 
 ### AI Integration (`ai/`)
@@ -102,6 +107,13 @@ src/
 - **analyticsManager.js**: Coordinates comprehensive stream and chat data collection
 - **viewers/viewerTracker.js**: Tracks viewer participation, message counts, and AI usage statistics
 
+### Logging System (`logger/`)
+- **logger.js**: Winston-based structured logging with multiple log levels (debug, info, warn, error)
+- **Size-based rotation**: Automatically rotates logs when files reach 20MB
+- **Retention policy**: Keeps last 10 log files, automatically deletes older ones
+- **Separate error logs**: Dedicated error log files for quick troubleshooting
+- **Crash-safe**: Uses last known activity timestamps for accurate analytics even after crashes
+
 ## Features
 
 ### AI-Powered Responses
@@ -133,9 +145,50 @@ src/
 
 ### Advanced Features
 - **Stream Lifecycle Management**: Automatic resource management based on stream status
+- **Graceful Shutdown**: Database integrity protection with automatic data saves
+- **Auto-Shutdown Timer**: 30-minute grace period after stream offline (recovers from internet outages)
+- **Crash Recovery**: Orphaned session cleanup using last chat activity timestamps
 - **Token Management**: Automatic refresh for all API services
 - **Error Handling**: Comprehensive error recovery and user feedback
+- **Structured Logging**: Winston-based logging with rotation and retention policies
 - **Modular Architecture**: Easy to extend with new features and integrations
+
+## Running the Bot
+
+### Start the Bot
+```bash
+npm start
+```
+or
+```bash
+node src/bot.js
+```
+
+### Stop the Bot
+- **Graceful Shutdown**: Press `Ctrl+C` to safely stop the bot
+  - Saves all stream analytics
+  - Closes viewer sessions properly
+  - Ensures database integrity
+  - Closes all connections cleanly
+
+### Automatic Shutdown
+- Bot automatically shuts down 30 minutes after stream goes offline
+- Countdown warnings logged at 15min, 5min, 1min remaining
+- Cancels shutdown if stream comes back online (internet outage recovery)
+
+### Log Files
+All logs are stored in `src/logger/logs/`:
+- `bot-YYYY-MM-DD-HHmmss.log` - All logs (info, debug, warn, error)
+- `error-YYYY-MM-DD-HHmmss.log` - Error logs only
+
+To enable debug logging, edit `src/config/config.js`:
+```javascript
+this.logging = {
+    level: 'debug',  // Change from 'info' to 'debug'
+    maxSize: '20m',
+    maxFiles: 10
+}
+```
 
 ## Configuration
 
