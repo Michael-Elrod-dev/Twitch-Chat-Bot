@@ -2,19 +2,24 @@
 
 const fetch = require('node-fetch');
 const config = require('../config/config');
+const logger = require('../logger/logger');
 
 class SubscriptionManager {
     constructor(tokenManager, sessionId) {
         this.tokenManager = tokenManager;
         this.sessionId = sessionId;
+        logger.debug('SubscriptionManager', 'SubscriptionManager instance created', { sessionId });
     }
 
     setSessionId(sessionId) {
+        logger.debug('SubscriptionManager', 'Session ID updated', { oldSessionId: this.sessionId, newSessionId: sessionId });
         this.sessionId = sessionId;
     }
 
     async subscribeToChatEvents() {
         try {
+            logger.debug('SubscriptionManager', 'Subscribing to chat events');
+
             if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.userId) {
                 throw new Error('Missing required IDs');
             }
@@ -45,18 +50,24 @@ class SubscriptionManager {
             const responseData = await response.json();
 
             if (!response.ok) {
+                logger.error('SubscriptionManager', 'Failed to subscribe to chat events', {
+                    status: response.status,
+                    error: JSON.stringify(responseData)
+                });
                 throw new Error(`Failed to subscribe to chat events: ${JSON.stringify(responseData)}`);
             }
 
-            console.log('✅ Subscribed to chat events');
+            logger.info('SubscriptionManager', 'Subscribed to chat events', { subscriptionId: responseData.data?.[0]?.id });
         } catch (error) {
-            console.error('❌ Error subscribing to chat events:', error);
+            logger.error('SubscriptionManager', 'Error subscribing to chat events', { error: error.message, stack: error.stack });
             throw error;
         }
     }
 
     async subscribeToChannelPoints() {
         try {
+            logger.debug('SubscriptionManager', 'Subscribing to channel point redemptions');
+
             if (!this.tokenManager.tokens.channelId || !this.tokenManager.tokens.userId) {
                 throw new Error('Missing required IDs');
             }
@@ -86,18 +97,24 @@ class SubscriptionManager {
             const responseData = await response.json();
 
             if (!response.ok) {
+                logger.error('SubscriptionManager', 'Failed to subscribe to channel points', {
+                    status: response.status,
+                    error: JSON.stringify(responseData)
+                });
                 throw new Error(`Failed to subscribe to channel points: ${JSON.stringify(responseData)}`);
             }
 
-            console.log('✅ Subscribed to channel point redemptions');
+            logger.info('SubscriptionManager', 'Subscribed to channel point redemptions', { subscriptionId: responseData.data?.[0]?.id });
         } catch (error) {
-            console.error('❌ Error subscribing to channel points:', error);
+            logger.error('SubscriptionManager', 'Error subscribing to channel points', { error: error.message, stack: error.stack });
             throw error;
         }
     }
 
     async subscribeToStreamOnline() {
         try {
+            logger.debug('SubscriptionManager', 'Subscribing to stream online events');
+
             if (!this.tokenManager.tokens.channelId) {
                 throw new Error('Missing required channel ID');
             }
@@ -127,18 +144,24 @@ class SubscriptionManager {
             const responseData = await response.json();
 
             if (!response.ok) {
+                logger.error('SubscriptionManager', 'Failed to subscribe to stream online events', {
+                    status: response.status,
+                    error: JSON.stringify(responseData)
+                });
                 throw new Error(`Failed to subscribe to stream online events: ${JSON.stringify(responseData)}`);
             }
 
-            console.log('✅ Subscribed to stream online events');
+            logger.info('SubscriptionManager', 'Subscribed to stream online events', { subscriptionId: responseData.data?.[0]?.id });
         } catch (error) {
-            console.error('❌ Error subscribing to stream online events:', error);
+            logger.error('SubscriptionManager', 'Error subscribing to stream online events', { error: error.message, stack: error.stack });
             throw error;
         }
     }
 
     async subscribeToStreamOffline() {
         try {
+            logger.debug('SubscriptionManager', 'Subscribing to stream offline events');
+
             if (!this.tokenManager.tokens.channelId) {
                 throw new Error('Missing required channel ID');
             }
@@ -168,32 +191,38 @@ class SubscriptionManager {
             const responseData = await response.json();
 
             if (!response.ok) {
+                logger.error('SubscriptionManager', 'Failed to subscribe to stream offline events', {
+                    status: response.status,
+                    error: JSON.stringify(responseData)
+                });
                 throw new Error(`Failed to subscribe to stream offline events: ${JSON.stringify(responseData)}`);
             }
 
-            console.log('✅ Subscribed to stream offline events');
+            logger.info('SubscriptionManager', 'Subscribed to stream offline events', { subscriptionId: responseData.data?.[0]?.id });
         } catch (error) {
-            console.error('❌ Error subscribing to stream offline events:', error);
+            logger.error('SubscriptionManager', 'Error subscribing to stream offline events', { error: error.message, stack: error.stack });
             throw error;
         }
     }
 
     async unsubscribeFromChatEvents() {
         try {
+            logger.debug('SubscriptionManager', 'Unsubscribing from chat events');
             await this.unsubscribeFromEventType('channel.chat.message');
-            console.log('✅ Unsubscribed from chat events');
+            logger.info('SubscriptionManager', 'Unsubscribed from chat events');
         } catch (error) {
-            console.error('❌ Error unsubscribing from chat events:', error);
+            logger.error('SubscriptionManager', 'Error unsubscribing from chat events', { error: error.message });
             throw error;
         }
     }
 
     async unsubscribeFromChannelPoints() {
         try {
+            logger.debug('SubscriptionManager', 'Unsubscribing from channel point redemptions');
             await this.unsubscribeFromEventType('channel.channel_points_custom_reward_redemption.add');
-            console.log('✅ Unsubscribed from channel point redemptions');
+            logger.info('SubscriptionManager', 'Unsubscribed from channel point redemptions');
         } catch (error) {
-            console.error('❌ Error unsubscribing from channel points:', error);
+            logger.error('SubscriptionManager', 'Error unsubscribing from channel points', { error: error.message });
             throw error;
         }
     }
@@ -201,6 +230,8 @@ class SubscriptionManager {
     // Helper method to handle the actual unsubscription logic
     async unsubscribeFromEventType(eventType) {
         try {
+            logger.debug('SubscriptionManager', 'Fetching subscriptions to unsubscribe', { eventType });
+
             // First, get all subscriptions to find the one we want to delete
             const subscriptionsResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
                 method: 'GET',
@@ -213,6 +244,10 @@ class SubscriptionManager {
 
             if (!subscriptionsResponse.ok) {
                 const errorData = await subscriptionsResponse.json();
+                logger.error('SubscriptionManager', 'Failed to fetch subscriptions', {
+                    status: subscriptionsResponse.status,
+                    error: JSON.stringify(errorData)
+                });
                 throw new Error(`Failed to get subscriptions: ${JSON.stringify(errorData)}`);
             }
 
@@ -225,9 +260,11 @@ class SubscriptionManager {
             );
 
             if (!subscription) {
-                console.log(`ℹ️ No subscription found for ${eventType} with session ${this.sessionId}`);
+                logger.info('SubscriptionManager', 'No subscription found to unsubscribe', { eventType, sessionId: this.sessionId });
                 return;
             }
+
+            logger.debug('SubscriptionManager', 'Deleting subscription', { eventType, subscriptionId: subscription.id });
 
             // Delete the subscription
             const deleteResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions?id=${subscription.id}`, {
@@ -241,13 +278,18 @@ class SubscriptionManager {
 
             if (!deleteResponse.ok) {
                 const errorData = await deleteResponse.json();
+                logger.error('SubscriptionManager', 'Failed to delete subscription', {
+                    subscriptionId: subscription.id,
+                    status: deleteResponse.status,
+                    error: JSON.stringify(errorData)
+                });
                 throw new Error(`Failed to delete subscription ${subscription.id}: ${JSON.stringify(errorData)}`);
             }
 
-            console.log(`✅ Successfully unsubscribed from ${eventType} (ID: ${subscription.id})`);
+            logger.info('SubscriptionManager', 'Successfully unsubscribed', { eventType, subscriptionId: subscription.id });
 
         } catch (error) {
-            console.error(`❌ Error unsubscribing from ${eventType}:`, error);
+            logger.error('SubscriptionManager', 'Error in unsubscribe process', { eventType, error: error.message });
             throw error;
         }
     }

@@ -1,12 +1,19 @@
 // src/commands/specialCommandHandlers.js
 
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const logger = require('../logger/logger');
 
 function specialCommandHandlers(dependencies) {
-    const { quoteManager, spotifyManager, viewerManager } = dependencies;
+    const { quoteManager, spotifyManager } = dependencies;
     return {
         async followAge(twitchBot, channel, context, args) {
             const toUser = args[0]?.replace('@', '') || context.username;
+
+            logger.debug('SpecialCommandHandlers', 'Fetching followage', {
+                channel,
+                toUser,
+                requestedBy: context.username
+            });
 
             try {
                 const response = await fetch(`https://commands.garretcharp.com/twitch/followage/${channel}/${toUser}`);
@@ -18,8 +25,13 @@ function specialCommandHandlers(dependencies) {
                 }
 
                 await twitchBot.sendMessage(channel, followAge);
+                logger.info('SpecialCommandHandlers', 'Followage command executed', {
+                    channel,
+                    toUser,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error fetching follow data:', error);
+                logger.error('SpecialCommandHandlers', 'Error fetching follow data', { error: error.message, stack: error.stack, channel, toUser });
                 await twitchBot.sendMessage(channel, `Error: ${error.message || 'Unable to fetch follow data'}`);
             }
         },
@@ -41,11 +53,17 @@ function specialCommandHandlers(dependencies) {
                     if (minutes > 0 || hours === 0) uptimeStr += `${minutes} minute${minutes !== 1 ? 's' : ''}`;
 
                     await twitchBot.sendMessage(channel, `Stream has been live for ${uptimeStr.trim()}`);
+                    logger.info('SpecialCommandHandlers', 'Uptime command executed', {
+                        channel,
+                        uptimeMs: diffMs,
+                        requestedBy: context.username
+                    });
                 } else {
                     await twitchBot.sendMessage(channel, `${channel} is not live`);
+                    logger.debug('SpecialCommandHandlers', 'Uptime checked - stream not live', { channel });
                 }
             } catch (error) {
-                console.error('Uptime fetch failed:', error);
+                logger.error('SpecialCommandHandlers', 'Uptime fetch failed', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'A fix for this command is coming soon.');
             }
         },
@@ -85,11 +103,17 @@ function specialCommandHandlers(dependencies) {
                     const trackName = currentTrack.body.item.name;
                     const artistName = currentTrack.body.item.artists[0].name;
                     await twitchBot.sendMessage(channel, `Currently playing: ${trackName} by ${artistName}`);
+                    logger.info('SpecialCommandHandlers', 'Current song command executed', {
+                        channel,
+                        trackName,
+                        artistName
+                    });
                 } else {
                     await twitchBot.sendMessage(channel, 'No song is currently playing in Spotify.');
+                    logger.debug('SpecialCommandHandlers', 'No song currently playing', { channel });
                 }
             } catch (error) {
-                console.error('❌ Error fetching current song:', error);
+                logger.error('SpecialCommandHandlers', 'Error fetching current song', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Unable to fetch current song information.');
             }
         },
@@ -99,11 +123,17 @@ function specialCommandHandlers(dependencies) {
                 if (spotifyManager.previousTrack) {
                     const { name, artist } = spotifyManager.previousTrack;
                     await twitchBot.sendMessage(channel, `Last played song: ${name} by ${artist}`);
+                    logger.info('SpecialCommandHandlers', 'Last song command executed', {
+                        channel,
+                        trackName: name,
+                        artistName: artist
+                    });
                 } else {
                     await twitchBot.sendMessage(channel, 'No previous song information available yet.');
+                    logger.debug('SpecialCommandHandlers', 'No previous song available', { channel });
                 }
             } catch (error) {
-                console.error('❌ Error fetching last song:', error);
+                logger.error('SpecialCommandHandlers', 'Error fetching last song', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Unable to fetch last song information.');
             }
         },
@@ -128,6 +158,7 @@ function specialCommandHandlers(dependencies) {
 
                     if (!quote) {
                         await twitchBot.sendMessage(channel, `Quote #${id} not found!`);
+                        logger.debug('SpecialCommandHandlers', 'Quote not found', { channel, quoteId: id });
                         return;
                     }
                 } else {
@@ -136,15 +167,22 @@ function specialCommandHandlers(dependencies) {
 
                 const year = new Date(quote.savedAt).getFullYear();
                 await twitchBot.sendMessage(channel, `Quote #${quote.id}/${totalQuotes} - '${quote.quote}' - ${quote.author}, ${year}`);
+                logger.info('SpecialCommandHandlers', 'Quote command executed', {
+                    channel,
+                    quoteId: quote.id,
+                    totalQuotes,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error in quote handler:', error);
+                logger.error('SpecialCommandHandlers', 'Error in quote handler', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Sorry, there was an error retrieving quotes.');
             }
         },
 
         async combinedStats(twitchBot, channel, context, args) {
+            let requestedUser;
             try {
-                const requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
+                requestedUser = args[0]?.replace('@', '').toLowerCase() || context.username.toLowerCase();
                 const messages = await twitchBot.viewerManager.getUserMessages(requestedUser);
                 const commands = await twitchBot.viewerManager.getUserCommands(requestedUser);
                 const redemptions = await twitchBot.viewerManager.getUserRedemptions(requestedUser);
@@ -154,25 +192,44 @@ function specialCommandHandlers(dependencies) {
                     `@${requestedUser} has ${total} total interactions ` +
                     `(${messages} messages, ${commands} commands, ${redemptions} redemptions)`
                 );
+                logger.info('SpecialCommandHandlers', 'Combined stats command executed', {
+                    channel,
+                    targetUser: requestedUser,
+                    total,
+                    messages,
+                    commands,
+                    redemptions,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error in combinedStats:', error);
+                logger.error('SpecialCommandHandlers', 'Error in combinedStats', { error: error.message, stack: error.stack, channel, targetUser: requestedUser });
                 await twitchBot.sendMessage(channel, 'An error occurred while fetching chat stats.');
             }
         },
 
-        async topStats(twitchBot, channel, context, args) {
+        async topStats(twitchBot, channel, context) {
             try {
                 if (!twitchBot.viewerManager && twitchBot.analyticsManager?.viewerTracker) {
-                    console.log('Using viewerTracker directly instead');
+                    logger.debug('SpecialCommandHandlers', 'Using viewerTracker directly for topStats', { channel });
                     const topUsers = await twitchBot.analyticsManager.viewerTracker.getTopUsers(5);
                     await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
+                    logger.info('SpecialCommandHandlers', 'Top stats command executed', {
+                        channel,
+                        topUsers: topUsers.length,
+                        requestedBy: context.username
+                    });
                     return;
                 }
 
                 const topUsers = await twitchBot.viewerManager.getTopUsers(5);
                 await twitchBot.sendMessage(channel, `Top 5 Most Active Viewers: ${topUsers.join(' | ')}`);
+                logger.info('SpecialCommandHandlers', 'Top stats command executed', {
+                    channel,
+                    topUsers: topUsers.length,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error in topStats:', error);
+                logger.error('SpecialCommandHandlers', 'Error in topStats', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'An error occurred while fetching top stats.');
             }
         },
@@ -183,7 +240,7 @@ function specialCommandHandlers(dependencies) {
 
                 const channelId = await twitchBot.users.getUserByName(channel);
                 if (!channelId) {
-                    console.error('Channel not found');
+                    logger.error('SpecialCommandHandlers', 'Channel not found for toggleSongs', { channel });
                     return;
                 }
 
@@ -194,6 +251,11 @@ function specialCommandHandlers(dependencies) {
 
                 if (!songReward || !skipQueueReward) {
                     await twitchBot.sendMessage(channel, 'Could not find one or both song-related rewards!');
+                    logger.warn('SpecialCommandHandlers', 'Song rewards not found', {
+                        channel,
+                        hasSongReward: !!songReward,
+                        hasSkipReward: !!skipQueueReward
+                    });
                     return;
                 }
 
@@ -216,8 +278,13 @@ function specialCommandHandlers(dependencies) {
                 ]);
 
                 await twitchBot.sendMessage(channel, `Song requests have been turned ${enable ? 'on' : 'off'}`);
+                logger.info('SpecialCommandHandlers', 'Song requests toggled', {
+                    channel,
+                    enabled: enable,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error toggling songs:', error);
+                logger.error('SpecialCommandHandlers', 'Error toggling songs', { error: error.message, stack: error.stack, channel, command });
                 await twitchBot.sendMessage(channel, `Failed to ${command === '!songson' ? 'enable' : 'disable'} song requests: ${error.message}`);
             }
         },
@@ -228,13 +295,20 @@ function specialCommandHandlers(dependencies) {
 
                 if (pendingTracks.length === 0) {
                     await twitchBot.sendMessage(channel, 'There are no songs in the queue.');
+                    logger.debug('SpecialCommandHandlers', 'Next song requested - queue empty', { channel });
                     return;
                 }
 
                 const nextTrack = pendingTracks[0];
                 await twitchBot.sendMessage(channel, `Next song in queue: ${nextTrack.name} by ${nextTrack.artist} (requested by ${nextTrack.requestedBy})`);
+                logger.info('SpecialCommandHandlers', 'Next song command executed', {
+                    channel,
+                    trackName: nextTrack.name,
+                    artistName: nextTrack.artist,
+                    requestedBy: nextTrack.requestedBy
+                });
             } catch (error) {
-                console.error('❌ Error fetching next song:', error);
+                logger.error('SpecialCommandHandlers', 'Error fetching next song', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Unable to fetch next song information.');
             }
         },
@@ -245,6 +319,7 @@ function specialCommandHandlers(dependencies) {
 
                 if (pendingTracks.length === 0) {
                     await twitchBot.sendMessage(channel, 'The queue is currently empty.');
+                    logger.debug('SpecialCommandHandlers', 'Queue info requested - queue empty', { channel });
                     return;
                 }
 
@@ -267,8 +342,15 @@ function specialCommandHandlers(dependencies) {
                 }
 
                 await twitchBot.sendMessage(channel, response);
+                logger.info('SpecialCommandHandlers', 'Queue info command executed', {
+                    channel,
+                    queueLength: pendingTracks.length,
+                    targetUser: requestedUser,
+                    userSongCount: userPositions.length,
+                    requestedBy: context.username
+                });
             } catch (error) {
-                console.error('❌ Error fetching queue information:', error);
+                logger.error('SpecialCommandHandlers', 'Error fetching queue information', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Unable to fetch queue information.');
             }
         },
@@ -281,6 +363,7 @@ function specialCommandHandlers(dependencies) {
 
                 if (state === 'CLOSED') {
                     await twitchBot.sendMessage(channel, 'Spotify is not currently active.');
+                    logger.debug('SpecialCommandHandlers', 'Skip song failed - Spotify not active', { channel });
                     return;
                 }
 
@@ -291,15 +374,22 @@ function specialCommandHandlers(dependencies) {
                     const nextTrack = pendingTracks[0];
                     await spotifyManager.spotifyApi.addToQueue(nextTrack.uri);
                     spotifyManager.queueManager.removeFirstTrack();
-                    console.log(`* Added next track to queue before skip: ${nextTrack.name} by ${nextTrack.artist}`);
+                    logger.debug('SpecialCommandHandlers', 'Added next track to queue before skip', {
+                        trackName: nextTrack.name,
+                        artist: nextTrack.artist
+                    });
                 }
 
                 // Skip the current song
                 await spotifyManager.spotifyApi.skipToNext();
                 await twitchBot.sendMessage(channel, 'Skipped to next song!');
+                logger.info('SpecialCommandHandlers', 'Song skipped', {
+                    channel,
+                    requestedBy: context.username
+                });
 
             } catch (error) {
-                console.error('❌ Error skipping song:', error);
+                logger.error('SpecialCommandHandlers', 'Error skipping song', { error: error.message, stack: error.stack, channel });
                 await twitchBot.sendMessage(channel, 'Unable to skip song. Make sure Spotify is active.');
             }
         },
@@ -319,10 +409,25 @@ function specialCommandHandlers(dependencies) {
                 const success = await twitchBot.emoteManager.addEmote(trigger, response);
                 if (success) {
                     await twitchBot.sendMessage(channel, `Emote "${trigger}" added successfully!`);
+                    logger.info('SpecialCommandHandlers', 'Emote added', {
+                        channel,
+                        trigger,
+                        requestedBy: context.username
+                    });
                 } else {
                     await twitchBot.sendMessage(channel, `Emote "${trigger}" already exists.`);
+                    logger.debug('SpecialCommandHandlers', 'Emote already exists', {
+                        channel,
+                        trigger
+                    });
                 }
             } catch (error) {
+                logger.error('SpecialCommandHandlers', 'Error adding emote', {
+                    error: error.message,
+                    stack: error.stack,
+                    channel,
+                    trigger
+                });
                 await twitchBot.sendMessage(channel, 'Error adding emote.');
             }
         }

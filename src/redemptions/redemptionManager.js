@@ -2,6 +2,7 @@
 
 const fetch = require('node-fetch');
 const config = require('../config/config');
+const logger = require('../logger/logger');
 
 class RedemptionManager {
     constructor(twitchBot, spotifyManager) {
@@ -12,33 +13,37 @@ class RedemptionManager {
 
     registerHandler(rewardTitle, handler) {
         this.handlers.set(rewardTitle.toLowerCase(), handler);
-        console.log(`✅ Registered ${rewardTitle} handler`);
+        logger.info('RedemptionManager', 'Handler registered', { rewardTitle });
     }
 
     async handleRedemption(event) {
-        const timestamp = new Date().toISOString();
         const handler = this.handlers.get(event.rewardTitle.toLowerCase());
 
         if (!handler) {
-            console.log(`* No handler found for reward: ${event.rewardTitle}`);
+            logger.warn('RedemptionManager', 'No handler found for reward', {
+                rewardTitle: event.rewardTitle,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
             return;
         }
 
         try {
             await handler(event, this.twitchBot, this.spotifyManager, this.twitchBot);
-            console.log(`* Executed handler for: ${event.rewardTitle}`);
+            logger.info('RedemptionManager', 'Handler executed successfully', {
+                rewardTitle: event.rewardTitle,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
         } catch (error) {
-            console.error('* Handler execution failed:', {
-                timestamp,
-                reward: event.rewardTitle,
-                user: event.userDisplayName,
+            logger.error('RedemptionManager', 'Handler execution failed', {
                 error: error.message,
                 stack: error.stack,
-                eventData: {
-                    rewardId: event.rewardId,
-                    status: event.status,
-                    input: event.input
-                }
+                rewardTitle: event.rewardTitle,
+                userDisplayName: event.userDisplayName,
+                rewardId: event.rewardId,
+                status: event.status,
+                input: event.input
             });
         }
     }
@@ -62,7 +67,13 @@ class RedemptionManager {
                 throw new Error(`Failed to update redemption status: ${response.status} - ${JSON.stringify(errorData)}`);
             }
         } catch (error) {
-            console.error('Error updating redemption status:', error);
+            logger.error('RedemptionManager', 'Failed to update redemption status', {
+                error: error.message,
+                stack: error.stack,
+                broadcasterId,
+                rewardId,
+                status
+            });
             throw error;
         }
     }

@@ -1,6 +1,7 @@
 // src/commands/commandManager.js
 
 const config = require('../config/config');
+const logger = require('../logger/logger');
 
 class CommandManager {
     constructor(specialCommandHandlers) {
@@ -35,9 +36,14 @@ class CommandManager {
             }
 
             this.cacheExpiry = Date.now() + this.cacheTimeout;
-            console.log(`✅ Loaded ${this.commandCache.size} commands`);
+            logger.info('CommandManager', 'Commands loaded successfully', {
+                commandCount: this.commandCache.size
+            });
         } catch (error) {
-            console.error('❌ Error loading commands:', error);
+            logger.error('CommandManager', 'Error loading commands', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -46,12 +52,17 @@ class CommandManager {
         try {
             // Check if cache needs refresh
             if (Date.now() > this.cacheExpiry) {
+                logger.debug('CommandManager', 'Cache expired, reloading commands');
                 await this.loadCommands();
             }
 
             return this.commandCache.get(commandName.toLowerCase()) || null;
         } catch (error) {
-            console.error('❌ Error getting command:', error);
+            logger.error('CommandManager', 'Error getting command', {
+                error: error.message,
+                stack: error.stack,
+                commandName
+            });
             return null;
         }
     }
@@ -132,6 +143,12 @@ class CommandManager {
         if (command.userLevel === 'broadcaster' && !context.badges?.broadcaster) return;
 
         try {
+            logger.debug('CommandManager', 'Executing command', {
+                commandName,
+                userName: context.username,
+                hasHandler: !!command.handler
+            });
+
             if (command.handler && this.specialCommandHandlers[command.handler]) {
                 const twitchBotWrapper = {
                     sendMessage: (channel, message) => twitchBot.sendMessage(channel, message),
@@ -149,11 +166,25 @@ class CommandManager {
                     emoteManager: twitchBot.emoteManager
                 };
                 await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
+                logger.info('CommandManager', 'Special command executed', {
+                    commandName,
+                    handler: command.handler,
+                    userName: context.username
+                });
             } else {
                 await twitchBot.sendMessage(channel, command.response);
+                logger.info('CommandManager', 'Standard command executed', {
+                    commandName,
+                    userName: context.username
+                });
             }
         } catch (error) {
-            console.error(`Error executing command ${commandName}:`, error);
+            logger.error('CommandManager', 'Error executing command', {
+                error: error.message,
+                stack: error.stack,
+                commandName,
+                userName: context.username
+            });
         }
     }
 
@@ -161,7 +192,12 @@ class CommandManager {
         try {
             await twitchBot.sendMessage(channel, response);
         } catch (error) {
-            console.error('❌ Error sending chat message:', error);
+            logger.error('CommandManager', 'Error sending chat message', {
+                error: error.message,
+                stack: error.stack,
+                channel,
+                response
+            });
         }
     }
 
@@ -180,12 +216,22 @@ class CommandManager {
                 userLevel: userLevel
             });
 
+            logger.info('CommandManager', 'Command added successfully', {
+                commandName: name,
+                userLevel
+            });
+
             return true;
         } catch (error) {
             if (error.code === 'ER_DUP_ENTRY') {
+                logger.debug('CommandManager', 'Command already exists', { commandName: name });
                 return false; // Command already exists
             }
-            console.error('❌ Error adding command:', error);
+            logger.error('CommandManager', 'Error adding command', {
+                error: error.message,
+                stack: error.stack,
+                commandName: name
+            });
             throw error;
         }
     }
@@ -195,6 +241,11 @@ class CommandManager {
             // Check if command exists and doesn't have a handler
             const command = await this.getCommand(name);
             if (!command || command.handler) {
+                logger.debug('CommandManager', 'Cannot edit command - not found or has handler', {
+                    commandName: name,
+                    exists: !!command,
+                    hasHandler: command?.handler
+                });
                 return false;
             }
 
@@ -212,11 +263,18 @@ class CommandManager {
                     handler: null,
                     userLevel: command.userLevel
                 });
+                logger.info('CommandManager', 'Command edited successfully', {
+                    commandName: name
+                });
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('❌ Error editing command:', error);
+            logger.error('CommandManager', 'Error editing command', {
+                error: error.message,
+                stack: error.stack,
+                commandName: name
+            });
             throw error;
         }
     }
@@ -226,6 +284,11 @@ class CommandManager {
             // Check if command exists and doesn't have a handler
             const command = await this.getCommand(name);
             if (!command || command.handler) {
+                logger.debug('CommandManager', 'Cannot delete command - not found or has handler', {
+                    commandName: name,
+                    exists: !!command,
+                    hasHandler: command?.handler
+                });
                 return false;
             }
 
@@ -238,11 +301,18 @@ class CommandManager {
             if (result.affectedRows > 0) {
                 // Remove from cache
                 this.commandCache.delete(name.toLowerCase());
+                logger.info('CommandManager', 'Command deleted successfully', {
+                    commandName: name
+                });
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('❌ Error deleting command:', error);
+            logger.error('CommandManager', 'Error deleting command', {
+                error: error.message,
+                stack: error.stack,
+                commandName: name
+            });
             throw error;
         }
     }
@@ -256,7 +326,10 @@ class CommandManager {
             `;
             return await this.dbManager.query(sql);
         } catch (error) {
-            console.error('❌ Error getting all commands:', error);
+            logger.error('CommandManager', 'Error getting all commands', {
+                error: error.message,
+                stack: error.stack
+            });
             return [];
         }
     }

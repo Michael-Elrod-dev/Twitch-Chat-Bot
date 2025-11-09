@@ -3,6 +3,7 @@
 const config = require('../../config/config');
 const QueueManager = require('./queueManager');
 const SpotifyWebApi = require('spotify-web-api-node');
+const logger = require('../../logger/logger');
 
 class SpotifyManager {
     constructor(tokenManager) {
@@ -40,7 +41,10 @@ class SpotifyManager {
                 const currentState = await this.getPlaybackState();
                 this.lastPlaybackState = currentState;
             } catch (error) {
-                console.error('❌ Error monitoring playback:', error);
+                logger.error('SpotifyManager', 'Error monitoring playback', {
+                    error: error.message,
+                    stack: error.stack
+                });
             }
         }, config.spotifyInterval);
     }
@@ -65,16 +69,25 @@ class SpotifyManager {
 
                             // Add to Spotify queue
                             await this.spotifyApi.addToQueue(nextTrack.uri);
-                            console.log(`* Added next track to queue: ${nextTrack.name} by ${nextTrack.artist}`);
+                            logger.debug('SpotifyManager', 'Added next track to Spotify queue', {
+                                trackName: nextTrack.name,
+                                artist: nextTrack.artist,
+                                requestedBy: nextTrack.requestedBy
+                            });
 
                             // Remove from pending queue
                             await this.queueManager.removeFirstTrack();
-                            console.log('* Removed track from pending queue');
+                            logger.debug('SpotifyManager', 'Removed track from pending queue', {
+                                trackName: nextTrack.name
+                            });
                         }
                     }
                 }
             } catch (error) {
-                console.error('❌ Error monitoring current track:', error);
+                logger.error('SpotifyManager', 'Error monitoring current track', {
+                    error: error.message,
+                    stack: error.stack
+                });
             }
         }, config.spotifyInterval);
     }
@@ -106,7 +119,10 @@ class SpotifyManager {
                     }
                 }
             } catch (error) {
-                console.error('❌ Error tracking last song:', error);
+                logger.error('SpotifyManager', 'Error tracking last song', {
+                    error: error.message,
+                    stack: error.stack
+                });
             }
         }, config.spotifyInterval);
     }
@@ -118,7 +134,7 @@ class SpotifyManager {
                 try {
                     // Test the token
                     await this.spotifyApi.getMe();
-                    console.log('✅ Existing Spotify user auth valid');
+                    logger.info('SpotifyManager', 'Existing Spotify user auth valid');
                     return;
                 } catch (error) {
                     // Token invalid, try refresh
@@ -127,14 +143,18 @@ class SpotifyManager {
                         this.spotifyApi.setAccessToken(data.body['access_token']);
                         this.tokenManager.tokens.spotifyUserAccessToken = data.body['access_token'];
                         await this.tokenManager.saveTokens();
+                        logger.info('SpotifyManager', 'Spotify token refreshed successfully');
                         return;
                     } catch (refreshError) {
-                        console.log('* Need new Spotify authorization');
+                        logger.warn('SpotifyManager', 'Need new Spotify authorization');
                     }
                 }
             }
         } catch (error) {
-            console.error('Spotify authentication error:', error);
+            logger.error('SpotifyManager', 'Spotify authentication error', {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 
@@ -159,7 +179,10 @@ class SpotifyManager {
             return true;
         } catch (error) {
             if (error.body?.error?.reason !== 'NO_ACTIVE_DEVICE') {
-                console.error('❌ Error adding to queue:', error);
+                logger.error('SpotifyManager', 'Error adding to queue', {
+                    error: error.message,
+                    stack: error.stack
+                });
             }
             throw error;
         }
@@ -176,8 +199,12 @@ class SpotifyManager {
                     this.spotifyApi.setAccessToken(data.body['access_token']);
                     this.tokenManager.tokens.spotifyUserAccessToken = data.body['access_token'];
                     await this.tokenManager.saveTokens();
+                    logger.debug('SpotifyManager', 'Token refreshed in ensureTokenValid');
                 } catch (refreshError) {
-                    console.error('❌ Error refreshing token:', refreshError);
+                    logger.error('SpotifyManager', 'Error refreshing token', {
+                        error: refreshError.message,
+                        stack: refreshError.stack
+                    });
                     throw refreshError;
                 }
             } else {
@@ -207,7 +234,10 @@ class SpotifyManager {
 
             return this.requestsPlaylistId;
         } catch (error) {
-            console.error('❌ Error getting/creating requests playlist:', error);
+            logger.error('SpotifyManager', 'Error getting/creating requests playlist', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -240,12 +270,17 @@ class SpotifyManager {
 
             if (!trackExists) {
                 await this.spotifyApi.addTracksToPlaylist(playlistId, [trackUri]);
+                logger.debug('SpotifyManager', 'Added new track to requests playlist', { trackUri });
                 return true;
             }
 
             return false;
         } catch (error) {
-            console.error('❌ Error adding to requests playlist:', error);
+            logger.error('SpotifyManager', 'Error adding to requests playlist', {
+                error: error.message,
+                stack: error.stack,
+                trackUri
+            });
             throw error;
         }
     }

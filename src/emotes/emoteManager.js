@@ -1,6 +1,7 @@
 // src/emotes/emoteManager.js
 
 const config = require('../config/config');
+const logger = require('../logger/logger');
 
 class EmoteManager {
     constructor() {
@@ -30,9 +31,9 @@ class EmoteManager {
             }
 
             this.cacheExpiry = Date.now() + this.cacheTimeout;
-            console.log(`✅ Loaded ${this.emoteCache.size} emotes`);
+            logger.info('EmoteManager', 'Emotes loaded successfully', { count: this.emoteCache.size });
         } catch (error) {
-            console.error('❌ Error loading emotes:', error);
+            logger.error('EmoteManager', 'Failed to load emotes', { error: error.message, stack: error.stack });
             throw error;
         }
     }
@@ -46,7 +47,7 @@ class EmoteManager {
 
             return this.emoteCache.get(triggerText.toLowerCase()) || null;
         } catch (error) {
-            console.error('❌ Error getting emote response:', error);
+            logger.error('EmoteManager', 'Failed to get emote response', { error: error.message, stack: error.stack, triggerText });
             return null;
         }
     }
@@ -67,7 +68,7 @@ class EmoteManager {
             if (error.code === 'ER_DUP_ENTRY') {
                 return false; // Emote already exists
             }
-            console.error('❌ Error adding emote:', error);
+            logger.error('EmoteManager', 'Failed to add emote', { error: error.message, stack: error.stack, triggerText, responseText });
             throw error;
         }
     }
@@ -88,7 +89,7 @@ class EmoteManager {
             }
             return false;
         } catch (error) {
-            console.error('❌ Error updating emote:', error);
+            logger.error('EmoteManager', 'Failed to update emote', { error: error.message, stack: error.stack, triggerText, responseText });
             throw error;
         }
     }
@@ -108,7 +109,7 @@ class EmoteManager {
             }
             return false;
         } catch (error) {
-            console.error('❌ Error deleting emote:', error);
+            logger.error('EmoteManager', 'Failed to delete emote', { error: error.message, stack: error.stack, triggerText });
             throw error;
         }
     }
@@ -122,7 +123,7 @@ class EmoteManager {
             `;
             return await this.dbManager.query(sql);
         } catch (error) {
-            console.error('❌ Error getting all emotes:', error);
+            logger.error('EmoteManager', 'Failed to get all emotes', { error: error.message, stack: error.stack });
             return [];
         }
     }

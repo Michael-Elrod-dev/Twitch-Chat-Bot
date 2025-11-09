@@ -1,7 +1,14 @@
 // tests/ai/rateLimiter.test.js
 
 const RateLimiter = require('../../src/ai/rateLimiter');
-const config = require('../../src/config/config');
+
+// Mock logger
+jest.mock('../../src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+}));
 
 // Mock the config module
 jest.mock('../../src/config/config', () => ({

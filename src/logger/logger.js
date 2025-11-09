@@ -1,230 +1,134 @@
 // src/logger/logger.js
 
-const fs = require('fs');
+const winston = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
-const { LOG_LEVELS, RESET_COLOR } = require('./logLevels');
 const config = require('../config/config');
 
 class Logger {
-    constructor(options = {}) {
-        this.logLevel = options.logLevel || config.logging.level;
-        this.logDirectory = options.logDirectory || path.join(__dirname, 'logs');
-        this.maxLogFiles = options.maxLogFiles || config.logging.maxLogFiles;
+    constructor() {
+        this.logDirectory = path.join(__dirname, 'logs');
 
-        this.ensureLogDirectory();
-        this.currentDate = this.getCurrentDate();
-        this.cleanupOldLogs();
-        this.setupLogFiles();
-    }
+        // Define custom format for log messages
+        const customFormat = winston.format.printf(({ timestamp, level, message, module, userId, ...metadata }) => {
+            const moduleFormatted = module ? `[${module.padEnd(20)}]` : '[General             ]';
+            const userInfo = userId ? `[${userId}] ` : '';
+            const metaStr = Object.keys(metadata).length ? ` ${JSON.stringify(metadata)}` : '';
 
-    ensureLogDirectory() {
-        if (!fs.existsSync(this.logDirectory)) {
-            fs.mkdirSync(this.logDirectory, { recursive: true });
-        }
-    }
-
-    getCurrentDate() {
-        return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    }
-
-    cleanupOldLogs() {
-        try {
-            const files = fs.readdirSync(this.logDirectory);
-
-            const botLogFiles = files.filter(file =>
-                /^bot-\d{4}-\d{2}-\d{2}\.log$/.test(file)
-            ).sort();
-
-            const errorLogFiles = files.filter(file =>
-                /^errors-\d{4}-\d{2}-\d{2}\.log$/.test(file)
-            ).sort();
-
-            this.removeOldFiles(botLogFiles, 'bot logs');
-            this.removeOldFiles(errorLogFiles, 'error logs');
-
-        } catch (error) {
-            console.error('❌ Error during log cleanup:', error.message);
-        }
-    }
-
-    removeOldFiles(fileList, logType) {
-        if (fileList.length <= this.maxLogFiles) {
-            console.log(`📁 ${logType}: ${fileList.length} files (within limit of ${this.maxLogFiles})`);
-            return;
-        }
-
-        const filesToDelete = fileList.length - this.maxLogFiles;
-        const filesToRemove = fileList.slice(0, filesToDelete);
-
-        console.log(`🧹 Cleaning up ${logType}: removing ${filesToDelete} old files`);
-
-        filesToRemove.forEach(file => {
-            try {
-                const filePath = path.join(this.logDirectory, file);
-                const stats = fs.statSync(filePath);
-                const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-
-                fs.unlinkSync(filePath);
-                console.log(`   ✅ Deleted: ${file} (${fileSizeMB}MB)`);
-            } catch (error) {
-                console.error(`   ❌ Failed to delete ${file}:`, error.message);
-            }
+            return `${timestamp} [${level.toUpperCase().padEnd(5)}] ${moduleFormatted} ${userInfo}${message}${metaStr}`;
         });
 
-        console.log(`📁 ${logType}: ${fileList.length - filesToDelete} files remaining`);
+        // Console transport - only for important startup/shutdown messages
+        const consoleTransport = new winston.transports.Console({
+            level: 'info', // Only show info and above in console
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+                winston.format.printf(({ timestamp, level, message, module }) => {
+                    const moduleStr = module ? `[${module}]` : '';
+                    return `${timestamp} ${level} ${moduleStr} ${message}`;
+                })
+            )
+        });
+
+        // Main log file - all logs with size-based rotation
+        const mainFileTransport = new DailyRotateFile({
+            filename: 'bot-%DATE%.log',
+            dirname: this.logDirectory,
+            datePattern: 'YYYY-MM-DD-HHmmss', // Timestamp when app starts (unique per run)
+            maxSize: config.logging.maxSize || '20m', // Rotate when file reaches this size
+            maxFiles: config.logging.maxFiles || 10, // Keep max 10 files total
+            zippedArchive: false, // Don't compress old files
+            level: config.logging.level || 'info',
+            format: winston.format.combine(
+                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+                customFormat
+            )
+        });
+
+        // Error log file - errors only with size-based rotation
+        const errorFileTransport = new DailyRotateFile({
+            filename: 'error-%DATE%.log',
+            dirname: this.logDirectory,
+            datePattern: 'YYYY-MM-DD-HHmmss', // Timestamp when app starts
+            maxSize: config.logging.maxSize || '20m',
+            maxFiles: config.logging.maxFiles || 10,
+            zippedArchive: false,
+            level: 'error',
+            format: winston.format.combine(
+                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+                customFormat
+            )
+        });
+
+        // Create the Winston logger
+        this.winstonLogger = winston.createLogger({
+            level: config.logging.level || 'info',
+            transports: [
+                consoleTransport,
+                mainFileTransport,
+                errorFileTransport
+            ]
+        });
+
+        // Log initialization
+        this.info('Logger', 'Logger initialized', {
+            logLevel: config.logging.level || 'info',
+            maxSize: config.logging.maxSize || '20m',
+            maxFiles: config.logging.maxFiles || 10,
+            logDirectory: this.logDirectory
+        });
     }
 
-    getLogFilesSummary() {
-        try {
-            const files = fs.readdirSync(this.logDirectory);
-
-            const botLogFiles = files.filter(file =>
-                /^bot-\d{4}-\d{2}-\d{2}\.log$/.test(file)
-            );
-
-            const errorLogFiles = files.filter(file =>
-                /^errors-\d{4}-\d{2}-\d{2}\.log$/.test(file)
-            );
-
-            let totalSize = 0;
-            const allLogFiles = [...botLogFiles, ...errorLogFiles];
-
-            allLogFiles.forEach(file => {
-                try {
-                    const filePath = path.join(this.logDirectory, file);
-                    const stats = fs.statSync(filePath);
-                    totalSize += stats.size;
-                } catch (error) {
-                    // File might have been deleted, ignore
-                }
-            });
-
-            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-
-            return {
-                botLogCount: botLogFiles.length,
-                errorLogCount: errorLogFiles.length,
-                totalFiles: allLogFiles.length,
-                totalSizeMB: totalSizeMB,
-                oldestBotLog: botLogFiles.sort()[0] || null,
-                newestBotLog: botLogFiles.sort().pop() || null
-            };
-        } catch (error) {
-            console.error('❌ Error getting log files summary:', error.message);
-            return null;
-        }
+    /**
+     * Log an error message
+     * @param {string} module - Module name (e.g., 'WebSocketManager')
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata (error object, userId, etc.)
+     */
+    error(module, message, metadata = {}) {
+        this.winstonLogger.error(message, { module, ...metadata });
     }
 
-    setupLogFiles() {
-        const today = this.getCurrentDate();
-        if (today !== this.currentDate) {
-            this.currentDate = today;
-            this.cleanupOldLogs();
-        }
-
-        this.mainLogFile = path.join(this.logDirectory, `bot-${this.currentDate}.log`);
-        this.errorLogFile = path.join(this.logDirectory, `errors-${this.currentDate}.log`);
-        this.latestLogFile = path.join(this.logDirectory, 'latest.log');
-
-        // Create symlink to latest log
-        try {
-            if (fs.existsSync(this.latestLogFile)) {
-                fs.unlinkSync(this.latestLogFile);
-            }
-            fs.symlinkSync(path.basename(this.mainLogFile), this.latestLogFile);
-        } catch (error) {
-            // Symlink creation failed (probably Windows), just continue
-        }
-
-        // Log the summary when setting up files
-        const summary = this.getLogFilesSummary();
-        if (summary) {
-            console.log(`📊 Log Files Summary: ${summary.totalFiles} files, ${summary.totalSizeMB}MB total`);
-            if (summary.oldestBotLog && summary.newestBotLog) {
-                console.log(`📅 Date Range: ${summary.oldestBotLog.replace('bot-', '').replace('.log', '')} → ${summary.newestBotLog.replace('bot-', '').replace('.log', '')}`);
-            }
-        }
+    /**
+     * Log an info message
+     * @param {string} module - Module name (e.g., 'WebSocketManager')
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata (userId, etc.)
+     */
+    info(module, message, metadata = {}) {
+        this.winstonLogger.info(message, { module, ...metadata });
     }
 
-    formatMessage(level, module, action, details, userId = null) {
-        const timestamp = new Date().toISOString();
-        const levelName = LOG_LEVELS[level].name.padEnd(6);
-        const moduleFormatted = module.padEnd(15);
-
-        let userInfo = '';
-        if (userId) {
-            userInfo = `[${userId}] `;
-        }
-
-        return `${timestamp} [${levelName}] [${moduleFormatted}] ${userInfo}${action} - ${details}`;
+    /**
+     * Log a debug message
+     * @param {string} module - Module name (e.g., 'WebSocketManager')
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata
+     */
+    debug(module, message, metadata = {}) {
+        this.winstonLogger.debug(message, { module, ...metadata });
     }
 
-    writeToConsole(level, message) {
-        const color = LOG_LEVELS[level].color;
-        console.log(`${color}${message}${RESET_COLOR}`);
+    /**
+     * Log a warning message
+     * @param {string} module - Module name (e.g., 'WebSocketManager')
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata
+     */
+    warn(module, message, metadata = {}) {
+        this.winstonLogger.warn(message, { module, ...metadata });
     }
 
-    writeToFile(message, isError = false) {
-        const today = this.getCurrentDate();
-        if (today !== this.currentDate) {
-            this.setupLogFiles();
-        }
-
-        try {
-            fs.appendFileSync(this.mainLogFile, message + '\n');
-
-            if (isError) {
-                fs.appendFileSync(this.errorLogFile, message + '\n');
-            }
-        } catch (error) {
-            console.error('❌ Failed to write to log file:', error.message);
-        }
-    }
-
-    log(level, module, action, details, userId = null, error = null) {
-        const levelConfig = LOG_LEVELS[level];
-
-        if (levelConfig.level > this.logLevel) return;
-
-        const message = this.formatMessage(level, module, action, details, userId);
-        const isError = level === 'ERROR';
-
-        let fullMessage = message;
-        if (error && error.stack) {
-            fullMessage += `\nStack Trace:\n${error.stack}`;
-        }
-
-        this.writeToConsole(level, message);
-        this.writeToFile(fullMessage, isError);
-    }
-
-    // The 3 main logging methods
-    error(module, action, details, userId = null, error = null) {
-        this.log('ERROR', module, action, details, userId, error);
-    }
-
-    user(module, action, details, userId) {
-        this.log('USER', module, action, details, userId);
-    }
-
-    system(module, action, details) {
-        this.log('SYSTEM', module, action, details);
-    }
-
-    // Utility methods
-    forceCleanup() {
-        console.log('🧹 Force cleaning up old log files...');
-        this.cleanupOldLogs();
-    }
-
-    setMaxLogFiles(newMax) {
-        this.maxLogFiles = newMax;
-        console.log(`📁 Updated max log files to: ${newMax}`);
-        this.cleanupOldLogs();
+    /**
+     * Update log level dynamically
+     * @param {string} level - New log level ('debug', 'info', 'warn', 'error')
+     */
+    setLogLevel(level) {
+        this.winstonLogger.level = level;
+        this.info('Logger', `Log level changed to: ${level}`);
     }
 }
 
-// Create singleton instance
-const logger = new Logger();
-
-module.exports = logger;
+// Export singleton instance
+module.exports = new Logger();

@@ -1,5 +1,7 @@
 // src/redemptions/songs/queueManager.js
 
+const logger = require('../../logger/logger');
+
 class QueueManager {
     constructor() {
         this.dbManager = null;
@@ -7,7 +9,7 @@ class QueueManager {
 
     async init(dbManager) {
         this.dbManager = dbManager;
-        console.log('✅ QueueManager initialized with database');
+        logger.info('QueueManager', 'QueueManager initialized with database');
     }
 
     async addToPendingQueue(track) {
@@ -28,8 +30,19 @@ class QueueManager {
                 track.requestedBy,
                 nextPosition
             ]);
+            logger.debug('QueueManager', 'Track added to pending queue', {
+                trackName: track.name,
+                artist: track.artist,
+                requestedBy: track.requestedBy,
+                queuePosition: nextPosition
+            });
         } catch (error) {
-            console.error('❌ Error adding to pending queue:', error);
+            logger.error('QueueManager', 'Error adding to pending queue', {
+                error: error.message,
+                stack: error.stack,
+                trackName: track.name,
+                artist: track.artist
+            });
             throw error;
         }
     }
@@ -55,13 +68,27 @@ class QueueManager {
             ]);
 
             await this.dbManager.query('COMMIT');
+            logger.debug('QueueManager', 'Track added to priority queue', {
+                trackName: track.name,
+                artist: track.artist,
+                requestedBy: track.requestedBy,
+                queuePosition: 1
+            });
         } catch (error) {
             try {
                 await this.dbManager.query('ROLLBACK');
             } catch (rollbackError) {
-                console.error('❌ Error rolling back transaction:', rollbackError);
+                logger.error('QueueManager', 'Error rolling back transaction', {
+                    error: rollbackError.message,
+                    stack: rollbackError.stack
+                });
             }
-            console.error('❌ Error adding to priority queue:', error);
+            logger.error('QueueManager', 'Error adding to priority queue', {
+                error: error.message,
+                stack: error.stack,
+                trackName: track.name,
+                artist: track.artist
+            });
             throw error;
         }
     }
@@ -70,8 +97,12 @@ class QueueManager {
         try {
             const sql = 'DELETE FROM song_queue';
             await this.dbManager.query(sql);
+            logger.info('QueueManager', 'Queue cleared');
         } catch (error) {
-            console.error('❌ Error clearing queue:', error);
+            logger.error('QueueManager', 'Error clearing queue', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -85,9 +116,15 @@ class QueueManager {
                 ORDER BY queue_position ASC
             `;
             const results = await this.dbManager.query(sql);
+            logger.debug('QueueManager', 'Retrieved pending tracks', {
+                trackCount: results.length
+            });
             return results;
         } catch (error) {
-            console.error('❌ Error getting pending tracks:', error);
+            logger.error('QueueManager', 'Error getting pending tracks', {
+                error: error.message,
+                stack: error.stack
+            });
             return [];
         }
     }
@@ -105,9 +142,13 @@ class QueueManager {
             await this.dbManager.query(updateSql);
 
             await this.dbManager.query('COMMIT');
+            logger.debug('QueueManager', 'First track removed from queue');
         } catch (error) {
             await this.dbManager.query('ROLLBACK');
-            console.error('❌ Error removing first track:', error);
+            logger.error('QueueManager', 'Error removing first track', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }

@@ -2,6 +2,14 @@
 
 const AIManager = require('../../src/ai/aiManager');
 
+// Mock logger
+jest.mock('../../src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+}));
+
 // Mock dependencies
 jest.mock('../../src/config/config', () => ({
     aiTriggers: {

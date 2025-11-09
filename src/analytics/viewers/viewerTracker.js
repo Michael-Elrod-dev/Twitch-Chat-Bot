@@ -1,5 +1,7 @@
 // src/analytics/viewers/viewerTracker.js
 
+const logger = require('../../logger/logger');
+
 class ViewerTracker {
     constructor(analyticsManager) {
         this.analyticsManager = analyticsManager;
@@ -25,9 +27,21 @@ class ViewerTracker {
                 userId, username, isMod, isSubscriber, isBroadcaster,
                 username, isMod, isSubscriber, isBroadcaster
             ]);
+            logger.debug('ViewerTracker', 'User record ensured', {
+                username,
+                userId,
+                isMod,
+                isSubscriber,
+                isBroadcaster
+            });
             return userId;
         } catch (error) {
-            console.error('❌ Error ensuring user exists:', error);
+            logger.error('ViewerTracker', 'Error ensuring user exists', {
+                error: error.message,
+                stack: error.stack,
+                username,
+                userId
+            });
             throw error;
         }
     }
@@ -35,7 +49,11 @@ class ViewerTracker {
     async trackInteraction(username, userId, streamId, type, content = null, userContext = {}) {
         try {
             if (!username) {
-                console.error('Attempted to track interaction for undefined username');
+                logger.warn('ViewerTracker', 'Attempted to track interaction for undefined username', {
+                    userId,
+                    streamId,
+                    type
+                });
                 return;
             }
 
@@ -57,6 +75,11 @@ class ViewerTracker {
                     WHERE stream_id = ?
                 `;
                 await this.analyticsManager.dbManager.query(updateUniqueSql, [streamId]);
+                logger.debug('ViewerTracker', 'New unique chatter detected', {
+                    username,
+                    userId: dbUserId,
+                    streamId
+                });
             }
 
             const sql = `
@@ -65,8 +88,21 @@ class ViewerTracker {
             `;
             await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
             await this.updateChatTotals(dbUserId, type);
+            logger.debug('ViewerTracker', 'Interaction tracked', {
+                username,
+                userId: dbUserId,
+                streamId,
+                type
+            });
         } catch (error) {
-            console.error(`❌ Error tracking ${type} for ${username}:`, error);
+            logger.error('ViewerTracker', `Error tracking ${type} for ${username}`, {
+                error: error.message,
+                stack: error.stack,
+                username,
+                userId,
+                streamId,
+                type
+            });
         }
     }
 
@@ -84,7 +120,7 @@ class ViewerTracker {
                 updateColumn = 'redemption_count';
                 break;
             default:
-                console.error(`Unknown message type: ${messageType}`);
+                logger.error('ViewerTracker', `Unknown message type: ${messageType}`, { userId, messageType });
                 return;
             }
 
@@ -97,8 +133,14 @@ class ViewerTracker {
             `;
 
             await this.analyticsManager.dbManager.query(sql, [userId]);
+            logger.debug('ViewerTracker', 'Chat totals updated', { userId, messageType, updateColumn });
         } catch (error) {
-            console.error('❌ Error updating chat totals:', error);
+            logger.error('ViewerTracker', 'Error updating chat totals', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                messageType
+            });
         }
     }
 
@@ -109,9 +151,16 @@ class ViewerTracker {
                 WHERE user_id = ? AND stream_id = ? AND end_time IS NULL
             `;
             const sessions = await this.analyticsManager.dbManager.query(sql, [userId, streamId]);
-            return sessions.length > 0 ? sessions[0].session_id : null;
+            const sessionId = sessions.length > 0 ? sessions[0].session_id : null;
+            logger.debug('ViewerTracker', 'Active session retrieved', { userId, streamId, sessionId });
+            return sessionId;
         } catch (error) {
-            console.error('❌ Error getting active session:', error);
+            logger.error('ViewerTracker', 'Error getting active session', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                streamId
+            });
             return null;
         }
     }
@@ -123,8 +172,14 @@ class ViewerTracker {
                 VALUES (?, ?, NOW())
             `;
             await this.analyticsManager.dbManager.query(sql, [userId, streamId]);
+            logger.info('ViewerTracker', 'Viewing session started', { userId, streamId });
         } catch (error) {
-            console.error('❌ Error starting session:', error);
+            logger.error('ViewerTracker', 'Error starting session', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                streamId
+            });
         }
     }
 
@@ -136,8 +191,13 @@ class ViewerTracker {
                 WHERE session_id = ?
             `;
             await this.analyticsManager.dbManager.query(sql, [sessionId]);
+            logger.info('ViewerTracker', 'Viewing session ended', { sessionId });
         } catch (error) {
-            console.error('❌ Error ending session:', error);
+            logger.error('ViewerTracker', 'Error ending session', {
+                error: error.message,
+                stack: error.stack,
+                sessionId
+            });
         }
     }
 
@@ -148,21 +208,32 @@ class ViewerTracker {
                 SET end_time = NOW()
                 WHERE stream_id = ? AND end_time IS NULL
             `;
-            await this.analyticsManager.dbManager.query(sql, [streamId]);
-            console.log(`✅ Closed all viewing sessions for stream ${streamId}`);
+            const result = await this.analyticsManager.dbManager.query(sql, [streamId]);
+            logger.info('ViewerTracker', 'Closed all viewing sessions for stream', {
+                streamId,
+                affectedRows: result.affectedRows
+            });
         } catch (error) {
-            console.error('❌ Error ending all sessions for stream:', error);
+            logger.error('ViewerTracker', 'Error ending all sessions for stream', {
+                error: error.message,
+                stack: error.stack,
+                streamId
+            });
         }
     }
 
     async processViewerList(viewers, streamId) {
         try {
-            if (!viewers || viewers.length === 0) return;
+            if (!viewers || viewers.length === 0) {
+                logger.debug('ViewerTracker', 'Empty viewer list received', { streamId });
+                return;
+            }
 
             // Create a set of current viewer IDs for quick lookup
             const currentViewerIds = new Set(viewers.map(v => v.user_id));
 
             // 1. Process current viewers - start sessions for new viewers
+            let newSessions = 0;
             for (const viewer of viewers) {
                 const userId = viewer.user_id;
                 const username = viewer.user_login;
@@ -176,6 +247,7 @@ class ViewerTracker {
                 // If no active session, start one
                 if (!activeSession) {
                     await this.startSession(userId, streamId);
+                    newSessions++;
                 }
             }
 
@@ -186,21 +258,39 @@ class ViewerTracker {
             `;
             const activeSessions = await this.analyticsManager.dbManager.query(activeSql, [streamId]);
 
+            let endedSessions = 0;
             for (const session of activeSessions) {
                 // If user no longer in current viewer list, end their session
                 if (!currentViewerIds.has(session.user_id)) {
                     await this.endSession(session.session_id);
+                    endedSessions++;
                 }
             }
+
+            logger.debug('ViewerTracker', 'Viewer list processed', {
+                streamId,
+                totalViewers: viewers.length,
+                newSessions,
+                endedSessions,
+                activeSessions: activeSessions.length
+            });
         } catch (error) {
-            console.error('❌ Error processing viewer list:', error);
+            logger.error('ViewerTracker', 'Error processing viewer list', {
+                error: error.message,
+                stack: error.stack,
+                streamId,
+                viewerCount: viewers ? viewers.length : 0
+            });
         }
     }
 
     async getUserStats(username) {
         try {
             const userId = await this.getUserId(username);
-            if (!userId) return null;
+            if (!userId) {
+                logger.debug('ViewerTracker', 'User not found for stats', { username });
+                return null;
+            }
 
             const sql = `
                 SELECT
@@ -213,16 +303,23 @@ class ViewerTracker {
             const results = await this.analyticsManager.dbManager.query(sql, [userId]);
 
             if (results.length === 0) {
+                logger.debug('ViewerTracker', 'No stats found for user', { username, userId });
                 return null;
             }
 
-            return {
+            const stats = {
                 messages: parseInt(results[0].messages) || 0,
                 commands: parseInt(results[0].commands) || 0,
                 redemptions: parseInt(results[0].redemptions) || 0
             };
+            logger.debug('ViewerTracker', 'User stats retrieved', { username, userId, stats });
+            return stats;
         } catch (error) {
-            console.error('❌ Error getting user stats:', error);
+            logger.error('ViewerTracker', 'Error getting user stats', {
+                error: error.message,
+                stack: error.stack,
+                username
+            });
             return null;
         }
     }
@@ -231,9 +328,15 @@ class ViewerTracker {
         try {
             const sql = 'SELECT user_id FROM viewers WHERE LOWER(username) = LOWER(?)';
             const results = await this.analyticsManager.dbManager.query(sql, [username]);
-            return results.length > 0 ? results[0].user_id : null;
+            const userId = results.length > 0 ? results[0].user_id : null;
+            logger.debug('ViewerTracker', 'User ID lookup', { username, userId });
+            return userId;
         } catch (error) {
-            console.error('❌ Error getting user ID:', error);
+            logger.error('ViewerTracker', 'Error getting user ID', {
+                error: error.message,
+                stack: error.stack,
+                username
+            });
             return null;
         }
     }
@@ -276,11 +379,20 @@ class ViewerTracker {
 
             const results = await this.analyticsManager.dbManager.query(sql);
 
+            logger.debug('ViewerTracker', 'Top users retrieved', {
+                limit: safeLimit,
+                resultCount: results.length
+            });
+
             return results.map((user, index) =>
                 `${index + 1}. ${user.username}`
             );
         } catch (error) {
-            console.error('❌ Error getting top users:', error);
+            logger.error('ViewerTracker', 'Error getting top users', {
+                error: error.message,
+                stack: error.stack,
+                limit
+            });
             return [];
         }
     }

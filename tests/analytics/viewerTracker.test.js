@@ -2,6 +2,16 @@
 
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
 
+// Mock the logger
+jest.mock('../../src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+}));
+
+const logger = require('../../src/logger/logger');
+
 describe('ViewerTracker', () => {
     let viewerTracker;
     let mockDbManager;
@@ -23,6 +33,10 @@ describe('ViewerTracker', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        logger.info.mockClear();
+        logger.debug.mockClear();
+        logger.warn.mockClear();
+        logger.error.mockClear();
     });
 
     describe('ensureUserExists', () => {
@@ -164,16 +178,17 @@ describe('ViewerTracker', () => {
         });
 
         it('should log success message', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-            mockDbManager.query.mockResolvedValueOnce([]);
+            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 5 });
 
             await viewerTracker.endAllSessionsForStream('stream456');
 
-            expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Closed all viewing sessions for stream stream456')
+            expect(logger.info).toHaveBeenCalledWith(
+                'ViewerTracker',
+                'Closed all viewing sessions for stream',
+                expect.objectContaining({
+                    streamId: 'stream456'
+                })
             );
-
-            consoleSpy.mockRestore();
         });
     });
 
@@ -372,8 +387,6 @@ describe('ViewerTracker', () => {
         });
 
         it('should handle undefined username gracefully', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
             await viewerTracker.trackInteraction(
                 undefined,
                 '123',
@@ -382,12 +395,12 @@ describe('ViewerTracker', () => {
                 'test'
             );
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
-                'Attempted to track interaction for undefined username'
+            expect(logger.warn).toHaveBeenCalledWith(
+                'ViewerTracker',
+                'Attempted to track interaction for undefined username',
+                expect.any(Object)
             );
             expect(mockDbManager.query).not.toHaveBeenCalled();
-
-            consoleErrorSpy.mockRestore();
         });
     });
 
@@ -426,14 +439,17 @@ describe('ViewerTracker', () => {
         });
 
         it('should handle unknown message type', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
             await viewerTracker.updateChatTotals('user123', 'invalid_type');
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith('Unknown message type: invalid_type');
+            expect(logger.error).toHaveBeenCalledWith(
+                'ViewerTracker',
+                expect.stringContaining('Unknown message type'),
+                expect.objectContaining({
+                    userId: 'user123',
+                    messageType: 'invalid_type'
+                })
+            );
             expect(mockDbManager.query).not.toHaveBeenCalled();
-
-            consoleErrorSpy.mockRestore();
         });
     });
 

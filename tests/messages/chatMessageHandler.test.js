@@ -2,6 +2,16 @@
 
 const ChatMessageHandler = require('../../src/messages/chatMessageHandler');
 
+// Mock the logger
+jest.mock('../../src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+}));
+
+const logger = require('../../src/logger/logger');
+
 describe('ChatMessageHandler', () => {
     let chatMessageHandler;
     let mockViewerManager;
@@ -54,6 +64,10 @@ describe('ChatMessageHandler', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        logger.info.mockClear();
+        logger.debug.mockClear();
+        logger.warn.mockClear();
+        logger.error.mockClear();
     });
 
     describe('handleChatMessage - Basic Flow', () => {
@@ -474,8 +488,7 @@ describe('ChatMessageHandler', () => {
             ).resolves.toBeUndefined();
         });
 
-        it('should log errors to console', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        it('should log errors to logger', async () => {
             mockBot.analyticsManager.trackChatMessage.mockRejectedValueOnce(
                 new Error('Test Error')
             );
@@ -490,12 +503,13 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
-                '❌ Error handling chat message:',
-                expect.any(Error)
+            expect(logger.error).toHaveBeenCalledWith(
+                'ChatMessageHandler',
+                'Error handling chat message',
+                expect.objectContaining({
+                    error: 'Test Error'
+                })
             );
-
-            consoleErrorSpy.mockRestore();
         });
     });
 

@@ -1,6 +1,7 @@
 // src/analytics/analyticsManager.js
 
 const ViewerTracker = require('./viewers/viewerTracker');
+const logger = require('../logger/logger');
 
 class AnalyticsManager {
     constructor() {
@@ -13,8 +14,12 @@ class AnalyticsManager {
         try {
             this.dbManager = dbManager;
             this.viewerTracker = new ViewerTracker(this);
+            logger.info('AnalyticsManager', 'Analytics manager initialized successfully');
         } catch (error) {
-            console.error('❌ Failed to initialize analytics manager:', error);
+            logger.error('AnalyticsManager', 'Failed to initialize analytics manager', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -30,9 +35,22 @@ class AnalyticsManager {
                     WHERE stream_id = ?
                 `;
                 await this.dbManager.query(updateSql, [streamId]);
+                logger.debug('AnalyticsManager', 'Chat message tracked', {
+                    username,
+                    userId,
+                    streamId,
+                    type
+                });
             }
         } catch (error) {
-            console.error('❌ Error tracking chat message:', error);
+            logger.error('AnalyticsManager', 'Error tracking chat message', {
+                error: error.message,
+                stack: error.stack,
+                username,
+                userId,
+                streamId,
+                type
+            });
         }
     }
 
@@ -44,8 +62,19 @@ class AnalyticsManager {
                VALUES (?, NOW(), ?, ?)
            `;
             await this.dbManager.query(sql, [streamId, title, category]);
+            logger.info('AnalyticsManager', 'Stream started', {
+                streamId,
+                title,
+                category
+            });
         } catch (error) {
-            console.error('❌ Error tracking stream start:', error);
+            logger.error('AnalyticsManager', 'Error tracking stream start', {
+                error: error.message,
+                stack: error.stack,
+                streamId,
+                title,
+                category
+            });
         }
     }
 
@@ -58,8 +87,13 @@ class AnalyticsManager {
            `;
             await this.dbManager.query(sql, [streamId]);
             this.currentStreamId = null;
+            logger.info('AnalyticsManager', 'Stream ended', { streamId });
         } catch (error) {
-            console.error('❌ Error tracking stream end:', error);
+            logger.error('AnalyticsManager', 'Error tracking stream end', {
+                error: error.message,
+                stack: error.stack,
+                streamId
+            });
         }
     }
 }

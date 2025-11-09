@@ -3,6 +3,7 @@
 const config = require('../config/config');
 const RateLimiter = require('./rateLimiter');
 const ClaudeModel = require('./models/claudeModel');
+const logger = require('../logger/logger');
 
 class AIManager {
     constructor() {
@@ -15,14 +16,28 @@ class AIManager {
         this.dbManager = dbManager;
         this.claudeModel = new ClaudeModel(claudeApiKey);
         this.rateLimiter = new RateLimiter(dbManager);
-        console.log('✅ AIManager initialized');
+        logger.info('AIManager', 'AIManager initialized successfully');
     }
 
     async handleTextRequest(prompt, userId, streamId, userContext = {}) {
+        logger.debug('AIManager', 'Processing text request', {
+            userId,
+            userName: userContext.userName,
+            promptLength: prompt.length,
+            streamId
+        });
+
         // Check rate limits for Claude
         const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'claude', streamId, userContext);
 
         if (!rateLimitResult.allowed) {
+            logger.info('AIManager', 'Rate limit exceeded', {
+                userId,
+                userName: userContext.userName,
+                reason: rateLimitResult.reason,
+                streamCount: rateLimitResult.streamCount,
+                streamLimit: rateLimitResult.streamLimit
+            });
             return {
                 success: false,
                 message: rateLimitResult.message
@@ -45,11 +60,26 @@ class AIManager {
                 finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
             }
 
+            logger.info('AIManager', 'Text request completed successfully', {
+                userId,
+                userName: userContext.userName,
+                promptLength: prompt.length,
+                responseLength: response.length,
+                streamCount: usageStats.streamCount,
+                streamLimit: userLimits.streamLimit
+            });
+
             return {
                 success: true,
                 response: finalResponse
             };
         }
+
+        logger.error('AIManager', 'Failed to get AI response', {
+            userId,
+            userName: userContext.userName,
+            promptLength: prompt.length
+        });
 
         return {
             success: false,

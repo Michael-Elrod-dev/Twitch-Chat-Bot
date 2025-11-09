@@ -1,5 +1,7 @@
 // src/messages/redemptionHandler.js
 
+const logger = require('../logger/logger');
+
 class RedemptionHandler {
     constructor(viewerManager, redemptionManager) {
         this.viewerManager = viewerManager;
@@ -22,6 +24,14 @@ class RedemptionHandler {
                 broadcasterDisplayName: payload.event.broadcaster_user_login
             };
 
+            logger.info('RedemptionHandler', 'Processing channel point redemption', {
+                userId: event.userId,
+                userName: event.userDisplayName,
+                rewardTitle: event.rewardTitle,
+                rewardId: event.rewardId,
+                input: event.input
+            });
+
             // Track redemption in analytics
             await bot.analyticsManager.trackChatMessage(
                 event.userDisplayName,
@@ -32,8 +42,17 @@ class RedemptionHandler {
             );
 
             await this.redemptionManager.handleRedemption(event);
+
+            logger.info('RedemptionHandler', 'Redemption processed successfully', {
+                userId: event.userId,
+                userName: event.userDisplayName,
+                rewardTitle: event.rewardTitle
+            });
         } catch (error) {
-            console.error('❌ Error handling redemption:', error);
+            logger.error('RedemptionHandler', 'Error handling redemption', {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 }

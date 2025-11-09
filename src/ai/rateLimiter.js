@@ -1,6 +1,7 @@
 // src/ai/rateLimiter.js
 
 const config = require('../config/config');
+const logger = require('../logger/logger');
 
 class RateLimiter {
     constructor(dbManager) {
@@ -37,8 +38,24 @@ class RateLimiter {
 
             const currentCount = results.length > 0 ? results[0].stream_count : 0;
 
+            logger.debug('RateLimiter', 'Checking rate limit', {
+                userId,
+                userName: userContext.userName,
+                service,
+                currentCount,
+                streamLimit: userLimits.streamLimit,
+                streamId
+            });
+
             // Check stream limit
             if (currentCount >= userLimits.streamLimit) {
+                logger.info('RateLimiter', 'Rate limit exceeded', {
+                    userId,
+                    userName: userContext.userName,
+                    service,
+                    streamCount: currentCount,
+                    streamLimit: userLimits.streamLimit
+                });
                 return {
                     allowed: false,
                     reason: 'stream_limit',
@@ -51,7 +68,14 @@ class RateLimiter {
             return { allowed: true, reason: null };
 
         } catch (error) {
-            console.error(`❌ Error checking rate limit for ${service}:`, error);
+            logger.error('RateLimiter', 'Error checking rate limit', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                userName: userContext.userName,
+                service,
+                streamId
+            });
             return {
                 allowed: false,
                 reason: 'error',
@@ -69,8 +93,19 @@ class RateLimiter {
                     stream_count = stream_count + 1
             `;
             await this.dbManager.query(sql, [userId, service, streamId]);
+            logger.debug('RateLimiter', 'Usage updated', {
+                userId,
+                service,
+                streamId
+            });
         } catch (error) {
-            console.error(`❌ Error updating usage for ${service}:`, error);
+            logger.error('RateLimiter', 'Error updating usage', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                service,
+                streamId
+            });
         }
     }
 
@@ -87,7 +122,13 @@ class RateLimiter {
                 streamCount: results.length > 0 ? results[0].stream_count : 0
             };
         } catch (error) {
-            console.error(`❌ Error getting user stats for ${service}:`, error);
+            logger.error('RateLimiter', 'Error getting user stats', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                service,
+                streamId
+            });
             return { streamCount: 0 };
         }
     }

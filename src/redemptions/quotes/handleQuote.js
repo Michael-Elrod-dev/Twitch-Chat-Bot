@@ -1,10 +1,16 @@
 // src/redemptions/quotes/handleQuote.js
 
-async function handleQuote(event, twitchBot, _, twitchBot2) {
+const logger = require('../../logger/logger');
+
+async function handleQuote(event, twitchBot) {
     try {
         const input = event.input.trim();
 
         if (!input) {
+            logger.info('HandleQuote', 'Quote redemption cancelled: No input provided', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
@@ -20,6 +26,11 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
         const match = input.match(/[''"](.*?)[''"]\s*-\s*(.*)/);
 
         if (!match) {
+            logger.info('HandleQuote', 'Quote redemption cancelled: Invalid format', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName,
+                input: input
+            });
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
@@ -49,7 +60,14 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
         try {
             quoteId = await twitchBot.quoteManager.addQuote(quoteData);
         } catch (saveError) {
-            console.error('❌ Error saving quote:', saveError);
+            logger.error('HandleQuote', 'Error saving quote', {
+                error: saveError.message,
+                stack: saveError.stack,
+                quote: quoteData.quote,
+                author: quoteData.author,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
@@ -69,11 +87,25 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             'FULFILLED'
         );
 
+        logger.info('HandleQuote', 'Quote saved and redemption fulfilled', {
+            quoteId,
+            quote: quote.trim(),
+            author: author.trim(),
+            savedBy: event.userDisplayName,
+            userId: event.userId
+        });
+
         await twitchBot.sendMessage(event.broadcasterDisplayName,
             `Quote #${quoteId} has been saved! "${quote.trim()}" - ${author.trim()}`);
 
     } catch (error) {
-        console.error('❌ Error in quote handler:', error);
+        logger.error('HandleQuote', 'Error in quote handler', {
+            error: error.message,
+            stack: error.stack,
+            userId: event.userId,
+            userDisplayName: event.userDisplayName,
+            input: event.input
+        });
         try {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
@@ -85,7 +117,12 @@ async function handleQuote(event, twitchBot, _, twitchBot2) {
             await twitchBot.sendMessage(event.broadcasterDisplayName,
                 `@${event.userDisplayName} Sorry, there was an error saving your quote. Your points have been refunded.`);
         } catch (refundError) {
-            console.error('❌ Error refunding points:', refundError);
+            logger.error('HandleQuote', 'Error refunding points', {
+                error: refundError.message,
+                stack: refundError.stack,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
         }
     }
 }

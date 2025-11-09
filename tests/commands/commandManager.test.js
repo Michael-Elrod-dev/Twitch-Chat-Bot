@@ -2,6 +2,14 @@
 
 const CommandManager = require('../../src/commands/commandManager');
 
+// Mock logger
+jest.mock('../../src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+}));
+
 // Mock config
 jest.mock('../../src/config/config', () => ({
     commandCacheInterval: 60000

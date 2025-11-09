@@ -3,6 +3,7 @@
 const { ApiClient } = require('@twurple/api');
 const { StaticAuthProvider } = require('@twurple/auth');
 const TokenManager = require('./tokenManager');
+const logger = require('../logger/logger');
 
 async function createChannelPointReward(rewardConfig) {
     const tokenManager = new TokenManager();
@@ -20,16 +21,24 @@ async function createChannelPointReward(rewardConfig) {
         const existingReward = rewards.find(reward => reward.title === rewardConfig.title);
 
         if (existingReward) {
-            console.log(`Reward "${rewardConfig.title}" already exists.`);
+            logger.info('RedemptionCreation', 'Reward already exists', { title: rewardConfig.title });
             return;
         }
 
         // Directly use rewardConfig as provided
         const reward = await apiClient.channelPoints.createCustomReward(BROADCASTER_ID, rewardConfig);
 
-        console.log(`Custom reward "${reward.title}" created successfully:`, reward);
+        logger.info('RedemptionCreation', 'Custom reward created successfully', {
+            title: reward.title,
+            cost: reward.cost,
+            id: reward.id
+        });
     } catch (error) {
-        console.error('Error creating custom reward:', error);
+        logger.error('RedemptionCreation', 'Error creating custom reward', {
+            error: error.message,
+            stack: error.stack,
+            rewardTitle: rewardConfig.title
+        });
     }
 }
 

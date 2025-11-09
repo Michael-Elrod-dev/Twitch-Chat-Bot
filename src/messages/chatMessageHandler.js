@@ -1,5 +1,7 @@
 // src/messages/chatMessageHandler.js
 
+const logger = require('../logger/logger');
+
 class ChatMessageHandler {
     constructor(viewerManager, commandManager, emoteManager, aiManager) {
         this.viewerManager = viewerManager;
@@ -14,6 +16,12 @@ class ChatMessageHandler {
 
             const event = payload.event;
             if (event.chatter_user_id === bot.tokenManager.tokens.botId) return;
+
+            logger.debug('ChatMessageHandler', 'Processing chat message', {
+                userId: event.chatter_user_id,
+                userName: event.chatter_user_name,
+                message: event.message.text
+            });
 
             // Extract badge information
             const isBroadcaster = event.badges?.some(badge => badge.set_id === 'broadcaster') || false;
@@ -45,11 +53,26 @@ class ChatMessageHandler {
             if (bot.aiManager && bot.aiManager.shouldTriggerText(messageText)) {
                 const prompt = bot.aiManager.extractPrompt(messageText, 'text');
                 if (prompt) {
+                    logger.debug('ChatMessageHandler', 'Processing AI text request', {
+                        userId: context.userId,
+                        userName: context.username,
+                        prompt: prompt
+                    });
+
                     const result = await bot.aiManager.handleTextRequest(prompt, context.userId, bot.currentStreamId, userContext);
 
                     if (result.success) {
+                        logger.info('ChatMessageHandler', 'AI text request processed successfully', {
+                            userId: context.userId,
+                            userName: context.username
+                        });
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.response}`);
                     } else {
+                        logger.warn('ChatMessageHandler', 'AI text request failed', {
+                            userId: context.userId,
+                            userName: context.username,
+                            message: result.message
+                        });
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.message}`);
                     }
 
@@ -69,6 +92,11 @@ class ChatMessageHandler {
             // Check for emotes using database
             const emoteResponse = await this.emoteManager.getEmoteResponse(lowerMessage);
             if (emoteResponse) {
+                logger.info('ChatMessageHandler', 'Emote response triggered', {
+                    userId: context.userId,
+                    userName: context.username,
+                    emote: lowerMessage
+                });
                 await bot.analyticsManager.trackChatMessage(
                     context.username,
                     context.userId,
@@ -83,6 +111,11 @@ class ChatMessageHandler {
 
             // Handle regular commands
             if (lowerMessage.startsWith('!')) {
+                logger.debug('ChatMessageHandler', 'Processing command', {
+                    userId: context.userId,
+                    userName: context.username,
+                    command: messageText
+                });
                 await bot.analyticsManager.trackChatMessage(
                     context.username,
                     context.userId,
@@ -93,6 +126,10 @@ class ChatMessageHandler {
                 );
                 await this.commandManager.handleCommand(bot, bot.channelName, context, event.message.text);
             } else {
+                logger.debug('ChatMessageHandler', 'Regular message received', {
+                    userId: context.userId,
+                    userName: context.username
+                });
                 await bot.analyticsManager.trackChatMessage(
                     context.username,
                     context.userId,
@@ -103,7 +140,10 @@ class ChatMessageHandler {
                 );
             }
         } catch (error) {
-            console.error('❌ Error handling chat message:', error);
+            logger.error('ChatMessageHandler', 'Error handling chat message', {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 }

@@ -1,7 +1,6 @@
 // src/config/config.js
 
 require('dotenv').config();
-const path = require('path');
 
 class Config {
     constructor() {
@@ -19,8 +18,9 @@ class Config {
 
         // Logging Configuration
         this.logging = {
-            level: 2, // 0=ERROR, 1=USER, 2=SYSTEM
-            maxLogFiles: 20 // Keep last 20 days of logs
+            level: 'info', // Levels: 'error', 'warn', 'info', 'debug'
+            maxSize: '20m', // Rotate log file when it reaches this size (e.g., '20m' = 20 megabytes)
+            maxFiles: 10 // Keep maximum of 10 log files before deleting oldest
         };
 
 
@@ -39,6 +39,7 @@ class Config {
         this.spotifyInterval = 3000; // 3 seconds
         this.emoteCacheInterval = 300000; // 5 minutes
         this.commandCacheInterval = 300000; // 5 minutes
+        this.shutdownGracePeriod = 1800000; // 30 minutes - time to wait after stream offline before auto-shutdown
 
         // AI Model Settings
         this.aiModels = {

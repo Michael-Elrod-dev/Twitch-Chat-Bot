@@ -1,12 +1,18 @@
 // src/redemptions/songs/songRequest.js
 
+const logger = require('../../logger/logger');
+
 async function handleSongRequest(event, twitchBot, spotifyManager) {
     try {
         const input = event.input.trim();
         const isPriorityRequest = event.rewardTitle.toLowerCase().includes('skip song queue');
 
         if (!input) {
-            console.log('* Redemption cancelled: No input provided');
+            logger.info('SongRequest', 'Redemption cancelled: No input provided', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName,
+                rewardTitle: event.rewardTitle
+            });
             try {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
@@ -18,14 +24,23 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
-                console.error('* Error refunding points:', refundError);
+                logger.error('SongRequest', 'Error refunding points', {
+                    error: refundError.message,
+                    stack: refundError.stack,
+                    userId: event.userId,
+                    userDisplayName: event.userDisplayName
+                });
                 throw refundError;
             }
             return;
         }
 
         if (!input.includes('spotify.com/track/')) {
-            console.log('* Redemption cancelled: Invalid Spotify link');
+            logger.info('SongRequest', 'Redemption cancelled: Invalid Spotify link', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName,
+                input: input
+            });
             try {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
@@ -37,7 +52,12 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Please provide a valid Spotify song link! Your points have been refunded.`);
             } catch (refundError) {
-                console.error('* Error refunding points:', refundError);
+                logger.error('SongRequest', 'Error refunding points', {
+                    error: refundError.message,
+                    stack: refundError.stack,
+                    userId: event.userId,
+                    userDisplayName: event.userDisplayName
+                });
                 throw refundError;
             }
             return;
@@ -55,7 +75,13 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
             try {
                 wasAddedToPlaylist = await spotifyManager.addToRequestsPlaylist(trackUri);
             } catch (playlistError) {
-                console.error('* Error adding to history playlist:', playlistError);
+                logger.error('SongRequest', 'Error adding to history playlist', {
+                    error: playlistError.message,
+                    stack: playlistError.stack,
+                    trackUri,
+                    trackName,
+                    artistName
+                });
             }
 
             if (isPriorityRequest) {
@@ -73,7 +99,14 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                     requestedBy: event.userDisplayName
                 });
             }
-            console.log('* Successfully added to queue');
+            logger.info('SongRequest', 'Song successfully added to queue', {
+                trackName,
+                artistName,
+                requestedBy: event.userDisplayName,
+                userId: event.userId,
+                isPriorityRequest,
+                wasAddedToPlaylist
+            });
 
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
@@ -81,20 +114,28 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 [event.id],
                 'FULFILLED'
             );
-            console.log('* Redemption marked as fulfilled');
+            logger.debug('SongRequest', 'Redemption marked as fulfilled', {
+                redemptionId: event.id,
+                trackName
+            });
 
             let message = `@${event.userDisplayName} Successfully added "${trackName}" by ${artistName} to the ${isPriorityRequest ? 'priority ' : ''}queue!`;
             if (wasAddedToPlaylist) {
                 message += ' This song is new and has been added to the Chat Playlist: https://open.spotify.com/playlist/2NAkywBRNBcYN0Q1gob1bF?si=6e4c734c87244bd0';
             }
             await twitchBot.sendMessage(event.broadcasterDisplayName, message);
-            console.log('* Success message sent to chat');
+            logger.debug('SongRequest', 'Success message sent to chat', {
+                trackName,
+                userDisplayName: event.userDisplayName
+            });
 
         } catch (error) {
-            console.error('* Error processing Spotify track:', {
+            logger.error('SongRequest', 'Error processing Spotify track', {
                 error: error.message,
                 stack: error.stack,
-                trackUri: trackUri
+                trackUri: trackUri,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
             });
             try {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
@@ -106,27 +147,34 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
 
                 await twitchBot.sendMessage(event.broadcasterDisplayName,
                     `@${event.userDisplayName} Sorry, I couldn't process your request. Your points have been refunded.`);
-                console.log('* Points refunded successfully');
+                logger.info('SongRequest', 'Points refunded successfully', {
+                    userId: event.userId,
+                    userDisplayName: event.userDisplayName
+                });
             } catch (refundError) {
-                console.error('* Critical: Error refunding points:', {
+                logger.error('SongRequest', 'Critical: Error refunding points', {
                     error: refundError.message,
-                    stack: refundError.stack
+                    stack: refundError.stack,
+                    userId: event.userId,
+                    userDisplayName: event.userDisplayName
                 });
             }
         }
 
     } catch (error) {
-        console.error('* Critical: Fatal error in song request handler:', {
+        logger.error('SongRequest', 'Critical: Fatal error in song request handler', {
             error: error.message,
             stack: error.stack,
-            eventData: {
-                user: event.userDisplayName,
-                rewardId: event.rewardId,
-                input: event.input
-            }
+            userId: event.userId,
+            userDisplayName: event.userDisplayName,
+            rewardId: event.rewardId,
+            input: event.input
         });
         try {
-            console.log('* Attempting to refund points after fatal error...');
+            logger.info('SongRequest', 'Attempting to refund points after fatal error', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
@@ -136,11 +184,16 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
 
             await twitchBot.sendMessage(event.broadcasterDisplayName,
                 `@${event.userDisplayName} Sorry, there was an error processing your request. Your points have been refunded.`);
-            console.log('* Points refunded successfully after fatal error');
+            logger.info('SongRequest', 'Points refunded successfully after fatal error', {
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
+            });
         } catch (refundError) {
-            console.error('* Critical: Error refunding points after fatal error:', {
+            logger.error('SongRequest', 'Critical: Error refunding points after fatal error', {
                 error: refundError.message,
-                stack: refundError.stack
+                stack: refundError.stack,
+                userId: event.userId,
+                userDisplayName: event.userDisplayName
             });
         }
     }
