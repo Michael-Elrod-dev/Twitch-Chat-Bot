@@ -11,11 +11,18 @@
     "spotify-web-api-node": "^5.0.2",
     "tmi.js": "^1.8.5"
   },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12"
+  },
   "name": "almosthadai",
   "version": "1.0.0",
   "main": "src/bot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
   },
   "author": "",
   "license": "ISC",
