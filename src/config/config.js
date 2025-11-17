@@ -37,12 +37,12 @@ class Config {
         this.claudeApiEndpoint = 'https://api.anthropic.com/v1';
 
         // Intervals
-        this.tokenRefreshInterval = 300000; // 5 minutes
+        this.tokenRefreshInterval = 300000;  // 5 minutes
         this.viewerTrackingInterval = 60000; // 1 minute
-        this.spotifyInterval = 3000; // 3 seconds
-        this.emoteCacheInterval = 300000; // 5 minutes
-        this.commandCacheInterval = 300000; // 5 minutes
-        this.shutdownGracePeriod = 1800000; // 30 minutes - time to wait after stream offline before auto-shutdown
+        this.spotifyInterval = 3000;         // 3 seconds
+        this.emoteCacheInterval = 300000;    // 5 minutes
+        this.commandCacheInterval = 300000;  // 5 minutes
+        this.shutdownGracePeriod = 1800000;  // 30 minutes
 
         // AI Model Settings
         this.aiModels = {
@@ -60,8 +60,8 @@ class Config {
             claude: {
                 streamLimits: {
                     broadcaster: 999999,
-                    mod: 50,
-                    subscriber: 50,
+                    mod: 15,
+                    subscriber: 10,
                     everyone: 5
                 }
             }

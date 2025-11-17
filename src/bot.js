@@ -270,7 +270,7 @@ class Bot {
 
             // Send success message to chat if all checks passed
             try {
-                await this.sendMessage(this.channelName, '🤖 Bot is now live and fully operational! All systems ready.');
+                await this.sendMessage(this.channelName, 'Bot is live and fully operational');
                 logger.debug('Bot', 'Sent startup message to chat');
             } catch (messageError) {
                 logger.error('Bot', 'Failed to send startup message to chat', { error: messageError.message });

@@ -103,7 +103,7 @@ CREATE TABLE quotes (
 
 CREATE TABLE api_usage (
     user_id VARCHAR(50),
-    api_type ENUM('claude', 'openai_image') NOT NULL,
+    api_type ENUM('claude') NOT NULL,
     stream_id VARCHAR(50) NOT NULL,
     stream_count INT DEFAULT 0,
     PRIMARY KEY (user_id, api_type, stream_id),
