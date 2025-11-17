@@ -19,20 +19,31 @@ jest.mock('../../src/config/config', () => ({
         ai: {
             unavailable: 'Sorry, I\'m having trouble responding right now.'
         }
+    },
+    aiSettings: {
+        claude: {
+            chatHistoryLimit: 50
+        }
     }
 }));
 
 jest.mock('../../src/ai/rateLimiter');
 jest.mock('../../src/ai/models/claudeModel');
+jest.mock('../../src/ai/contextBuilder');
+jest.mock('../../src/ai/promptBuilder');
 
 const RateLimiter = require('../../src/ai/rateLimiter');
 const ClaudeModel = require('../../src/ai/models/claudeModel');
+const ContextBuilder = require('../../src/ai/contextBuilder');
+const PromptBuilder = require('../../src/ai/promptBuilder');
 
 describe('AIManager', () => {
     let aiManager;
     let mockDbManager;
     let mockRateLimiter;
     let mockClaudeModel;
+    let mockContextBuilder;
+    let mockPromptBuilder;
 
     beforeEach(() => {
         mockDbManager = {
@@ -50,8 +61,25 @@ describe('AIManager', () => {
             getTextResponse: jest.fn()
         };
 
+        mockContextBuilder = {
+            getAllContext: jest.fn().mockResolvedValue({
+                streamContext: null,
+                chatHistory: [],
+                userRoles: {
+                    broadcaster: 'Unknown',
+                    mods: []
+                }
+            })
+        };
+
+        mockPromptBuilder = {
+            buildUserMessage: jest.fn((prompt) => prompt)
+        };
+
         RateLimiter.mockImplementation(() => mockRateLimiter);
         ClaudeModel.mockImplementation(() => mockClaudeModel);
+        ContextBuilder.mockImplementation(() => mockContextBuilder);
+        PromptBuilder.mockImplementation(() => mockPromptBuilder);
 
         aiManager = new AIManager();
     });
