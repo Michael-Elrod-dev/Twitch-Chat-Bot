@@ -31,7 +31,7 @@ def fix_file_header(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             lines = f.readlines()
     except Exception as e:
-        print(f"❌ Error reading {filepath}: {e}")
+        print(f"[ERROR] Error reading {filepath}: {e}")
         return True  # Don't try to fix if we can't read
 
     needs_fix = False
@@ -41,7 +41,7 @@ def fix_file_header(filepath):
         # Empty file - add header
         lines = [expected_comment + '\n', '\n']
         needs_fix = True
-        print(f"✅ {filepath}: Added header to empty file")
+        print(f"[FIXED] {filepath}: Added header to empty file")
     else:
         # Check first line
         first_line = lines[0].rstrip()
@@ -51,12 +51,12 @@ def fix_file_header(filepath):
             lines.insert(0, expected_comment + '\n')
             lines.insert(1, '\n')
             needs_fix = True
-            print(f"✅ {filepath}: Added missing header comment")
+            print(f"[FIXED] {filepath}: Added missing header comment")
         elif first_line != expected_comment:
             # Wrong path in comment - fix it
             lines[0] = expected_comment + '\n'
             needs_fix = True
-            print(f"✅ {filepath}: Fixed header path")
+            print(f"[FIXED] {filepath}: Fixed header path")
             print(f"   Was: {first_line}")
             print(f"   Now: {expected_comment}")
 
@@ -65,12 +65,12 @@ def fix_file_header(filepath):
             # No second line - add blank line
             lines.insert(1, '\n')
             needs_fix = True
-            print(f"✅ {filepath}: Added missing blank line after header")
+            print(f"[FIXED] {filepath}: Added missing blank line after header")
         elif lines[1].rstrip() != "":
             # Second line is not blank - insert a blank line
             lines.insert(1, '\n')
             needs_fix = True
-            print(f"✅ {filepath}: Added blank line after header")
+            print(f"[FIXED] {filepath}: Added blank line after header")
 
     # Write back if changes were made
     if needs_fix:
@@ -78,7 +78,7 @@ def fix_file_header(filepath):
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
         except Exception as e:
-            print(f"❌ Error writing {filepath}: {e}")
+            print(f"[ERROR] Error writing {filepath}: {e}")
             return True
 
         return False  # File was fixed (return False = hook "failed" to trigger re-staging)
@@ -104,7 +104,7 @@ def main():
             all_valid = False
 
     if not all_valid:
-        print("\n✨ Files were automatically fixed! Run git add to stage the changes.")
+        print("\n[INFO] Files were automatically fixed! Run git add to stage the changes.")
         return 1
 
     return 0

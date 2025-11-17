@@ -29,6 +29,7 @@ class ChatMessageHandler {
             const isSubscriber = event.badges?.some(badge => badge.set_id === 'subscriber') || false;
 
             const userContext = {
+                userName: event.chatter_user_name,
                 isMod: isMod,
                 isSubscriber: isSubscriber,
                 isBroadcaster: isBroadcaster

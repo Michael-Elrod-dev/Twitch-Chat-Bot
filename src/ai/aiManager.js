@@ -2,6 +2,8 @@
 
 const config = require('../config/config');
 const RateLimiter = require('./rateLimiter');
+const PromptBuilder = require('./promptBuilder');
+const ContextBuilder = require('./contextBuilder');
 const ClaudeModel = require('./models/claudeModel');
 const logger = require('../logger/logger');
 
@@ -10,12 +12,16 @@ class AIManager {
         this.dbManager = null;
         this.claudeModel = null;
         this.rateLimiter = null;
+        this.promptBuilder = null;
+        this.contextBuilder = null;
     }
 
     async init(dbManager, claudeApiKey) {
         this.dbManager = dbManager;
         this.claudeModel = new ClaudeModel(claudeApiKey);
         this.rateLimiter = new RateLimiter(dbManager);
+        this.contextBuilder = new ContextBuilder(dbManager);
+        this.promptBuilder = new PromptBuilder();
         logger.info('AIManager', 'AIManager initialized successfully');
     }
 
@@ -44,8 +50,33 @@ class AIManager {
             };
         }
 
-        // Get response from Claude
-        const response = await this.claudeModel.getTextResponse(prompt, userContext);
+        // Fetch context data for enhanced prompt
+        const chatHistoryLimit = config.aiSettings.claude.chatHistoryLimit;
+        const context = await this.contextBuilder.getAllContext(streamId, chatHistoryLimit);
+
+        // Build enhanced prompt with context
+        const enhancedPrompt = this.promptBuilder.buildUserMessage(
+            prompt,
+            userContext.userName,
+            context.streamContext,
+            context.chatHistory,
+            context.userRoles
+        );
+
+        logger.debug('AIManager', 'Enhanced prompt built', {
+            chatHistoryCount: context.chatHistory.length,
+            hasStreamContext: !!context.streamContext,
+            broadcaster: context.userRoles.broadcaster,
+            modsCount: context.userRoles.mods.length
+        });
+
+        // Log full prompt in debug mode for testing/verification
+        logger.debug('AIManager', 'Full prompt being sent to Claude:', {
+            fullPrompt: enhancedPrompt
+        });
+
+        // Get response from Claude with enhanced prompt
+        const response = await this.claudeModel.getTextResponse(enhancedPrompt, userContext);
 
         if (response) {
             await this.rateLimiter.updateUsage(userId, 'claude', streamId);
