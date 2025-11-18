@@ -22,7 +22,11 @@ jest.mock('../../src/config/config', () => ({
     },
     aiSettings: {
         claude: {
-            chatHistoryLimit: 50
+            chatHistoryLimits: {
+                regularChat: 50,
+                advice: 0,
+                roast: 0
+            }
         }
     }
 }));
@@ -157,7 +161,8 @@ describe('AIManager', () => {
             expect(result.success).toBe(true);
             expect(mockClaudeModel.getTextResponse).toHaveBeenCalledWith(
                 'test prompt',
-                { isBroadcaster: false }
+                { isBroadcaster: false },
+                expect.any(String)
             );
         });
 
@@ -273,7 +278,8 @@ describe('AIManager', () => {
 
             expect(mockClaudeModel.getTextResponse).toHaveBeenCalledWith(
                 'test',
-                userContext
+                userContext,
+                expect.any(String)
             );
         });
 

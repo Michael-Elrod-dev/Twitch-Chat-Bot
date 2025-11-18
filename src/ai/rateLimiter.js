@@ -28,7 +28,6 @@ class RateLimiter {
         try {
             const userLimits = this.getUserLimits(service, userContext);
 
-            // Get current usage for this user/service/stream
             const sql = `
                 SELECT stream_count
                 FROM api_usage
@@ -47,7 +46,6 @@ class RateLimiter {
                 streamId
             });
 
-            // Check stream limit
             if (currentCount >= userLimits.streamLimit) {
                 logger.info('RateLimiter', 'Rate limit exceeded', {
                     userId,

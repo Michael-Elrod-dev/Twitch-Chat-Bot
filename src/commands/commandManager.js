@@ -13,11 +13,6 @@ class CommandManager {
         this.cacheTimeout = config.commandCacheInterval;
     }
 
-    /**
-     * Create CommandManager with modular command handlers
-     * @param {Object} dependencies - Dependencies for command handlers (quoteManager, spotifyManager, etc.)
-     * @returns {CommandManager} Initialized command manager instance
-     */
     static createWithDependencies(dependencies) {
         const handlers = loadCommandHandlers(dependencies);
         const manager = new CommandManager(handlers);
@@ -65,7 +60,6 @@ class CommandManager {
 
     async getCommand(commandName) {
         try {
-            // Check if cache needs refresh
             if (Date.now() > this.cacheExpiry) {
                 logger.debug('CommandManager', 'Cache expired, reloading commands');
                 await this.loadCommands();
@@ -84,7 +78,6 @@ class CommandManager {
 
     async handleCommand(twitchBot, channel, context, message) {
         if (message === '!command' || message.startsWith('!command ')) {
-            // Only allow mods and broadcaster to use this command
             if (!context.mod && !context.badges?.broadcaster) return;
 
             const args = message.split(' ');
@@ -224,7 +217,6 @@ class CommandManager {
             `;
             await this.dbManager.query(sql, [name.toLowerCase(), response, userLevel]);
 
-            // Update cache
             this.commandCache.set(name.toLowerCase(), {
                 response: response,
                 handler: null,
@@ -240,7 +232,7 @@ class CommandManager {
         } catch (error) {
             if (error.code === 'ER_DUP_ENTRY') {
                 logger.debug('CommandManager', 'Command already exists', { commandName: name });
-                return false; // Command already exists
+                return false;
             }
             logger.error('CommandManager', 'Error adding command', {
                 error: error.message,
@@ -253,7 +245,6 @@ class CommandManager {
 
     async editCommand(name, response) {
         try {
-            // Check if command exists and doesn't have a handler
             const command = await this.getCommand(name);
             if (!command || command.handler) {
                 logger.debug('CommandManager', 'Cannot edit command - not found or has handler', {
@@ -272,7 +263,6 @@ class CommandManager {
             const result = await this.dbManager.query(sql, [response, name.toLowerCase()]);
 
             if (result.affectedRows > 0) {
-                // Update cache
                 this.commandCache.set(name.toLowerCase(), {
                     response: response,
                     handler: null,
@@ -296,7 +286,6 @@ class CommandManager {
 
     async deleteCommand(name) {
         try {
-            // Check if command exists and doesn't have a handler
             const command = await this.getCommand(name);
             if (!command || command.handler) {
                 logger.debug('CommandManager', 'Cannot delete command - not found or has handler', {
@@ -314,7 +303,6 @@ class CommandManager {
             const result = await this.dbManager.query(sql, [name.toLowerCase()]);
 
             if (result.affectedRows > 0) {
-                // Remove from cache
                 this.commandCache.delete(name.toLowerCase());
                 logger.info('CommandManager', 'Command deleted successfully', {
                     commandName: name

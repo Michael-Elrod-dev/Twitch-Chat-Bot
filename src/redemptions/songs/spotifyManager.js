@@ -14,7 +14,6 @@ class SpotifyManager {
             redirectUri: 'http://127.0.0.1:3000/callback'
         });
 
-        // Set tokens if we have them
         if (this.tokenManager.tokens.spotifyUserAccessToken) {
             this.spotifyApi.setAccessToken(this.tokenManager.tokens.spotifyUserAccessToken);
             this.spotifyApi.setRefreshToken(this.tokenManager.tokens.spotifyUserRefreshToken);
@@ -33,7 +32,6 @@ class SpotifyManager {
     }
 
     startPlaybackMonitoring() {
-        // Set initial state
         this.lastPlaybackState = 'NONE';
 
         setInterval(async () => {
@@ -60,14 +58,11 @@ class SpotifyManager {
                     const progress = currentPlayback.body.progress_ms;
                     const remaining = totalDuration - progress;
 
-                    // If less than 5 seconds remaining
                     if (remaining <  config.spotifyInterval) {
-                        // Get next song from pending queue
                         const pendingTracks = await this.queueManager.getPendingTracks();
                         if (pendingTracks.length > 0) {
                             const nextTrack = pendingTracks[0];
 
-                            // Add to Spotify queue
                             await this.spotifyApi.addToQueue(nextTrack.uri);
                             logger.debug('SpotifyManager', 'Added next track to Spotify queue', {
                                 trackName: nextTrack.name,
@@ -75,7 +70,6 @@ class SpotifyManager {
                                 requestedBy: nextTrack.requestedBy
                             });
 
-                            // Remove from pending queue
                             await this.queueManager.removeFirstTrack();
                             logger.debug('SpotifyManager', 'Removed track from pending queue', {
                                 trackName: nextTrack.name
@@ -104,17 +98,14 @@ class SpotifyManager {
                 const currentTrack = await this.spotifyApi.getMyCurrentPlayingTrack();
 
                 if (currentTrack.body && currentTrack.body.item) {
-                    // If current track is different from what we last stored
                     if (!this.lastPlayedTrack ||
                         this.lastPlayedTrack.id !== currentTrack.body.item.id) {
-                        // Store the previous track before updating
                         if (this.lastPlayedTrack) {
                             this.previousTrack = {
                                 name: this.lastPlayedTrack.name,
                                 artist: this.lastPlayedTrack.artists[0].name
                             };
                         }
-                        // Update current track
                         this.lastPlayedTrack = currentTrack.body.item;
                     }
                 }
@@ -129,15 +120,12 @@ class SpotifyManager {
 
     async authenticate() {
         try {
-            // If we have user tokens, try to use them
             if (this.tokenManager.tokens.spotifyUserAccessToken) {
                 try {
-                    // Test the token
                     await this.spotifyApi.getMe();
                     logger.info('SpotifyManager', 'Existing Spotify user auth valid');
                     return;
                 } catch (error) {
-                    // Token invalid, try refresh
                     try {
                         const data = await this.spotifyApi.refreshAccessToken();
                         this.spotifyApi.setAccessToken(data.body['access_token']);
@@ -190,10 +178,9 @@ class SpotifyManager {
 
     async ensureTokenValid() {
         try {
-            // Try to get user info to test token
             await this.spotifyApi.getMe();
         } catch (error) {
-            if (error.statusCode === 401) {  // Token expired
+            if (error.statusCode === 401) {
                 try {
                     const data = await this.spotifyApi.refreshAccessToken();
                     this.spotifyApi.setAccessToken(data.body['access_token']);
@@ -218,14 +205,12 @@ class SpotifyManager {
 
         try {
             await this.ensureTokenValid();
-            // Get user's playlists
             const playlists = await this.spotifyApi.getUserPlaylists();
             const requestsPlaylist = playlists.body.items.find(p => p.name === 'Chat Song Requests');
 
             if (requestsPlaylist) {
                 this.requestsPlaylistId = requestsPlaylist.id;
             } else {
-                // Create the playlist if it doesn't exist
                 const newPlaylist = await this.spotifyApi.createPlaylist('Chat Song Requests', {
                     description: 'Songs requested by Twitch chat'
                 });
@@ -247,23 +232,19 @@ class SpotifyManager {
             await this.ensureTokenValid();
             const playlistId = await this.getOrCreateRequestsPlaylist();
 
-            // Initialize variables for pagination
             let offset = 0;
-            const limit = 100; // Spotify's max limit per request
+            const limit = 100;
             let trackExists = false;
             let hasMoreTracks = true;
 
-            // Check all pages of the playlist
             while (hasMoreTracks && !trackExists) {
                 const response = await this.spotifyApi.getPlaylistTracks(playlistId, {
                     offset: offset,
                     limit: limit
                 });
 
-                // Check if track exists in current page
                 trackExists = response.body.items.some(item => item.track?.uri === trackUri);
 
-                // Update pagination variables
                 hasMoreTracks = response.body.items.length === limit;
                 offset += limit;
             }

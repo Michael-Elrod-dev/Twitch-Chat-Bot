@@ -2,16 +2,12 @@
 
 const logger = require('../../logger/logger');
 
-/**
- * AI-related command handlers
- */
 function aiHandlers() {
     return {
         async toggleAI(twitchBot, channel, context, args) {
             try {
                 if (!context.mod && !context.badges?.broadcaster) return;
 
-                // Parse the on/off argument
                 if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
                     await twitchBot.sendMessage(channel, 'Usage: !ai <on|off>');
                     return;
@@ -19,19 +15,16 @@ function aiHandlers() {
 
                 const enable = args[0].toLowerCase() === 'on';
 
-                // Get current AI state from database
                 const getCurrentStateSql = 'SELECT token_value FROM tokens WHERE token_key = ?';
                 const result = await twitchBot.analyticsManager.dbManager.query(getCurrentStateSql, ['aiEnabled']);
 
                 const currentState = result.length > 0 && result[0].token_value === 'true';
 
-                // Check if AI is already in the desired state
                 if (currentState === enable) {
                     await twitchBot.sendMessage(channel, `AI responses are already turned ${enable ? 'on' : 'off'}`);
                     return;
                 }
 
-                // Update AI state in database
                 const updateStateSql = `
                     INSERT INTO tokens (token_key, token_value)
                     VALUES ('aiEnabled', ?)

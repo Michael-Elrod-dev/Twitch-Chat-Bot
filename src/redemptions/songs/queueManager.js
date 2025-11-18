@@ -14,7 +14,6 @@ class QueueManager {
 
     async addToPendingQueue(track) {
         try {
-            // Get the next position (end of queue)
             const positionSql = 'SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position FROM song_queue';
             const positionResult = await this.dbManager.query(positionSql);
             const nextPosition = positionResult[0].next_position;
@@ -51,11 +50,9 @@ class QueueManager {
         try {
             await this.dbManager.query('START TRANSACTION');
 
-            // Increment all existing positions
             const incrementSql = 'UPDATE song_queue SET queue_position = queue_position + 1';
             await this.dbManager.query(incrementSql);
 
-            // Add new track at position 1
             const insertSql = `
                 INSERT INTO song_queue (track_uri, track_name, artist_name, requested_by, queue_position, added_at)
                 VALUES (?, ?, ?, ?, 1, NOW())
@@ -133,11 +130,9 @@ class QueueManager {
         try {
             await this.dbManager.query('START TRANSACTION');
 
-            // Remove the first track (position 1)
             const deleteSql = 'DELETE FROM song_queue WHERE queue_position = 1';
             await this.dbManager.query(deleteSql);
 
-            // Decrement all remaining positions
             const updateSql = 'UPDATE song_queue SET queue_position = queue_position - 1';
             await this.dbManager.query(updateSql);
 

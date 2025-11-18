@@ -11,8 +11,6 @@ class ContextBuilder {
 
     async getChatHistory(streamId, limit = 50) {
         try {
-            // Note: Using template literal for LIMIT since it's a safe config value (not user input)
-            // MySQL prepared statements don't allow parameter binding for LIMIT in some configurations
             const sql = `
                 SELECT
                     v.username,
@@ -28,7 +26,6 @@ class ContextBuilder {
 
             const results = await this.dbManager.query(sql, [streamId]);
 
-            // Reverse to get chronological order (oldest first)
             return results.reverse();
         } catch (error) {
             this.logger.error('Error fetching chat history:', error);
@@ -57,7 +54,6 @@ class ContextBuilder {
 
             const stream = results[0];
 
-            // Calculate stream duration
             const duration = this.calculateStreamDuration(stream.start_time);
 
             return {
@@ -107,6 +103,38 @@ class ContextBuilder {
         }
     }
 
+    async getUserProfile(userId) {
+        try {
+            const sql = `
+                SELECT
+                    username,
+                    context
+                FROM viewers
+                WHERE user_id = ?
+            `;
+
+            const results = await this.dbManager.query(sql, [userId]);
+
+            if (results.length === 0) {
+                return null;
+            }
+
+            const user = results[0];
+
+            if (!user.context) {
+                return null;
+            }
+
+            return {
+                username: user.username,
+                context: user.context
+            };
+        } catch (error) {
+            this.logger.error('Error fetching user profile:', error);
+            return null;
+        }
+    }
+
     calculateStreamDuration(startTime) {
         const now = new Date();
         const start = new Date(startTime);
@@ -124,7 +152,6 @@ class ContextBuilder {
 
     async getAllContext(streamId, chatHistoryLimit = 50) {
         try {
-            // Fetch all context in parallel for efficiency
             const [chatHistory, streamContext, userRoles] = await Promise.all([
                 this.getChatHistory(streamId, chatHistoryLimit),
                 this.getStreamContext(streamId),

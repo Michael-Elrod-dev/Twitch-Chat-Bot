@@ -40,13 +40,11 @@ class PromptBuilder {
         let history = '<chat_history>\n';
 
         chatHistory.forEach(msg => {
-            // Format timestamp as [HH:MM]
             const time = new Date(msg.message_time);
             const hours = time.getHours().toString().padStart(2, '0');
             const minutes = time.getMinutes().toString().padStart(2, '0');
             const timestamp = `${hours}:${minutes}`;
 
-            // Use natural Twitch chat format: [timestamp] username: message
             history += `[${timestamp}] ${this.escapeXml(msg.username)}: ${this.escapeXml(msg.message_content)}\n`;
         });
 
@@ -58,18 +56,52 @@ class PromptBuilder {
     buildUserMessage(userQuery, username, streamContext, chatHistory, userRoles) {
         let prompt = '';
 
-        // Add stream context
         prompt += this.buildStreamContext(streamContext, userRoles);
         prompt += '\n\n';
 
-        // Add chat history
         prompt += this.buildChatHistory(chatHistory);
         prompt += '\n\n';
 
-        // Add the actual user query
         prompt += '<user_query>\n';
         prompt += `${this.escapeXml(username)}: ${this.escapeXml(userQuery)}\n`;
         prompt += '</user_query>';
+
+        return prompt;
+    }
+
+    buildUserProfile(userProfile) {
+        if (!userProfile || !userProfile.context) {
+            return '';
+        }
+
+        let profile = '<user_profile>\n';
+        profile += `About ${this.escapeXml(userProfile.username)}:\n`;
+        profile += this.escapeXml(userProfile.context);
+        profile += '\n</user_profile>';
+
+        return profile;
+    }
+
+    buildGamePrompt(targetUsername, userProfile, streamContext, chatHistory, userRoles) {
+        let prompt = '';
+
+        prompt += this.buildStreamContext(streamContext, userRoles);
+        prompt += '\n\n';
+
+        const profileSection = this.buildUserProfile(userProfile);
+        if (profileSection) {
+            prompt += profileSection;
+            prompt += '\n\n';
+        }
+
+        if (chatHistory && chatHistory.length > 0) {
+            prompt += this.buildChatHistory(chatHistory);
+            prompt += '\n\n';
+        }
+
+        prompt += '<target_user>\n';
+        prompt += `Generate response for: ${this.escapeXml(targetUsername)}\n`;
+        prompt += '</target_user>';
 
         return prompt;
     }

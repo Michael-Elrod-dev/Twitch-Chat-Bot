@@ -2,11 +2,6 @@
 
 const logger = require('../../logger/logger');
 
-/**
- * Spotify-related command handlers
- * @param {Object} dependencies - Injected dependencies
- * @param {Object} dependencies.spotifyManager - Spotify manager instance
- */
 function spotifyHandlers(dependencies) {
     const { spotifyManager } = dependencies;
 
@@ -89,16 +84,13 @@ function spotifyHandlers(dependencies) {
                     return;
                 }
 
-                // Determine which user to look up
                 const requestedUser = args[0] ? args[0].replace('@', '').toLowerCase() : context.username.toLowerCase();
 
-                // Find all positions where the user has songs
                 const userPositions = pendingTracks
                     .map((track, index) => ({ position: index + 1, requestedBy: track.requestedBy }))
                     .filter(track => track.requestedBy.toLowerCase() === requestedUser)
                     .map(track => track.position);
 
-                // Create response message
                 let response = `Queue length: ${pendingTracks.length} song${pendingTracks.length !== 1 ? 's' : ''}`;
 
                 if (userPositions.length > 0) {
@@ -133,10 +125,8 @@ function spotifyHandlers(dependencies) {
                     return;
                 }
 
-                // Check if there's a song in the queue before skipping
                 const pendingTracks = await spotifyManager.queueManager.getPendingTracks();
                 if (pendingTracks.length > 0) {
-                    // Add next song to Spotify queue before skipping
                     const nextTrack = pendingTracks[0];
                     await spotifyManager.spotifyApi.addToQueue(nextTrack.uri);
                     await spotifyManager.queueManager.removeFirstTrack();
@@ -146,7 +136,6 @@ function spotifyHandlers(dependencies) {
                     });
                 }
 
-                // Skip the current song
                 await spotifyManager.spotifyApi.skipToNext();
                 await twitchBot.sendMessage(channel, 'Skipped to next song!');
                 logger.info('SpotifyHandlers', 'Song skipped', {
@@ -164,7 +153,6 @@ function spotifyHandlers(dependencies) {
             try {
                 if (!context.mod && !context.badges?.broadcaster) return;
 
-                // Parse the on/off argument
                 if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
                     await twitchBot.sendMessage(channel, 'Usage: !songs <on|off>');
                     return;
@@ -178,7 +166,6 @@ function spotifyHandlers(dependencies) {
                     return;
                 }
 
-                // Get all channel rewards
                 const rewards = await twitchBot.channelPoints.getCustomRewards(channelId.id);
                 const songReward = rewards.find(reward => reward.title.toLowerCase() === 'song request');
                 const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === 'skip song queue');
@@ -193,13 +180,11 @@ function spotifyHandlers(dependencies) {
                     return;
                 }
 
-                // Check if both rewards are already in the desired state
                 if (songReward.isEnabled === enable && skipQueueReward.isEnabled === enable) {
                     await twitchBot.sendMessage(channel, `Song requests are already turned ${enable ? 'on' : 'off'}`);
                     return;
                 }
 
-                // Update both rewards' states
                 await Promise.all([
                     twitchBot.channelPoints.updateCustomReward(channelId.id, songReward.id, {
                         isEnabled: enable

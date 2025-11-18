@@ -23,7 +23,6 @@ class ChatMessageHandler {
                 message: event.message.text
             });
 
-            // Extract badge information
             const isBroadcaster = event.badges?.some(badge => badge.set_id === 'broadcaster') || false;
             const isMod = event.badges?.some(badge => badge.set_id === 'moderator') || false;
             const isSubscriber = event.badges?.some(badge => badge.set_id === 'subscriber') || false;
@@ -50,9 +49,7 @@ class ChatMessageHandler {
             const messageText = event.message.text;
             const lowerMessage = messageText.toLowerCase();
 
-            // Check for TEXT AI requests
             if (bot.aiManager && bot.aiManager.shouldTriggerText(messageText)) {
-                // Check if AI is enabled
                 const aiEnabledResult = await this.isAIEnabled(bot);
 
                 if (!aiEnabledResult) {
@@ -60,7 +57,6 @@ class ChatMessageHandler {
                         userId: context.userId,
                         userName: context.username
                     });
-                    // Track the message but don't process AI
                     await bot.analyticsManager.trackChatMessage(
                         context.username,
                         context.userId,
@@ -97,7 +93,6 @@ class ChatMessageHandler {
                         await bot.sendMessage(bot.channelName, `@${context.username} ${result.message}`);
                     }
 
-                    // Track analytics
                     await bot.analyticsManager.trackChatMessage(
                         context.username,
                         context.userId,
@@ -110,7 +105,6 @@ class ChatMessageHandler {
                 }
             }
 
-            // Check for emotes using database
             const emoteResponse = await this.emoteManager.getEmoteResponse(lowerMessage);
             if (emoteResponse) {
                 logger.info('ChatMessageHandler', 'Emote response triggered', {
@@ -130,7 +124,6 @@ class ChatMessageHandler {
                 return;
             }
 
-            // Handle regular commands
             if (lowerMessage.startsWith('!')) {
                 logger.debug('ChatMessageHandler', 'Processing command', {
                     userId: context.userId,
@@ -173,7 +166,6 @@ class ChatMessageHandler {
             const sql = 'SELECT token_value FROM tokens WHERE token_key = ?';
             const result = await bot.analyticsManager.dbManager.query(sql, ['aiEnabled']);
 
-            // Default to true if not set (backwards compatibility)
             if (result.length === 0) {
                 return true;
             }
@@ -184,7 +176,6 @@ class ChatMessageHandler {
                 error: error.message,
                 stack: error.stack
             });
-            // Default to true on error to avoid breaking functionality
             return true;
         }
     }

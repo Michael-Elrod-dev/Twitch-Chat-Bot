@@ -45,7 +45,6 @@ class Bot {
         try {
             logger.info('Bot', 'Starting bot initialization', { debugMode: config.isDebugMode });
 
-            // Setup debug database if in debug mode
             if (config.isDebugMode) {
                 logger.info('Bot', '=== DEBUG MODE ENABLED ===');
                 logger.info('Bot', 'Setting up debug database and logs');
@@ -54,12 +53,10 @@ class Bot {
                 await debugDbSetup.setupDebugDatabase();
             }
 
-            // Always connect to database and basic services
             logger.debug('Bot', 'Initializing database connection');
             this.dbManager = new DbManager();
             await this.dbManager.connect();
 
-            // Clean up any orphaned sessions from previous crashes
             await this.cleanupOrphanedSessions();
 
             logger.debug('Bot', 'Initializing token manager');
@@ -76,12 +73,10 @@ class Bot {
                 this.tokenManager.tokens.claudeApiKey
             );
 
-            // In debug mode, force full operation regardless of stream status
             if (config.isDebugMode) {
                 logger.info('Bot', 'Debug mode - forcing full operation (stream status ignored)');
                 await this.startFullOperation();
             } else {
-                // Check if stream is live
                 logger.info('Bot', 'Checking stream status');
                 const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
                 if (streamInfo) {
@@ -104,7 +99,6 @@ class Bot {
     async startMinimalOperation() {
         logger.info('Bot', 'Starting minimal operation mode');
 
-        // Only start WebSocket connection to listen for stream events
         this.webSocketManager = new WebSocketManager(
             this.tokenManager,
             null,
@@ -122,11 +116,10 @@ class Bot {
 
         await this.webSocketManager.connect();
 
-        // Start token refresh interval even in minimal mode
         logger.debug('Bot', 'Starting token refresh interval');
         this.tokenRefreshInterval = setInterval(async () => {
             try {
-                if (this.isShuttingDown) return; // Don't refresh during shutdown
+                if (this.isShuttingDown) return;
                 await this.tokenManager.checkAndRefreshTokens();
             } catch (error) {
                 logger.error('Bot', 'Error in periodic token refresh', { error: error.message });
@@ -139,7 +132,7 @@ class Bot {
     async startFullOperation() {
         if (this.isStreaming) {
             logger.debug('Bot', 'Full operation already running, skipping start');
-            return; // Already running
+            return;
         }
 
         if (this.isShuttingDown) {
@@ -152,14 +145,12 @@ class Bot {
         try {
             this.isStreaming = true;
 
-            // Cancel shutdown timer if it exists (stream came back online during grace period)
             if (this.shutdownTimer) {
                 logger.info('Bot', 'Stream came back online! Cancelling auto-shutdown timer');
                 clearTimeout(this.shutdownTimer);
                 this.shutdownTimer = null;
             }
 
-            // Initialize all the analytics, commands, etc.
             logger.debug('Bot', 'Initializing analytics manager');
             this.analyticsManager = new AnalyticsManager();
             await this.analyticsManager.init(this.dbManager);
@@ -176,7 +167,6 @@ class Bot {
             this.currentStreamId = Date.now().toString();
             logger.info('Bot', 'Created new stream session', { streamId: this.currentStreamId });
 
-            // Get stream info for analytics
             logger.debug('Bot', 'Fetching stream information for analytics');
             const streamInfo = await this.twitchAPI.getStreamByUserName(this.channelName);
             let streamTitle = null;
@@ -231,14 +221,11 @@ class Bot {
             this.redemptionManager.registerHandler('Skip Song Queue', handleSongRequest);
             this.redemptionManager.registerHandler('Add a quote', handleQuote);
 
-            // REUSE existing WebSocket connection
             if (this.webSocketManager) {
                 logger.debug('Bot', 'Reusing existing WebSocket connection');
-                // Update handlers
                 this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
                 this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
 
-                // Add new subscriptions
                 if (this.subscriptionManager) {
                     await this.subscriptionManager.subscribeToChatEvents();
                     await this.subscriptionManager.subscribeToChannelPoints();
@@ -272,7 +259,6 @@ class Bot {
             logger.debug('Bot', 'Starting viewer tracking');
             this.startViewerTracking();
 
-            // Start hourly database backups (only when streaming, not in debug mode)
             if (!config.isDebugMode) {
                 logger.debug('Bot', 'Starting database backup interval');
                 this.startDatabaseBackups();
@@ -280,7 +266,6 @@ class Bot {
 
             logger.info('Bot', 'Bot is now fully operational');
 
-            // Send success message to chat if all checks passed
             try {
                 await this.sendMessage(this.channelName, 'Bot is live and fully operational');
                 logger.debug('Bot', 'Sent startup message to chat');
@@ -298,7 +283,7 @@ class Bot {
     startViewerTracking() {
         if (this.viewerTrackingInterval) {
             logger.debug('Bot', 'Clearing existing viewer tracking interval');
-            clearInterval(this.viewerTrackingInterval); // Clear existing interval
+            clearInterval(this.viewerTrackingInterval);
         }
 
         this.viewerTrackingInterval = setInterval(async () => {
@@ -307,14 +292,11 @@ class Bot {
 
                 const broadcasterId = this.tokenManager.tokens.channelId;
 
-                // Get current chatters list
                 const chatters = await this.twitchAPI.getChatters(broadcasterId, broadcasterId);
                 logger.debug('Bot', 'Retrieved chatters list', { count: chatters?.length || 0 });
 
-                // Process viewer sessions
                 await this.viewerManager.processViewerList(chatters, this.currentStreamId);
 
-                // Still update peak viewer count
                 const streamData = await this.twitchAPI.getStreamByUserName(this.channelName);
                 if (streamData && streamData.viewer_count) {
                     const updateSql = `
@@ -339,7 +321,6 @@ class Bot {
             clearInterval(this.backupInterval);
         }
 
-        // Create initial backup when starting
         this.backupManager.createBackup('stream-start')
             .then((success) => {
                 if (success) {
@@ -352,7 +333,6 @@ class Bot {
                 logger.error('Bot', 'Error creating initial backup', { error: error.message });
             });
 
-        // Set up hourly backups
         this.backupInterval = setInterval(async () => {
             try {
                 if (!this.isStreaming || this.isShuttingDown) return;
@@ -393,7 +373,6 @@ class Bot {
     async handleStreamOnline() {
         logger.info('Bot', 'Stream went online! Starting full bot functionality');
 
-        // Cancel shutdown timer if it exists (internet outage recovery)
         if (this.shutdownTimer) {
             logger.info('Bot', 'Stream came back online during grace period! Cancelling auto-shutdown');
             clearTimeout(this.shutdownTimer);
@@ -402,7 +381,6 @@ class Bot {
 
         await this.startFullOperation();
 
-        // Send Discord notification after delay (only if not in debug mode)
         if (!config.isDebugMode) {
             logger.info('Bot', `Scheduling Discord notification in ${config.discord.notificationDelay / 1000} seconds`);
             setTimeout(async () => {
@@ -429,7 +407,6 @@ class Bot {
                 streamId: this.currentStreamId
             });
 
-            // Fetch stream info from database
             const sql = `
                 SELECT title, category
                 FROM streams
@@ -458,7 +435,6 @@ class Bot {
         logger.info('Bot', 'Stream went offline. Stopping full bot functionality');
 
         try {
-            // Send offline message to chat BEFORE disabling functionality
             if (this.isStreaming && this.messageSender) {
                 try {
                     await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
@@ -470,44 +446,36 @@ class Bot {
 
             if (this.currentStreamId && this.analyticsManager) {
                 logger.debug('Bot', 'Ending stream session', { streamId: this.currentStreamId });
-                // Close all active viewing sessions before ending stream
                 await this.viewerManager.endAllSessionsForStream(this.currentStreamId);
                 await this.analyticsManager.trackStreamEnd(this.currentStreamId);
                 this.currentStreamId = null;
             }
 
-            // Clear viewer tracking
             if (this.viewerTrackingInterval) {
                 logger.debug('Bot', 'Stopping viewer tracking');
                 clearInterval(this.viewerTrackingInterval);
                 this.viewerTrackingInterval = null;
             }
 
-            // Clear backup interval
             if (this.backupInterval) {
                 logger.debug('Bot', 'Stopping database backup interval');
                 clearInterval(this.backupInterval);
                 this.backupInterval = null;
             }
 
-            // Reset to minimal operation
             this.isStreaming = false;
 
-            // Update WebSocket to remove chat/redemption handlers
             if (this.webSocketManager) {
                 logger.debug('Bot', 'Removing chat and redemption handlers from WebSocket');
                 this.webSocketManager.chatHandler = null;
                 this.webSocketManager.redemptionHandler = null;
-                // Note: streamOnlineHandler and streamOfflineHandler remain active
             }
 
-            // Unsubscribe from chat/redemption events but keep stream events
             if (this.subscriptionManager) {
                 try {
                     logger.debug('Bot', 'Unsubscribing from chat and channel point events');
                     await this.subscriptionManager.unsubscribeFromChatEvents();
                     await this.subscriptionManager.unsubscribeFromChannelPoints();
-                    // Keep stream online/offline subscriptions active
                 } catch (unsubError) {
                     logger.error('Bot', 'Error unsubscribing from events', { error: unsubError.message });
                 }
@@ -515,7 +483,6 @@ class Bot {
 
             logger.info('Bot', 'Bot successfully transitioned to minimal mode. Waiting for next stream');
 
-            // Start 30-minute auto-shutdown timer
             this.startShutdownTimer();
 
         } catch (error) {
@@ -525,12 +492,11 @@ class Bot {
     }
 
     startShutdownTimer() {
-        // Clear any existing shutdown timer
         if (this.shutdownTimer) {
             clearTimeout(this.shutdownTimer);
         }
 
-        const gracePeriodMs = config.shutdownGracePeriod; // 30 minutes
+        const gracePeriodMs = config.shutdownGracePeriod;
         const gracePeriodMinutes = gracePeriodMs / 60000;
 
         logger.info('Bot', `Auto-shutdown timer started - bot will shutdown in ${gracePeriodMinutes} minutes if stream doesn't restart`, {
@@ -538,7 +504,6 @@ class Bot {
             gracePeriodMinutes
         });
 
-        // Log warnings at intervals
         const warnings = [
             { time: gracePeriodMs - 15 * 60000, message: '15 minutes until auto-shutdown' },
             { time: gracePeriodMs - 5 * 60000, message: '5 minutes until auto-shutdown' },
@@ -555,7 +520,6 @@ class Bot {
             }
         });
 
-        // Set the actual shutdown timer
         this.shutdownTimer = setTimeout(async () => {
             if (!this.isStreaming && !this.isShuttingDown) {
                 logger.info('Bot', 'Grace period expired - initiating auto-shutdown');
@@ -568,8 +532,6 @@ class Bot {
         try {
             logger.info('Bot', 'Checking for orphaned sessions from previous crashes');
 
-            // Step 1: Fix streams using last chat activity
-            // For streams with chat activity, use the last message timestamp
             const streamWithChatSql = `
                 UPDATE streams s
                 SET end_time = (
@@ -584,7 +546,6 @@ class Bot {
             `;
             const streamWithChatResult = await this.dbManager.query(streamWithChatSql);
 
-            // For streams with NO chat activity, use NOW() as fallback
             const streamNoChatSql = `
                 UPDATE streams
                 SET end_time = NOW()
@@ -604,7 +565,6 @@ class Bot {
                 logger.debug('Bot', 'No orphaned streams found');
             }
 
-            // Step 2: Fix viewing sessions using user's last message in that stream
             const sessionWithChatSql = `
                 UPDATE viewing_sessions vs
                 SET end_time = (
@@ -621,7 +581,6 @@ class Bot {
             `;
             const sessionWithChatResult = await this.dbManager.query(sessionWithChatSql);
 
-            // Step 3: For sessions without user messages, use stream end time or NOW()
             const sessionFallbackSql = `
                 UPDATE viewing_sessions vs
                 SET end_time = COALESCE(
@@ -655,12 +614,10 @@ class Bot {
                 error: error.message,
                 stack: error.stack
             });
-            // Don't throw - allow bot to continue even if cleanup fails
         }
     }
 
     async gracefulShutdown(reason = 'Manual shutdown') {
-        // Prevent multiple shutdown calls
         if (this.isShuttingDown) {
             logger.warn('Bot', 'Shutdown already in progress, ignoring duplicate call');
             return;
@@ -670,14 +627,12 @@ class Bot {
         logger.info('Bot', '=== Initiating graceful shutdown ===', { reason });
 
         try {
-            // Cancel any pending shutdown timer
             if (this.shutdownTimer) {
                 logger.debug('Bot', 'Clearing shutdown timer');
                 clearTimeout(this.shutdownTimer);
                 this.shutdownTimer = null;
             }
 
-            // If streaming, save stream data
             if (this.currentStreamId && this.viewerManager && this.analyticsManager) {
                 logger.info('Bot', 'Saving stream data before shutdown', { streamId: this.currentStreamId });
                 try {
@@ -689,28 +644,24 @@ class Bot {
                 }
             }
 
-            // Clear viewer tracking interval
             if (this.viewerTrackingInterval) {
                 logger.debug('Bot', 'Clearing viewer tracking interval');
                 clearInterval(this.viewerTrackingInterval);
                 this.viewerTrackingInterval = null;
             }
 
-            // Clear token refresh interval
             if (this.tokenRefreshInterval) {
                 logger.debug('Bot', 'Clearing token refresh interval');
                 clearInterval(this.tokenRefreshInterval);
                 this.tokenRefreshInterval = null;
             }
 
-            // Clear backup interval
             if (this.backupInterval) {
                 logger.debug('Bot', 'Clearing backup interval');
                 clearInterval(this.backupInterval);
                 this.backupInterval = null;
             }
 
-            // Create final database backup before shutdown (only if not in debug mode)
             if (this.backupManager && !config.isDebugMode) {
                 logger.info('Bot', 'Creating final database backup before shutdown');
                 try {
@@ -725,7 +676,6 @@ class Bot {
                 }
             }
 
-            // Close WebSocket connection
             if (this.webSocketManager) {
                 logger.info('Bot', 'Closing WebSocket connection');
                 try {
@@ -735,7 +685,6 @@ class Bot {
                 }
             }
 
-            // Close database connection
             if (this.dbManager) {
                 logger.info('Bot', 'Closing database connection');
                 try {
@@ -746,7 +695,6 @@ class Bot {
                 }
             }
 
-            // Log debug database preservation notice
             if (config.isDebugMode) {
                 const debugDbName = process.env.DB_NAME + '_debug';
                 logger.info('Bot', '=== DEBUG MODE SHUTDOWN ===');
@@ -756,12 +704,10 @@ class Bot {
 
             logger.info('Bot', '=== Graceful shutdown complete ===');
 
-            // Exit process
             process.exit(0);
 
         } catch (error) {
             logger.error('Bot', 'Error during graceful shutdown', { error: error.message, stack: error.stack });
-            // Force exit even if there was an error
             process.exit(1);
         }
     }
@@ -778,7 +724,6 @@ class Bot {
 
 const bot = new Bot();
 
-// Handle graceful shutdown on Ctrl+C (SIGINT) and kill signals (SIGTERM)
 process.on('SIGINT', async () => {
     logger.info('Bot', 'Received SIGINT (Ctrl+C) - initiating graceful shutdown');
     await bot.gracefulShutdown('SIGINT (Ctrl+C)');
@@ -789,7 +734,6 @@ process.on('SIGTERM', async () => {
     await bot.gracefulShutdown('SIGTERM');
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
     logger.error('Bot', 'Unhandled Promise Rejection', {
         reason: reason?.message || reason,
@@ -798,13 +742,11 @@ process.on('unhandledRejection', (reason, promise) => {
     });
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
     logger.error('Bot', 'Uncaught Exception - initiating emergency shutdown', {
         error: error.message,
         stack: error.stack
     });
-    // Give logger time to write, then exit
     setTimeout(() => process.exit(1), 1000);
 });
 
@@ -818,7 +760,6 @@ async function startBot() {
     }
 }
 
-// Only start bot if not in test environment
 if (process.env.NODE_ENV !== 'test') {
     startBot();
 }

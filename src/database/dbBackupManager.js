@@ -27,7 +27,6 @@ class DbBackupManager {
     }
 
     async createBackup(reason = 'manual') {
-        // Skip backups in debug mode
         if (config.isDebugMode) {
             logger.info('DbBackupManager', 'Skipping backup in debug mode', { reason });
             return false;
@@ -41,31 +40,24 @@ class DbBackupManager {
         try {
             logger.info('DbBackupManager', 'Starting database backup', { reason, filename });
 
-            // Ensure temp directory exists
             await fs.mkdir(this.tempBackupDir, { recursive: true });
 
-            // Create mysqldump command
             const dumpCommand = this.buildMysqldumpCommand(localPath);
 
-            // Execute mysqldump
             logger.debug('DbBackupManager', 'Executing mysqldump');
             await execAsync(dumpCommand);
 
-            // Verify backup file was created
             const stats = await fs.stat(localPath);
             logger.debug('DbBackupManager', 'Backup file created', {
                 size: stats.size,
                 path: localPath
             });
 
-            // Upload to S3
             await this.uploadToS3(localPath, s3Key);
 
-            // Clean up local file
             await fs.unlink(localPath);
             logger.debug('DbBackupManager', 'Local backup file cleaned up');
 
-            // Rotate old backups
             await this.rotateBackups();
 
             logger.info('DbBackupManager', 'Backup completed successfully', {
@@ -83,11 +75,14 @@ class DbBackupManager {
                 stack: error.stack
             });
 
-            // Clean up local file if it exists
             try {
                 await fs.unlink(localPath);
             } catch (cleanupError) {
-                // Ignore cleanup errors
+                logger.error('DbBackupManager', 'Cleanup failed', {
+                    reason,
+                    error: error.message,
+                    stack: error.stack
+                });
             }
 
             return false;
@@ -132,7 +127,6 @@ class DbBackupManager {
 
         logger.debug('DbBackupManager', 'Backups listed', { count: backups.length });
 
-        // Sort by LastModified descending (newest first)
         return backups.sort((a, b) => b.LastModified - a.LastModified);
     }
 
@@ -149,7 +143,6 @@ class DbBackupManager {
             return;
         }
 
-        // Delete backups beyond the max count
         const backupsToDelete = backups.slice(this.maxBackups);
 
         logger.info('DbBackupManager', 'Rotating backups', {
@@ -186,7 +179,6 @@ class DbBackupManager {
             }
             logger.debug('DbBackupManager', 'Temp directory cleaned up');
         } catch (error) {
-            // Ignore errors if directory doesn't exist
             if (error.code !== 'ENOENT') {
                 logger.error('DbBackupManager', 'Error cleaning up temp directory', {
                     error: error.message

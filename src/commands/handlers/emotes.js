@@ -2,9 +2,6 @@
 
 const logger = require('../../logger/logger');
 
-/**
- * Emote management command handlers
- */
 function emoteHandlers() {
     return {
         async emoteAdd(twitchBot, channel, context, args) {

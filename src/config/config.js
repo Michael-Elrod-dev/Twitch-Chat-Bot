@@ -4,13 +4,10 @@ require('dotenv').config();
 
 class Config {
     constructor() {
-        // Debug Mode Detection
         this.isDebugMode = process.argv.includes('--debug');
 
-        // Channel settings
         this.channelName = 'aimosthadme';
 
-        // Database
         this.database = {
             host: process.env.DB_HOST,
             port: parseInt(process.env.DB_PORT),
@@ -19,7 +16,6 @@ class Config {
             database: this.isDebugMode ? process.env.DB_NAME + '_debug' : process.env.DB_NAME
         };
 
-        // AWS S3 Backup Configuration
         this.aws = {
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -27,42 +23,35 @@ class Config {
             s3BucketName: process.env.AWS_S3_BUCKET_NAME
         };
 
-        // Logging Configuration
         this.logging = {
-            level: 'info', // Levels: 'error', 'warn', 'info', 'debug'
-            maxSize: '20m', // Rotate log file when it reaches this size (e.g., '20m' = 20 megabytes)
-            maxFiles: 10 // Keep maximum of 10 log files before deleting oldest
+            level: 'info',
+            maxSize: '20m',
+            maxFiles: 10
         };
 
 
-        // WebSocket
         this.wsEndpoint = 'wss://eventsub.wss.twitch.tv/ws';
-        this.wsReconnectDelay = 5000; // 5 seconds
+        this.wsReconnectDelay = 5000;
 
-        // API Endpoints
         this.twitchAuthEndpoint = 'https://id.twitch.tv/oauth2';
         this.twitchApiEndpoint = 'https://api.twitch.tv/helix';
         this.claudeApiEndpoint = 'https://api.anthropic.com/v1';
 
-        // Discord Notification Configuration
         this.discord = {
             webhookUrl: process.env.DISCORD_WEBHOOK_URL,
-            notificationDelay: 30000 // 30 seconds delay after stream goes live
+            notificationDelay: 30000
         };
 
-        // Twitch Channel URL
         this.twitchChannelUrl = `https://www.twitch.tv/${this.channelName}`;
 
-        // Intervals
-        this.tokenRefreshInterval = 300000;  // 5 minutes
-        this.viewerTrackingInterval = 60000; // 1 minute
-        this.spotifyInterval = 3000;         // 3 seconds
-        this.emoteCacheInterval = 300000;    // 5 minutes
-        this.commandCacheInterval = 300000;  // 5 minutes
-        this.shutdownGracePeriod = 1800000;  // 30 minutes
-        this.backupInterval = 3600000;       // 1 hour (for database backups when streaming)
+        this.tokenRefreshInterval = 300000;
+        this.viewerTrackingInterval = 60000;
+        this.spotifyInterval = 3000;
+        this.emoteCacheInterval = 300000;
+        this.commandCacheInterval = 300000;
+        this.shutdownGracePeriod = 1800000;
+        this.backupInterval = 3600000;
 
-        // AI Model Settings
         this.aiModels = {
             claude: {
                 model: 'claude-sonnet-4-5-20250929',
@@ -73,7 +62,6 @@ class Config {
             }
         };
 
-        // Rate Limits
         this.rateLimits = {
             claude: {
                 streamLimits: {
@@ -85,26 +73,20 @@ class Config {
             }
         };
 
-        // AI-Specific Settings
         this.aiSettings = {
             claude: {
-                systemPrompt: `You're a chill Twitch chat bot. Respond like a regular viewer who's knowledgeable but not trying too hard. Keep it brief (1-3 sentences max) - chat moves fast.
-
-Be conversational and natural. You can be sarcastic or have light banter when it fits, but don't force it. Match the vibe of the chat. Don't sound like an AI assistant - no "I'd be happy to help!" or overly formal language. Just talk like a normal person would in Twitch chat.
-
-If someone's asking something dumb or obvious, you can gently roast them. If it's a genuine question, give a straight answer. Read the room based on the chat history.
-
-Keep responses under ${this.aiModels.claude.maxCharacters} characters.`,
-                chatHistoryLimit: 50  // Number of recent chat messages to include as context
+                chatHistoryLimits: {
+                    regularChat: 50,
+                    advice: 0,
+                    roast: 0,
+                }
             }
         };
 
-        // Trigger Settings
         this.aiTriggers = {
             text: ['@almosthadai', 'almosthadai']
         };
 
-        // Error Responses
         this.errorMessages = {
             ai: {
                 unavailable: 'Sorry, I\'m having trouble responding right now.',

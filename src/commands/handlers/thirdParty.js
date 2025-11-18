@@ -1,11 +1,6 @@
 // src/commands/handlers/thirdParty.js
 
-/**
- * Third-party service command handlers
- * Commands that rely on external APIs and services
- */
 function thirdPartyHandlers() {
-    // Helper function for generating consistent hash codes from usernames
     function hashCode(str) {
         return str.split('').reduce((a, b) => {
             a = ((a << 5) - a) + b.charCodeAt(0);
@@ -13,7 +8,6 @@ function thirdPartyHandlers() {
         }, 0);
     }
 
-    // Helper function to get username-based seed
     function getUserSeed(username, minValue, maxValue) {
         const range = maxValue - minValue;
         const seed = (minValue + Math.abs(hashCode(username)) % range).toString().padStart(5, '0');

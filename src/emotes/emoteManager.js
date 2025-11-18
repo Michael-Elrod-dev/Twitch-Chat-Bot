@@ -24,7 +24,6 @@ class EmoteManager {
             `;
             const results = await this.dbManager.query(sql);
 
-            // Clear and rebuild cache
             this.emoteCache.clear();
             for (const row of results) {
                 this.emoteCache.set(row.trigger_text.toLowerCase(), row.response_text);
@@ -40,7 +39,6 @@ class EmoteManager {
 
     async getEmoteResponse(triggerText) {
         try {
-            // Check if cache needs refresh
             if (Date.now() > this.cacheExpiry) {
                 await this.loadEmotes();
             }
@@ -60,13 +58,12 @@ class EmoteManager {
             `;
             await this.dbManager.query(sql, [triggerText.toLowerCase(), responseText]);
 
-            // Update cache
             this.emoteCache.set(triggerText.toLowerCase(), responseText);
 
             return true;
         } catch (error) {
             if (error.code === 'ER_DUP_ENTRY') {
-                return false; // Emote already exists
+                return false;
             }
             logger.error('EmoteManager', 'Failed to add emote', { error: error.message, stack: error.stack, triggerText, responseText });
             throw error;
@@ -83,7 +80,6 @@ class EmoteManager {
             const result = await this.dbManager.query(sql, [responseText, triggerText.toLowerCase()]);
 
             if (result.affectedRows > 0) {
-                // Update cache
                 this.emoteCache.set(triggerText.toLowerCase(), responseText);
                 return true;
             }
@@ -103,7 +99,6 @@ class EmoteManager {
             const result = await this.dbManager.query(sql, [triggerText.toLowerCase()]);
 
             if (result.affectedRows > 0) {
-                // Remove from cache
                 this.emoteCache.delete(triggerText.toLowerCase());
                 return true;
             }

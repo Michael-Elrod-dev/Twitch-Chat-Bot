@@ -9,11 +9,14 @@ class ClaudeModel {
         this.apiKey = apiKey;
     }
 
-    async getTextResponse(prompt, context = {}) {
+    async getTextResponse(prompt, context = {}, systemPrompt = null) {
         const startTime = Date.now();
+
+        const systemMessage = systemPrompt || config.aiSettings.claude.systemPrompt;
 
         logger.debug('ClaudeModel', 'Sending request to Claude API', {
             promptLength: prompt.length,
+            systemPromptLength: systemMessage?.length,
             model: config.aiModels.claude.model,
             userName: context.userName
         });
@@ -30,7 +33,7 @@ class ClaudeModel {
                     model: config.aiModels.claude.model,
                     max_tokens: config.aiModels.claude.maxTokens,
                     temperature: config.aiModels.claude.temperature,
-                    system: config.aiSettings.claude.systemPrompt,
+                    system: systemMessage,
                     messages: [
                         {
                             role: 'user',

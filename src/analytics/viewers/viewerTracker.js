@@ -46,18 +46,6 @@ class ViewerTracker {
         }
     }
 
-    /**
-     * Track a user interaction
-     * @param {string} username - The username
-     * @param {string} userId - The user ID
-     * @param {string} streamId - The stream ID
-     * @param {string} type - The type of interaction
-     * @param {string|null} content - The content of the interaction
-     * @param {Object} userContext - User context object
-     * @param {boolean} userContext.isMod - Whether user is a moderator
-     * @param {boolean} userContext.isSubscriber - Whether user is a subscriber
-     * @param {boolean} userContext.isBroadcaster - Whether user is the broadcaster
-     */
     async trackInteraction(username, userId, streamId, type, content = null, userContext = {}) {
         try {
             if (!username) {
@@ -241,29 +229,23 @@ class ViewerTracker {
                 return;
             }
 
-            // Create a set of current viewer IDs for quick lookup
             const currentViewerIds = new Set(viewers.map(v => v.user_id));
 
-            // 1. Process current viewers - start sessions for new viewers
             let newSessions = 0;
             for (const viewer of viewers) {
                 const userId = viewer.user_id;
                 const username = viewer.user_login;
 
-                // Ensure user exists in viewers table
                 await this.ensureUserExists(username, userId);
 
-                // Check if user has active session
                 const activeSession = await this.getActiveSession(userId, streamId);
 
-                // If no active session, start one
                 if (!activeSession) {
                     await this.startSession(userId, streamId);
                     newSessions++;
                 }
             }
 
-            // 2. Find viewers who left - end their sessions
             const activeSql = `
                 SELECT session_id, user_id FROM viewing_sessions
                 WHERE stream_id = ? AND end_time IS NULL
@@ -272,7 +254,6 @@ class ViewerTracker {
 
             let endedSessions = 0;
             for (const session of activeSessions) {
-                // If user no longer in current viewer list, end their session
                 if (!currentViewerIds.has(session.user_id)) {
                     await this.endSession(session.session_id);
                     endedSessions++;

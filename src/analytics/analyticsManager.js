@@ -24,18 +24,6 @@ class AnalyticsManager {
         }
     }
 
-    /**
-     * Track a chat message, command, or redemption
-     * @param {string} username - The username
-     * @param {string} userId - The user ID
-     * @param {string} streamId - The stream ID
-     * @param {string} message - The message content
-     * @param {string} type - The type of interaction ('message', 'command', or 'redemption')
-     * @param {Object} userContext - User context object
-     * @param {boolean} userContext.isMod - Whether user is a moderator
-     * @param {boolean} userContext.isSubscriber - Whether user is a subscriber
-     * @param {boolean} userContext.isBroadcaster - Whether user is the broadcaster
-     */
     async trackChatMessage(username, userId, streamId, message, type = 'message', userContext = {}) {
         try {
             await this.viewerTracker.trackInteraction(username, userId, streamId, type, message, userContext);

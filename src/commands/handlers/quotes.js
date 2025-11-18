@@ -2,11 +2,6 @@
 
 const logger = require('../../logger/logger');
 
-/**
- * Quote command handlers
- * @param {Object} dependencies - Injected dependencies
- * @param {Object} dependencies.quoteManager - Quote manager instance
- */
 function quoteHandlers(dependencies) {
     const { quoteManager } = dependencies;
 

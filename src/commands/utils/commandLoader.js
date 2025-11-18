@@ -4,23 +4,16 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../logger/logger');
 
-/**
- * Automatically discovers and loads all command handlers from the handlers directory
- * @param {Object} dependencies - Dependencies to inject into command handlers
- * @returns {Object} Object mapping handler names to handler functions
- */
 function loadCommandHandlers(dependencies) {
     const handlers = {};
     const handlersDir = path.join(__dirname, '..', 'handlers');
 
     try {
-        // Check if handlers directory exists
         if (!fs.existsSync(handlersDir)) {
             logger.warn('CommandLoader', 'Handlers directory does not exist', { path: handlersDir });
             return handlers;
         }
 
-        // Read all .js files from handlers directory
         const handlerFiles = fs.readdirSync(handlersDir)
             .filter(file => file.endsWith('.js'));
 
@@ -30,18 +23,14 @@ function loadCommandHandlers(dependencies) {
             files: handlerFiles
         });
 
-        // Load each handler file
         for (const file of handlerFiles) {
             try {
                 const filePath = path.join(handlersDir, file);
                 const handlerModule = require(filePath);
 
-                // Handler modules should export a function that takes dependencies
-                // and returns an object of handler functions
                 if (typeof handlerModule === 'function') {
                     const moduleHandlers = handlerModule(dependencies);
 
-                    // Merge handlers from this module
                     Object.assign(handlers, moduleHandlers);
 
                     logger.info('CommandLoader', 'Loaded handler module', {

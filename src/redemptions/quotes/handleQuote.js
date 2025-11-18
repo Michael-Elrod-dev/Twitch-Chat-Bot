@@ -23,7 +23,6 @@ async function handleQuote(event, twitchBot) {
             return;
         }
 
-        // Match quotes with various quote characters (straight and curly quotes)
         const match = input.match(/['"\u2018\u2019\u201C\u201D](.*?)['"\u2018\u2019\u201C\u201D]\s*-\s*(.*)/);
 
         if (!match) {

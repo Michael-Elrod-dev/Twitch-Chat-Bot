@@ -13,12 +13,6 @@ class DiscordNotifier {
         });
     }
 
-    /**
-     * Send a stream live notification to Discord via webhook
-     * @param {string} streamTitle - The title of the stream
-     * @param {string} streamCategory - The game/category being played
-     * @returns {Promise<boolean>} - Returns true if notification sent successfully
-     */
     async sendStreamLiveNotification(streamTitle, streamCategory) {
         if (!this.webhookUrl) {
             logger.warn('DiscordNotifier', 'Discord webhook URL not configured, skipping notification');
@@ -67,12 +61,6 @@ class DiscordNotifier {
         }
     }
 
-    /**
-     * Build the Discord webhook message payload
-     * @param {string} streamTitle - The title of the stream
-     * @param {string} streamCategory - The game/category being played
-     * @returns {Object} - Discord webhook message object
-     */
     buildNotificationMessage(streamTitle, streamCategory) {
         return {
             content: '@everyone\n\n' +

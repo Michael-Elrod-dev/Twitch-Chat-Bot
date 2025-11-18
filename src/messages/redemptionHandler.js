@@ -32,14 +32,13 @@ class RedemptionHandler {
                 input: event.input
             });
 
-            // Track redemption in analytics
             await bot.analyticsManager.trackChatMessage(
                 event.userDisplayName,
                 event.userId,
                 bot.currentStreamId,
                 event.input || event.rewardTitle,
                 'redemption',
-                {} // userContext - redemptions don't have mod/subscriber info in this context
+                {}
             );
 
             await this.redemptionManager.handleRedemption(event);

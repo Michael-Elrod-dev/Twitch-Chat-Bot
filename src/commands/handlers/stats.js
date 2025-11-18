@@ -2,9 +2,6 @@
 
 const logger = require('../../logger/logger');
 
-/**
- * Analytics and statistics command handlers
- */
 function statsHandlers() {
     return {
         async combinedStats(twitchBot, channel, context, args) {

@@ -33,7 +33,6 @@ class AIManager {
             streamId
         });
 
-        // Check rate limits for Claude
         const rateLimitResult = await this.rateLimiter.checkRateLimit(userId, 'claude', streamId, userContext);
 
         if (!rateLimitResult.allowed) {
@@ -50,11 +49,9 @@ class AIManager {
             };
         }
 
-        // Fetch context data for enhanced prompt
-        const chatHistoryLimit = config.aiSettings.claude.chatHistoryLimit;
+        const chatHistoryLimit = config.aiSettings.claude.chatHistoryLimits.regularChat;
         const context = await this.contextBuilder.getAllContext(streamId, chatHistoryLimit);
 
-        // Build enhanced prompt with context
         const enhancedPrompt = this.promptBuilder.buildUserMessage(
             prompt,
             userContext.userName,
@@ -70,22 +67,20 @@ class AIManager {
             modsCount: context.userRoles.mods.length
         });
 
-        // Log full prompt in debug mode for testing/verification
         logger.debug('AIManager', 'Full prompt being sent to Claude:', {
             fullPrompt: enhancedPrompt
         });
 
-        // Get response from Claude with enhanced prompt
-        const response = await this.claudeModel.getTextResponse(enhancedPrompt, userContext);
+        const chatSystemPrompt = require('./prompts/chatPrompt');
+
+        const response = await this.claudeModel.getTextResponse(enhancedPrompt, userContext, chatSystemPrompt);
 
         if (response) {
             await this.rateLimiter.updateUsage(userId, 'claude', streamId);
 
-            // Get updated usage stats for display
             const usageStats = await this.rateLimiter.getUserStats(userId, 'claude', streamId);
             const userLimits = this.rateLimiter.getUserLimits('claude', userContext);
 
-            // Add usage counter (unless broadcaster has unlimited)
             let finalResponse = response;
             if (!userContext.isBroadcaster && userLimits.streamLimit < 999999) {
                 finalResponse = `(${usageStats.streamCount}/${userLimits.streamLimit}) ${response}`;
@@ -119,7 +114,6 @@ class AIManager {
     }
 
 
-    // Helper methods to check triggers
     shouldTriggerText(message) {
         const lowerMessage = message.toLowerCase();
         return config.aiTriggers.text.some(trigger =>
@@ -132,12 +126,120 @@ class AIManager {
         let prompt = message;
 
         if (triggerType === 'text') {
-            // Remove bot mentions - just the two we still use
             prompt = prompt.replace(/@almosthadai/gi, '').trim();
             prompt = prompt.replace(/almosthadai/gi, '').trim();
         }
 
         return prompt || null;
+    }
+
+    async handleGameCommand(gameType, targetUserId, targetUsername, streamId, requestingUserContext = {}) {
+        logger.debug('AIManager', 'Processing game command', {
+            gameType,
+            targetUserId,
+            targetUsername,
+            streamId,
+            requestedBy: requestingUserContext.userName
+        });
+
+        const rateLimitResult = await this.rateLimiter.checkRateLimit(
+            requestingUserContext.userId,
+            'claude',
+            streamId,
+            requestingUserContext
+        );
+
+        if (!rateLimitResult.allowed) {
+            logger.info('AIManager', 'Rate limit exceeded for game command', {
+                gameType,
+                userId: requestingUserContext.userId,
+                userName: requestingUserContext.userName,
+                reason: rateLimitResult.reason
+            });
+            return {
+                success: false,
+                message: rateLimitResult.message
+            };
+        }
+
+        const chatHistoryLimit = config.aiSettings.claude.chatHistoryLimits[gameType] || 0;
+        const [context, userProfile] = await Promise.all([
+            this.contextBuilder.getAllContext(streamId, chatHistoryLimit),
+            this.contextBuilder.getUserProfile(targetUserId)
+        ]);
+
+        const chatPrompt = require('./prompts/chatPrompt');
+
+        let gamePrompt;
+        try {
+            gamePrompt = require(`./prompts/${gameType}Prompt`);
+        } catch (error) {
+            logger.error('AIManager', 'Failed to load game prompt', {
+                gameType,
+                error: error.message
+            });
+            return {
+                success: false,
+                message: 'Game type not available.'
+            };
+        }
+
+        const combinedSystemPrompt = chatPrompt + '\n\n' + gamePrompt;
+
+        const userPrompt = this.promptBuilder.buildGamePrompt(
+            targetUsername,
+            userProfile,
+            context.streamContext,
+            context.chatHistory,
+            context.userRoles
+        );
+
+        logger.debug('AIManager', 'Game prompt built', {
+            gameType,
+            hasUserProfile: !!userProfile,
+            targetUsername,
+            chatHistoryCount: context.chatHistory.length,
+            systemPromptLength: combinedSystemPrompt.length
+        });
+
+        logger.debug('AIManager', 'Game prompts being sent to Claude:', {
+            systemPrompt: combinedSystemPrompt,
+            userPrompt: userPrompt
+        });
+
+        const response = await this.claudeModel.getTextResponse(userPrompt, requestingUserContext, combinedSystemPrompt);
+
+        if (response) {
+            await this.rateLimiter.updateUsage(requestingUserContext.userId, 'claude', streamId);
+
+            const usageStats = await this.rateLimiter.getUserStats(requestingUserContext.userId, 'claude', streamId);
+            const userLimits = this.rateLimiter.getUserLimits('claude', requestingUserContext);
+
+            logger.info('AIManager', 'Game command completed successfully', {
+                gameType,
+                targetUsername,
+                requestedBy: requestingUserContext.userName,
+                responseLength: response.length,
+                streamCount: usageStats.streamCount,
+                streamLimit: userLimits.streamLimit
+            });
+
+            return {
+                success: true,
+                response: response
+            };
+        }
+
+        logger.error('AIManager', 'Failed to get AI response for game command', {
+            gameType,
+            targetUsername,
+            requestedBy: requestingUserContext.userName
+        });
+
+        return {
+            success: false,
+            message: config.errorMessages.ai.unavailable
+        };
     }
 }
 

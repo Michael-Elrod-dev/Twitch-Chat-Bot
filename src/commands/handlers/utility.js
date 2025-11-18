@@ -3,9 +3,6 @@
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const logger = require('../../logger/logger');
 
-/**
- * Utility command handlers
- */
 function utilityHandlers() {
     return {
         async followAge(twitchBot, channel, context, args) {
