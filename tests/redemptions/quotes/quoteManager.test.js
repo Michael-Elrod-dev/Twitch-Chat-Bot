@@ -284,7 +284,6 @@ describe('QuoteManager', () => {
         });
 
         it('should handle complete quote lifecycle', async () => {
-            // Add a quote
             mockDbManager.query.mockResolvedValueOnce({ insertId: 1 });
             const insertId = await quoteManager.addQuote({
                 quote: 'Test quote',
@@ -294,7 +293,6 @@ describe('QuoteManager', () => {
             });
             expect(insertId).toBe(1);
 
-            // Get it by ID
             mockDbManager.query.mockResolvedValueOnce([{
                 id: 1,
                 quote: 'Test quote',
@@ -306,7 +304,6 @@ describe('QuoteManager', () => {
             const quote = await quoteManager.getQuoteById(1);
             expect(quote.quote).toBe('Test quote');
 
-            // Check total count
             mockDbManager.query.mockResolvedValueOnce([{ count: 1 }]);
             const total = await quoteManager.getTotalQuotes();
             expect(total).toBe(1);
@@ -327,7 +324,6 @@ describe('QuoteManager', () => {
         });
 
         it('should handle multiple quotes correctly', async () => {
-            // Add first quote
             mockDbManager.query.mockResolvedValueOnce({ insertId: 1 });
             await quoteManager.addQuote({
                 quote: 'First',
@@ -336,7 +332,6 @@ describe('QuoteManager', () => {
                 userId: 'u1'
             });
 
-            // Add second quote
             mockDbManager.query.mockResolvedValueOnce({ insertId: 2 });
             await quoteManager.addQuote({
                 quote: 'Second',
@@ -345,7 +340,6 @@ describe('QuoteManager', () => {
                 userId: 'u2'
             });
 
-            // Get total
             mockDbManager.query.mockResolvedValueOnce([{ count: 2 }]);
             const total = await quoteManager.getTotalQuotes();
             expect(total).toBe(2);

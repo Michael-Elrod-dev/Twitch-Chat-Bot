@@ -2,10 +2,8 @@
 
 const WebSocketManager = require('../../src/websocket/webSocketManager');
 
-// Mock WebSocket
 jest.mock('ws');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -13,7 +11,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     wsEndpoint: 'wss://test.twitch.tv/ws',
     wsReconnectDelay: 1000

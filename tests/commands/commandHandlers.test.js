@@ -1,16 +1,13 @@
 // tests/commands/commandHandlers.test.js
 
-// Tests for modular command handler system
 
 const { loadCommandHandlers } = require('../../src/commands/utils/commandLoader');
 
-// Mock node-fetch
 jest.mock('node-fetch', () => {
     const actualFetch = jest.requireActual('node-fetch');
     return jest.fn((...args) => actualFetch.default(...args));
 });
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -88,7 +85,6 @@ describe('CommandHandlers (Modular)', () => {
             badges: {}
         };
 
-        // Load handlers using the new modular system
         handlers = loadCommandHandlers({
             quoteManager: mockQuoteManager,
             spotifyManager: mockSpotifyManager
@@ -96,8 +92,6 @@ describe('CommandHandlers (Modular)', () => {
     });
 
     describe('Utility Functions', () => {
-        // We can't directly test the helper functions since they're not exported,
-        // but we can test their behavior through commands that use them
 
         describe('getUserSeed via fursona command', () => {
             it('should generate consistent fursona for same user', async () => {
@@ -319,7 +313,6 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should handle error gracefully', async () => {
-            // Force an error by making previousTrack throw
             Object.defineProperty(mockSpotifyManager, 'previousTrack', {
                 get: () => { throw new Error('Access error'); }
             });

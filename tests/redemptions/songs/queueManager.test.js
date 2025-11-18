@@ -2,7 +2,6 @@
 
 const QueueManager = require('../../../src/redemptions/songs/queueManager');
 
-// Mock logger
 jest.mock('../../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -392,7 +391,6 @@ describe('QueueManager', () => {
         });
 
         it('should handle complete queue lifecycle', async () => {
-            // Add tracks
             mockDbManager.query
                 .mockResolvedValueOnce([{ next_position: 1 }])
                 .mockResolvedValueOnce({ affectedRows: 1 })
@@ -413,7 +411,6 @@ describe('QueueManager', () => {
                 requestedBy: 'user2'
             });
 
-            // Get tracks
             mockDbManager.query.mockResolvedValueOnce([
                 { uri: 'spotify:track:1', name: 'Song 1', artist: 'Artist 1', requestedBy: 'user1' },
                 { uri: 'spotify:track:2', name: 'Song 2', artist: 'Artist 2', requestedBy: 'user2' }
@@ -422,7 +419,6 @@ describe('QueueManager', () => {
             const tracks = await queueManager.getPendingTracks();
             expect(tracks).toHaveLength(2);
 
-            // Remove first track
             mockDbManager.query.mockResolvedValue({ affectedRows: 1 });
             await queueManager.removeFirstTrack();
 
@@ -432,7 +428,6 @@ describe('QueueManager', () => {
         });
 
         it('should handle priority and regular queue mix', async () => {
-            // Add regular track
             mockDbManager.query
                 .mockResolvedValueOnce([{ next_position: 1 }])
                 .mockResolvedValueOnce({ affectedRows: 1 });
@@ -444,7 +439,6 @@ describe('QueueManager', () => {
                 requestedBy: 'user1'
             });
 
-            // Add priority track
             mockDbManager.query.mockResolvedValue({ affectedRows: 1 });
 
             await queueManager.addToPriorityQueue({

@@ -2,7 +2,6 @@
 
 const AIManager = require('../../src/ai/aiManager');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -10,7 +9,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock dependencies
 jest.mock('../../src/config/config', () => ({
     aiTriggers: {
         text: ['@almosthadai', 'almosthadai']
@@ -411,7 +409,6 @@ describe('AIManager', () => {
         });
 
         it('should handle complete successful flow', async () => {
-            // Setup mocks
             mockRateLimiter.checkRateLimit.mockResolvedValueOnce({
                 allowed: true
             });
@@ -423,7 +420,6 @@ describe('AIManager', () => {
                 streamLimit: 5
             });
 
-            // Execute
             const result = await aiManager.handleTextRequest(
                 'test prompt',
                 'user123',
@@ -431,7 +427,6 @@ describe('AIManager', () => {
                 { isBroadcaster: false }
             );
 
-            // Verify
             expect(result.success).toBe(true);
             expect(result.response).toBe('(2/5) AI response here');
             expect(mockRateLimiter.checkRateLimit).toHaveBeenCalled();
@@ -471,7 +466,6 @@ describe('AIManager', () => {
                 {}
             );
 
-            // Empty string is falsy, should return error
             expect(result.success).toBe(false);
             expect(mockRateLimiter.updateUsage).not.toHaveBeenCalled();
         });

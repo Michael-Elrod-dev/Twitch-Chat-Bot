@@ -2,10 +2,8 @@
 
 const SubscriptionManager = require('../../src/websocket/subscriptionManager');
 
-// Mock node-fetch
 jest.mock('node-fetch');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -13,7 +11,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));
@@ -335,7 +332,6 @@ describe('SubscriptionManager', () => {
 
     describe('unsubscribeFromChatEvents', () => {
         it('should unsubscribe from chat events successfully', async () => {
-            // Mock GET subscriptions
             const getResponse = {
                 ok: true,
                 json: jest.fn().mockResolvedValue({
@@ -349,7 +345,6 @@ describe('SubscriptionManager', () => {
                 })
             };
 
-            // Mock DELETE subscription
             const deleteResponse = {
                 ok: true,
                 json: jest.fn().mockResolvedValue({})
@@ -560,7 +555,6 @@ describe('SubscriptionManager', () => {
 
             await subscriptionManager.unsubscribeFromChatEvents();
 
-            // Should delete the one matching the session ID
             expect(fetch).toHaveBeenNthCalledWith(2, expect.stringContaining('id=sub-correct-session'), expect.any(Object));
         });
     });
@@ -578,7 +572,6 @@ describe('SubscriptionManager', () => {
             await subscriptionManager.subscribeToStreamOnline();
 
             expect(fetch).toHaveBeenCalledTimes(3);
-            // Each subscribe method logs at least one info message
             expect(logger.info).toHaveBeenCalled();
         });
 

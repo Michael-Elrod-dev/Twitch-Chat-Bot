@@ -2,7 +2,6 @@
 
 const handleQuote = require('../../../src/redemptions/quotes/handleQuote');
 
-// Mock logger
 jest.mock('../../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -259,7 +258,6 @@ describe('handleQuote', () => {
 
             await handleQuote(event, mockTwitchBot);
 
-            // The regex requires a dash and author portion, so just "Quote" won't match
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
@@ -332,7 +330,6 @@ describe('handleQuote', () => {
             statusError.stack = 'Error stack';
             mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(statusError);
 
-            // This should not throw, just log the error
             await expect(handleQuote(event, mockTwitchBot)).resolves.not.toThrow();
         });
 

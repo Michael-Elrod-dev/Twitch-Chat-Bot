@@ -2,7 +2,6 @@
 
 const EmoteManager = require('../../src/emotes/emoteManager');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -10,7 +9,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     emoteCacheInterval: 60000
 }));
@@ -112,7 +110,6 @@ describe('EmoteManager', () => {
         });
 
         it('should refresh cache when expired', async () => {
-            // Expire cache
             emoteManager.cacheExpiry = Date.now() - 1000;
 
             mockDbManager.query.mockResolvedValueOnce([
@@ -121,12 +118,10 @@ describe('EmoteManager', () => {
 
             await emoteManager.getEmoteResponse('new');
 
-            // Should have called query twice (init + refresh)
             expect(mockDbManager.query).toHaveBeenCalledTimes(2);
         });
 
         it('should return null on error', async () => {
-            // Force an error by expiring cache and making query fail
             emoteManager.cacheExpiry = Date.now() - 1000;
             mockDbManager.query.mockRejectedValueOnce(new Error('DB Error'));
 
@@ -251,7 +246,6 @@ describe('EmoteManager', () => {
 
             await emoteManager.updateEmote('edit', 'NewValue');
 
-            // Cache should still have old value
             expect(emoteManager.emoteCache.get('edit')).toBe('Old Response');
         });
     });
@@ -316,7 +310,6 @@ describe('EmoteManager', () => {
 
             await emoteManager.deleteEmote('delete');
 
-            // Should still be in cache
             expect(emoteManager.emoteCache.has('delete')).toBe(true);
         });
     });

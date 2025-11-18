@@ -2,7 +2,6 @@
 
 const RedemptionHandler = require('../../src/messages/redemptionHandler');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -410,7 +409,6 @@ describe('RedemptionHandler', () => {
                 }
             };
 
-            // First redemption fails
             mockRedemptionManager.handleRedemption
                 .mockRejectedValueOnce(new Error('Processing failed'))
                 .mockResolvedValueOnce(true);

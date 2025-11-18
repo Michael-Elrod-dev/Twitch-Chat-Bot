@@ -2,10 +2,8 @@
 
 const AnalyticsManager = require('../../src/analytics/analyticsManager');
 
-// Mock ViewerTracker
 jest.mock('../../src/analytics/viewers/viewerTracker');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -87,7 +85,6 @@ describe('AnalyticsManager', () => {
             await analyticsManager.init(mockDbManager);
             const firstTracker = analyticsManager.viewerTracker;
 
-            // Re-initialize
             const newMockDbManager = { query: jest.fn() };
             await analyticsManager.init(newMockDbManager);
 
@@ -389,7 +386,6 @@ describe('AnalyticsManager', () => {
 
             await analyticsManager.trackStreamStart('stream-123', 'Test', 'Category');
 
-            // currentStreamId is set before the query, so it should still be set
             expect(analyticsManager.currentStreamId).toBe('stream-123');
         });
     });
@@ -459,7 +455,6 @@ describe('AnalyticsManager', () => {
 
             await analyticsManager.trackStreamEnd('stream-123');
 
-            // currentStreamId should remain unchanged when query fails
             expect(analyticsManager.currentStreamId).toBe('stream-123');
         });
     });
@@ -471,16 +466,13 @@ describe('AnalyticsManager', () => {
         });
 
         it('should handle complete stream lifecycle', async () => {
-            // Start stream
             await analyticsManager.trackStreamStart('stream-123', 'Test Stream', 'Gaming');
             expect(analyticsManager.currentStreamId).toBe('stream-123');
 
-            // Track messages
             await analyticsManager.trackChatMessage('user1', 'id1', 'stream-123', 'msg1', 'message', {});
             await analyticsManager.trackChatMessage('user2', 'id2', 'stream-123', '!cmd', 'command', {});
             await analyticsManager.trackChatMessage('user3', 'id3', 'stream-123', 'redemption', 'redemption', {});
 
-            // End stream
             await analyticsManager.trackStreamEnd('stream-123');
             expect(analyticsManager.currentStreamId).toBeNull();
 
@@ -502,7 +494,6 @@ describe('AnalyticsManager', () => {
             await analyticsManager.trackStreamStart('stream-1', 'Stream 1', 'Category 1');
             expect(analyticsManager.currentStreamId).toBe('stream-1');
 
-            // Start new stream without ending the first one
             await analyticsManager.trackStreamStart('stream-2', 'Stream 2', 'Category 2');
             expect(analyticsManager.currentStreamId).toBe('stream-2');
         });

@@ -2,7 +2,6 @@
 
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
 
-// Mock the logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -18,12 +17,10 @@ describe('ViewerTracker', () => {
     let mockAnalyticsManager;
 
     beforeEach(() => {
-        // Create mock database manager
         mockDbManager = {
             query: jest.fn()
         };
 
-        // Create mock analytics manager
         mockAnalyticsManager = {
             dbManager: mockDbManager
         };
@@ -137,7 +134,6 @@ describe('ViewerTracker', () => {
         it('should handle database errors without throwing', async () => {
             mockDbManager.query.mockRejectedValueOnce(new Error('DB Error'));
 
-            // Should not throw
             await expect(
                 viewerTracker.startSession('user123', 'stream456')
             ).resolves.toBeUndefined();
@@ -200,7 +196,6 @@ describe('ViewerTracker', () => {
             ];
             const streamId = 'stream123';
 
-            // Mock ensureUserExists calls
             mockDbManager.query
                 .mockResolvedValueOnce([]) // user1 ensureUserExists
                 .mockResolvedValueOnce([]) // user1 getActiveSession (no session)
@@ -212,7 +207,6 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.processViewerList(viewers, streamId);
 
-            // Should create 2 sessions
             const startSessionCalls = mockDbManager.query.mock.calls.filter(
                 call => call[0].includes('INSERT INTO viewing_sessions')
             );
@@ -232,7 +226,6 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.processViewerList(viewers, streamId);
 
-            // Should NOT create a new session
             const startSessionCalls = mockDbManager.query.mock.calls.filter(
                 call => call[0].includes('INSERT INTO viewing_sessions')
             );
@@ -256,7 +249,6 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.processViewerList(viewers, streamId);
 
-            // Should end session for user2 who left
             const endSessionCalls = mockDbManager.query.mock.calls.filter(
                 call => call[0].includes('SET end_time = NOW()') && call[1][0] === 43
             );
@@ -269,7 +261,6 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.processViewerList(viewers, streamId);
 
-            // Should not call database at all
             expect(mockDbManager.query).not.toHaveBeenCalled();
         });
 
@@ -287,14 +278,11 @@ describe('ViewerTracker', () => {
             const streamId = 'stream123';
 
             mockDbManager.query
-                // user1 processing
                 .mockResolvedValueOnce([]) // ensureUserExists
                 .mockResolvedValueOnce([{ session_id: 41 }]) // has session
-                // user3 processing
                 .mockResolvedValueOnce([]) // ensureUserExists
                 .mockResolvedValueOnce([]) // no session
                 .mockResolvedValueOnce([]) // startSession
-                // Active sessions
                 .mockResolvedValueOnce([
                     { session_id: 41, user_id: '111' }, // user1 stays
                     { session_id: 42, user_id: '222' }  // user2 left
@@ -303,13 +291,11 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.processViewerList(viewers, streamId);
 
-            // Should create 1 session (user3)
             const startSessionCalls = mockDbManager.query.mock.calls.filter(
                 call => call[0].includes('INSERT INTO viewing_sessions')
             );
             expect(startSessionCalls).toHaveLength(1);
 
-            // Should end 1 session (user2)
             const endSessionCalls = mockDbManager.query.mock.calls.filter(
                 call => call[0].includes('SET end_time = NOW()')
             );
@@ -533,7 +519,6 @@ describe('ViewerTracker', () => {
 
             await viewerTracker.getTopUsers(-5);
 
-            // Should default to 5
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('LIMIT 5')
             );

@@ -25,7 +25,6 @@ async function createChannelPointReward(rewardConfig) {
             return;
         }
 
-        // Directly use rewardConfig as provided
         const reward = await apiClient.channelPoints.createCustomReward(BROADCASTER_ID, rewardConfig);
 
         logger.info('RedemptionCreation', 'Custom reward created successfully', {
@@ -42,7 +41,6 @@ async function createChannelPointReward(rewardConfig) {
     }
 }
 
-// Example usage: specifying all fields directly, even if disabled
 createChannelPointReward({
     title: 'Pick the game',
     prompt: 'Pick any game from Steam and I will play it on the next stream',
@@ -52,15 +50,9 @@ createChannelPointReward({
     userInputRequired: true,
     shouldRedemptionsSkipRequestQueue: false,
 
-    // Enable maximum per stream (disabled for now)
     isMaxPerStreamEnabled: false,
-    // maxPerStream: 5,
 
-    // Enable maximum per user per stream (disabled for now)
     isMaxPerUserPerStreamEnabled: false,
-    // maxPerUserPerStream: 2,
 
-    // Enable global cooldown (disabled for now)
     isGlobalCooldownEnabled: false,
-    // globalCooldown: 300
 });

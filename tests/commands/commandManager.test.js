@@ -1,10 +1,8 @@
 // tests/commands/commandManager.test.js
 
-// Updated to test both legacy and modular command handler systems
 
 const CommandManager = require('../../src/commands/commandManager');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -12,7 +10,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     commandCacheInterval: 60000
 }));
@@ -33,10 +30,8 @@ describe('CommandManager', () => {
             handleStats: jest.fn()
         };
 
-        // Test with legacy mode (direct handler object)
         commandManager = new CommandManager(mockSpecialHandlers);
 
-        // Mock Twitch bot
         mockTwitchBot = {
             sendMessage: jest.fn().mockResolvedValue(undefined),
             twitchAPI: {
@@ -134,7 +129,6 @@ describe('CommandManager', () => {
         });
 
         it('should refresh cache when expired', async () => {
-            // Expire cache
             commandManager.cacheExpiry = Date.now() - 1000;
 
             mockDbManager.query.mockResolvedValueOnce([
@@ -143,7 +137,6 @@ describe('CommandManager', () => {
 
             await commandManager.getCommand('!new');
 
-            // Should have called query twice (init + refresh)
             expect(mockDbManager.query).toHaveBeenCalledTimes(2);
         });
     });
@@ -326,7 +319,6 @@ describe('CommandManager', () => {
 
             await commandManager.handleCommand(mockTwitchBot, 'channel', context, '!command add !test');
 
-            // Should return early, not send any message
             expect(mockTwitchBot.sendMessage).not.toHaveBeenCalled();
         });
 
@@ -437,7 +429,6 @@ describe('CommandManager', () => {
                 '!command add !multiword This is a long response with many words'
             );
 
-            // Should join all words after command name
             expect(commandManager.commandCache.get('!multiword').response).toBe(
                 'This is a long response with many words'
             );
@@ -471,7 +462,6 @@ describe('CommandManager', () => {
 
             await commandManager.handleCommand(mockTwitchBot, 'channel', context, '!mod');
 
-            // Should return early, not send message
             expect(mockTwitchBot.sendMessage).not.toHaveBeenCalled();
         });
 
@@ -555,7 +545,6 @@ describe('CommandManager', () => {
 
             expect(modularManager).toBeInstanceOf(CommandManager);
             expect(modularManager.specialCommandHandlers).toBeDefined();
-            // Should have handlers loaded from modular files
             expect(typeof modularManager.specialCommandHandlers).toBe('object');
         });
 
@@ -567,11 +556,8 @@ describe('CommandManager', () => {
 
             const modularManager = CommandManager.createWithDependencies(mockDependencies);
 
-            // Check that modular handlers are loaded
             const handlers = modularManager.specialCommandHandlers;
 
-            // Should have handlers from different modules
-            // These will be loaded from the handlers/ directory
             expect(handlers).toBeDefined();
             expect(Object.keys(handlers).length).toBeGreaterThan(0);
         });

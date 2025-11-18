@@ -2,10 +2,8 @@
 
 const DiscordNotifier = require('../../src/notifications/discordNotifier');
 
-// Mock node-fetch
 jest.mock('node-fetch');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),

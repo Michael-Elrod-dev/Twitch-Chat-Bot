@@ -2,12 +2,10 @@
 
 const DbManager = require('../../src/database/dbManager');
 
-// Mock mysql2/promise
 jest.mock('mysql2/promise', () => ({
     createConnection: jest.fn()
 }));
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -15,7 +13,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     database: {
         host: 'localhost',

@@ -2,7 +2,6 @@
 
 const RateLimiter = require('../../src/ai/rateLimiter');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -10,7 +9,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock the config module
 jest.mock('../../src/config/config', () => ({
     rateLimits: {
         claude: {
@@ -344,21 +342,17 @@ describe('RateLimiter', () => {
             const streamId = 'stream456';
             const userContext = {};
 
-            // Request 1 - should allow (0/5)
             mockDbManager.query.mockResolvedValueOnce([]);
             let result = await rateLimiter.checkRateLimit(userId, service, streamId, userContext);
             expect(result.allowed).toBe(true);
 
-            // Update usage
             mockDbManager.query.mockResolvedValueOnce([]);
             await rateLimiter.updateUsage(userId, service, streamId);
 
-            // Request 5 - should allow (4/5)
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 4 }]);
             result = await rateLimiter.checkRateLimit(userId, service, streamId, userContext);
             expect(result.allowed).toBe(true);
 
-            // Request 6 - should deny (5/5)
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 5 }]);
             result = await rateLimiter.checkRateLimit(userId, service, streamId, userContext);
             expect(result.allowed).toBe(false);
@@ -368,12 +362,10 @@ describe('RateLimiter', () => {
             const userId = 'user123';
             const service = 'claude';
 
-            // Stream 1 - at limit
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 5 }]);
             let result = await rateLimiter.checkRateLimit(userId, service, 'stream1', {});
             expect(result.allowed).toBe(false);
 
-            // Stream 2 - fresh limit
             mockDbManager.query.mockResolvedValueOnce([]);
             result = await rateLimiter.checkRateLimit(userId, service, 'stream2', {});
             expect(result.allowed).toBe(true);
@@ -384,12 +376,10 @@ describe('RateLimiter', () => {
             const service = 'claude';
             const streamId = 'stream456';
 
-            // As regular user - 5 limit
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 4 }]);
             let result = await rateLimiter.checkRateLimit(userId, service, streamId, {});
             expect(result.allowed).toBe(true);
 
-            // User becomes mod - 50 limit, same usage count
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 4 }]);
             result = await rateLimiter.checkRateLimit(userId, service, streamId, { isMod: true });
             expect(result.allowed).toBe(true);

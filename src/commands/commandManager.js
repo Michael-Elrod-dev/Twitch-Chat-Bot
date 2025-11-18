@@ -35,7 +35,6 @@ class CommandManager {
             `;
             const results = await this.dbManager.query(sql);
 
-            // Clear and rebuild cache
             this.commandCache.clear();
             for (const row of results) {
                 this.commandCache.set(row.command_name.toLowerCase(), {

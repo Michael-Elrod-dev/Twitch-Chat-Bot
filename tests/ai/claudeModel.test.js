@@ -2,10 +2,8 @@
 
 const ClaudeModel = require('../../src/ai/models/claudeModel');
 
-// Mock node-fetch
 jest.mock('node-fetch');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -13,7 +11,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     claudeApiEndpoint: 'https://api.anthropic.com/v1',
     aiModels: {
@@ -311,8 +308,6 @@ describe('ClaudeModel', () => {
             };
             fetch.mockResolvedValue(mockResponse);
 
-            // The code will crash trying to access content[0].text
-            // But it's wrapped in a try-catch, so it returns null
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();

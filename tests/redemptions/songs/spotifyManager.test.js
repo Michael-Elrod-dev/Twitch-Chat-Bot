@@ -2,7 +2,6 @@
 
 const SpotifyManager = require('../../../src/redemptions/songs/spotifyManager');
 
-// Mock dependencies
 jest.mock('spotify-web-api-node');
 jest.mock('../../../src/redemptions/songs/queueManager');
 jest.mock('../../../src/logger/logger', () => ({
@@ -434,7 +433,6 @@ describe('SpotifyManager', () => {
         });
 
         it('should handle pagination for large playlists', async () => {
-            // First page: 100 tracks (max limit)
             const firstPage = {
                 body: {
                     items: Array(100).fill(null).map((_, i) => ({
@@ -443,7 +441,6 @@ describe('SpotifyManager', () => {
                 }
             };
 
-            // Second page: 50 tracks
             const secondPage = {
                 body: {
                     items: Array(50).fill(null).map((_, i) => ({
@@ -507,14 +504,11 @@ describe('SpotifyManager', () => {
 
     describe('Interval monitoring', () => {
         it('should verify intervals are started in constructor', () => {
-            // Just verify the manager was created with intervals
             expect(spotifyManager.lastPlaybackState).toBe('NONE');
             expect(spotifyManager.lastPlayedTrack).toBeNull();
         });
 
         it('should handle playback state tracking', async () => {
-            // The intervals are started in constructor, so they're already running
-            // We can test the individual methods instead
             const state = await spotifyManager.getPlaybackState();
             expect(state).toBe('PLAYING');
         });

@@ -2,7 +2,6 @@
 
 const Bot = require('../../src/bot');
 
-// Mock all dependencies
 jest.mock('../../src/config/config', () => ({
     channelName: 'testchannel',
     isDebugMode: false,
@@ -43,7 +42,6 @@ describe('Bot - Discord Notification Integration', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
-        // Mock DiscordNotifier
         mockDiscordNotifier = {
             sendStreamLiveNotification: jest.fn().mockResolvedValue(true)
         };
@@ -68,7 +66,6 @@ describe('Bot - Discord Notification Integration', () => {
 
     describe('handleStreamOnline', () => {
         beforeEach(() => {
-            // Mock bot methods
             bot.startFullOperation = jest.fn().mockResolvedValue();
             bot.sendDiscordStreamNotification = jest.fn().mockResolvedValue();
             bot.shutdownTimer = null;
@@ -86,7 +83,6 @@ describe('Bot - Discord Notification Integration', () => {
             );
             expect(bot.sendDiscordStreamNotification).not.toHaveBeenCalled();
 
-            // Fast-forward time
             jest.advanceTimersByTime(100);
             await Promise.resolve();
 
@@ -292,7 +288,6 @@ describe('Bot - Discord Notification Integration', () => {
             discordError.stack = 'Error stack';
             mockDiscordNotifier.sendStreamLiveNotification.mockRejectedValue(discordError);
 
-            // The method catches the error internally, so it doesn't throw
             await bot.sendDiscordStreamNotification();
 
             expect(logger.error).toHaveBeenCalledWith(
@@ -348,19 +343,16 @@ describe('Bot - Discord Notification Integration', () => {
         it('should complete full notification flow when stream goes live', async () => {
             await bot.handleStreamOnline();
 
-            // Verify startup
             expect(bot.startFullOperation).toHaveBeenCalled();
             expect(logger.info).toHaveBeenCalledWith(
                 'Bot',
                 expect.stringContaining('Scheduling Discord notification')
             );
 
-            // Fast-forward to notification time
             jest.advanceTimersByTime(100);
             await Promise.resolve();
             await Promise.resolve(); // Extra tick for async operations
 
-            // Verify notification sent
             expect(bot.dbManager.query).toHaveBeenCalled();
             expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
                 'End-to-End Test Stream',
@@ -371,13 +363,11 @@ describe('Bot - Discord Notification Integration', () => {
         it('should not send notification if stream ends before delay expires', async () => {
             await bot.handleStreamOnline();
 
-            // Stream ends before notification delay
             bot.currentStreamId = null;
 
             jest.advanceTimersByTime(100);
             await Promise.resolve();
 
-            // Notification should warn about no active stream
             expect(logger.warn).toHaveBeenCalledWith(
                 'Bot',
                 'Cannot send Discord notification - no active stream or database'

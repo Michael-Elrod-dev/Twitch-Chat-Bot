@@ -1,10 +1,8 @@
 // tests/bot/bot.backup.test.js
 
-// Integration tests for database backup functionality in Bot
 
 const Bot = require('../../src/bot');
 
-// Mock all dependencies
 jest.mock('../../src/database/dbBackupManager');
 jest.mock('../../src/database/dbManager');
 jest.mock('../../src/database/debugDbSetup');
@@ -69,14 +67,12 @@ describe('Bot - Database Backup Integration', () => {
         jest.clearAllMocks();
         jest.useFakeTimers();
 
-        // Setup mock backup manager
         mockBackupManager = {
             createBackup: jest.fn().mockResolvedValue(true),
             cleanup: jest.fn().mockResolvedValue(undefined)
         };
         DbBackupManager.mockImplementation(() => mockBackupManager);
 
-        // Setup mock database manager
         mockDbManager = {
             connect: jest.fn().mockResolvedValue(undefined),
             query: jest.fn().mockResolvedValue([]),
@@ -84,12 +80,10 @@ describe('Bot - Database Backup Integration', () => {
         };
         DbManager.mockImplementation(() => mockDbManager);
 
-        // Setup mock debug db setup
         DebugDbSetup.mockImplementation(() => ({
             setupDebugDatabase: jest.fn().mockResolvedValue(undefined)
         }));
 
-        // Setup mock token manager
         mockTokenManager = {
             init: jest.fn().mockResolvedValue(undefined),
             checkAndRefreshTokens: jest.fn().mockResolvedValue(undefined),
@@ -100,7 +94,6 @@ describe('Bot - Database Backup Integration', () => {
         };
         TokenManager.mockImplementation(() => mockTokenManager);
 
-        // Setup mock command manager
         mockCommandManager = {
             init: jest.fn().mockResolvedValue(undefined),
             handleCommand: jest.fn().mockResolvedValue(undefined)
@@ -108,7 +101,6 @@ describe('Bot - Database Backup Integration', () => {
         CommandManager.mockImplementation(() => mockCommandManager);
         CommandManager.createWithDependencies = jest.fn().mockReturnValue(mockCommandManager);
 
-        // Setup mock Twitch API
         mockTwitchAPI = {
             getStreamByUserName: jest.fn().mockResolvedValue(null),
             getChatters: jest.fn().mockResolvedValue([]),
@@ -136,7 +128,6 @@ describe('Bot - Database Backup Integration', () => {
 
     describe('startDatabaseBackups', () => {
         beforeEach(async () => {
-            // Setup for full operation
             mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
@@ -192,7 +183,6 @@ describe('Bot - Database Backup Integration', () => {
             await bot.init();
             jest.clearAllMocks();
 
-            // Fast-forward 1 hour
             jest.advanceTimersByTime(3600000);
             await Promise.resolve();
 
@@ -280,7 +270,6 @@ describe('Bot - Database Backup Integration', () => {
             await bot.init();
             const firstInterval = bot.backupInterval;
 
-            // Start again (simulating stream restart)
             bot.startDatabaseBackups();
             const secondInterval = bot.backupInterval;
 
@@ -294,10 +283,8 @@ describe('Bot - Database Backup Integration', () => {
 
     describe('handleStreamOffline - backup interval cleanup', () => {
         beforeEach(async () => {
-            // Use real timers for this test suite
             jest.useRealTimers();
 
-            // Start with stream online
             mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
@@ -307,21 +294,17 @@ describe('Bot - Database Backup Integration', () => {
         });
 
         afterEach(() => {
-            // Clean up any intervals
             if (bot.backupInterval) {
                 clearInterval(bot.backupInterval);
             }
-            // Restore fake timers
             jest.useFakeTimers();
         });
 
         it('should clear backup interval when stream goes offline', async () => {
-            // Verify interval exists before clearing
             expect(bot.backupInterval).toBeTruthy();
 
             await bot.handleStreamOffline();
 
-            // With real timers, just verify that isStreaming is false after stream offline
             expect(bot.isStreaming).toBe(false);
         });
 
@@ -338,14 +321,12 @@ describe('Bot - Database Backup Integration', () => {
 
     describe('gracefulShutdown - final backup', () => {
         beforeEach(async () => {
-            // Start with stream online
             mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
             });
 
-            // Mock process.exit to prevent test from exiting
             jest.spyOn(process, 'exit').mockImplementation(() => {});
         });
 
@@ -463,9 +444,7 @@ describe('Bot - Database Backup Integration', () => {
             await bot.init();
             jest.clearAllMocks();
 
-            // First shutdown
             const shutdown1 = bot.gracefulShutdown('test');
-            // Second shutdown (should be ignored)
             const shutdown2 = bot.gracefulShutdown('test');
 
             await Promise.all([shutdown1, shutdown2]);
@@ -484,7 +463,6 @@ describe('Bot - Database Backup Integration', () => {
         });
 
         it('should handle complete lifecycle: start -> backup -> shutdown', async () => {
-            // Start stream
             mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
@@ -493,19 +471,15 @@ describe('Bot - Database Backup Integration', () => {
 
             await bot.init();
 
-            // Verify initial backup
             expect(mockBackupManager.createBackup).toHaveBeenCalledWith('stream-start');
 
-            // Simulate hourly backup
             jest.advanceTimersByTime(3600000);
             await Promise.resolve();
             expect(mockBackupManager.createBackup).toHaveBeenCalledWith('scheduled');
 
-            // Shutdown
             await bot.gracefulShutdown('test');
             expect(mockBackupManager.createBackup).toHaveBeenCalledWith('shutdown');
 
-            // Total: initial + 1 scheduled + shutdown = 3
             expect(mockBackupManager.createBackup).toHaveBeenCalledTimes(3);
         });
 
@@ -515,15 +489,12 @@ describe('Bot - Database Backup Integration', () => {
             mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
             await bot.init();
 
-            // No initial backup
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
 
-            // No scheduled backup
             jest.advanceTimersByTime(3600000);
             await Promise.resolve();
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
 
-            // No shutdown backup
             await bot.gracefulShutdown('test');
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
 
@@ -539,10 +510,8 @@ describe('Bot - Database Backup Integration', () => {
             await bot.init();
             jest.clearAllMocks();
 
-            // Stream goes offline
             await bot.handleStreamOffline();
 
-            // Try to trigger scheduled backup
             jest.advanceTimersByTime(3600000);
             await Promise.resolve();
 

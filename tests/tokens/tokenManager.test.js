@@ -2,18 +2,14 @@
 
 const TokenManager = require('../../src/tokens/tokenManager');
 
-// Mock https
 jest.mock('https');
-// Mock node-fetch
 jest.mock('node-fetch');
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn()
 }));
-// Mock config
 jest.mock('../../src/config/config', () => ({
     channelName: 'testchannel',
     twitchAuthEndpoint: 'https://id.twitch.tv/oauth2'
@@ -266,7 +262,6 @@ describe('TokenManager', () => {
             };
             tokenManager.dbManager = mockDbManager;
 
-            // First validation fails
             const failedResponse = {
                 ok: false,
                 status: 401,
@@ -274,7 +269,6 @@ describe('TokenManager', () => {
                 json: jest.fn().mockResolvedValue({ error: 'invalid_token' })
             };
 
-            // After refresh, validation succeeds (2 calls: one in refresh, one after)
             const successResponse = {
                 ok: true,
                 json: jest.fn().mockResolvedValue({
@@ -288,7 +282,6 @@ describe('TokenManager', () => {
                 .mockResolvedValueOnce(successResponse) // Validation inside refreshToken
                 .mockResolvedValueOnce(successResponse); // Validation after refresh
 
-            // Mock refresh
             const mockRefreshResponse = new EventEmitter();
             const mockRequest = {
                 on: jest.fn(),
@@ -378,7 +371,6 @@ describe('TokenManager', () => {
                 return mockRequest;
             });
 
-            // Mock validation call
             fetch.mockResolvedValue({
                 ok: true,
                 json: jest.fn().mockResolvedValue({ user_id: 'bot-123' })
@@ -550,7 +542,6 @@ describe('TokenManager', () => {
             };
             tokenManager.dbManager = mockDbManager;
 
-            // Mock refresh
             const mockResponse = new EventEmitter();
             const mockRequest = {
                 on: jest.fn(),
@@ -571,7 +562,6 @@ describe('TokenManager', () => {
                 return mockRequest;
             });
 
-            // Mock validation
             fetch.mockResolvedValue({
                 ok: true,
                 json: jest.fn().mockResolvedValue({ user_id: 'user-123', expires_in: 3600 })

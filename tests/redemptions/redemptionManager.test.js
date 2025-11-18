@@ -2,10 +2,8 @@
 
 const RedemptionManager = require('../../src/redemptions/redemptionManager');
 
-// Mock node-fetch
 jest.mock('node-fetch');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -13,7 +11,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));

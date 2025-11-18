@@ -120,7 +120,6 @@ class TokenManager {
 
                 await this.refreshToken(type);
 
-                // After refresh, validate again to get the user ID
                 const newResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                     headers: {
                         'Authorization': `Bearer ${this.tokens.botAccessToken}`
@@ -202,7 +201,6 @@ class TokenManager {
                                 await this.updateToken('botAccessToken', result.access_token);
                                 await this.updateToken('botRefreshToken', result.refresh_token);
 
-                                // Validate the new token to get the bot ID
                                 const validateResponse = await fetch(`${config.twitchAuthEndpoint}/validate`, {
                                     headers: {
                                         'Authorization': `Bearer ${result.access_token}`
@@ -279,7 +277,6 @@ class TokenManager {
                 })
             ]);
 
-            // Add validation after refresh to get user IDs
             logger.debug('TokenManager', 'Validating refreshed tokens');
             await Promise.all([
                 this.validateToken('bot'),

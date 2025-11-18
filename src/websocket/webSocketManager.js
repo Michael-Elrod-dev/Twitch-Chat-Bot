@@ -65,7 +65,6 @@ class WebSocketManager {
                 this.sessionId = message.payload.session.id;
                 logger.info('WebSocketManager', 'WebSocket session established', { sessionId: this.sessionId });
 
-                // Notify when session is ready
                 if (this.onSessionReady) {
                     logger.debug('WebSocketManager', 'Triggering session ready callback');
                     await this.onSessionReady(this.sessionId);

@@ -2,7 +2,6 @@
 
 const handleSongRequest = require('../../../src/redemptions/songs/songRequest');
 
-// Mock logger
 jest.mock('../../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -177,7 +176,6 @@ describe('handleSongRequest', () => {
             refundError.stack = 'Error stack';
             mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
 
-            // The function doesn't re-throw the refund error, it just logs it
             await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
 
             expect(logger.error).toHaveBeenCalledWith(
@@ -232,7 +230,6 @@ describe('handleSongRequest', () => {
             refundError.stack = 'Error stack';
             mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
 
-            // The function doesn't re-throw the refund error, it just logs it
             await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
 
             expect(logger.error).toHaveBeenCalledWith(
@@ -299,7 +296,6 @@ describe('handleSongRequest', () => {
 
             await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
 
-            // Should still fulfill redemption
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
@@ -343,7 +339,6 @@ describe('handleSongRequest', () => {
 
     describe('Fatal error handling', () => {
         it('should attempt refund on fatal error', async () => {
-            // Simulate fatal error before input validation
             mockTwitchBot.redemptionManager.updateRedemptionStatus.mockImplementation(() => {
                 throw new Error('Fatal error');
             });
@@ -374,7 +369,6 @@ describe('handleSongRequest', () => {
 
             await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
 
-            // Should log the Spotify error first
             expect(logger.error).toHaveBeenCalledWith(
                 'SongRequest',
                 'Error processing Spotify track',
@@ -385,7 +379,6 @@ describe('handleSongRequest', () => {
                 })
             );
 
-            // Then log the refund error
             expect(logger.error).toHaveBeenCalledWith(
                 'SongRequest',
                 'Critical: Error refunding points',

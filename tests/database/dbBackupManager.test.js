@@ -2,7 +2,6 @@
 
 const DbBackupManager = require('../../src/database/dbBackupManager');
 
-// Mock logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -10,7 +9,6 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
-// Mock config
 jest.mock('../../src/config/config', () => ({
     isDebugMode: false,
     aws: {
@@ -79,14 +77,11 @@ describe('DbBackupManager', () => {
         });
 
         it('should log when starting backup', async () => {
-            // Mock the internal methods to avoid complex mocking
             jest.spyOn(backupManager.s3Client, 'send').mockResolvedValue({});
             jest.spyOn(backupManager, 'rotateBackups').mockResolvedValue(undefined);
 
-            // Mock fs and exec at a higher level by spying on internal methods
             const createBackupSpy = jest.spyOn(backupManager, 'createBackup');
 
-            // Just verify the method was called and logs were generated
             await backupManager.createBackup('scheduled').catch(() => {});
 
             expect(logger.info).toHaveBeenCalledWith(

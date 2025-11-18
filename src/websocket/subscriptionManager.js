@@ -227,12 +227,10 @@ class SubscriptionManager {
         }
     }
 
-    // Helper method to handle the actual unsubscription logic
     async unsubscribeFromEventType(eventType) {
         try {
             logger.debug('SubscriptionManager', 'Fetching subscriptions to unsubscribe', { eventType });
 
-            // First, get all subscriptions to find the one we want to delete
             const subscriptionsResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
                 method: 'GET',
                 headers: {
@@ -253,7 +251,6 @@ class SubscriptionManager {
 
             const subscriptionsData = await subscriptionsResponse.json();
 
-            // Find the subscription for this event type and session
             const subscription = subscriptionsData.data.find(sub =>
                 sub.type === eventType &&
                 sub.transport.session_id === this.sessionId
@@ -266,7 +263,6 @@ class SubscriptionManager {
 
             logger.debug('SubscriptionManager', 'Deleting subscription', { eventType, subscriptionId: subscription.id });
 
-            // Delete the subscription
             const deleteResponse = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions?id=${subscription.id}`, {
                 method: 'DELETE',
                 headers: {

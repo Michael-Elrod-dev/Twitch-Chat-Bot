@@ -2,7 +2,6 @@
 
 const ChatMessageHandler = require('../../src/messages/chatMessageHandler');
 
-// Mock the logger
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -109,7 +108,6 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Should track as regular message
             expect(mockBot.analyticsManager.trackChatMessage).toHaveBeenCalledWith(
                 'testuser',
                 'user123',
@@ -162,7 +160,6 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Should return early, not process message
             expect(mockCommandManager.handleCommand).not.toHaveBeenCalled();
         });
     });
@@ -293,7 +290,6 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Should not process as command
             expect(mockCommandManager.handleCommand).not.toHaveBeenCalled();
         });
     });
@@ -354,7 +350,6 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Should not process as command
             expect(mockCommandManager.handleCommand).not.toHaveBeenCalled();
         });
     });
@@ -482,7 +477,6 @@ describe('ChatMessageHandler', () => {
                 }
             };
 
-            // Should not throw
             await expect(
                 chatMessageHandler.handleChatMessage(payload, mockBot)
             ).resolves.toBeUndefined();
@@ -530,7 +524,6 @@ describe('ChatMessageHandler', () => {
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
             expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
-            // Emote should not be checked since AI was triggered
             expect(mockBot.sendMessage).toHaveBeenCalledWith(
                 'testchannel',
                 expect.stringContaining('AI response')
@@ -568,10 +561,8 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Check all were evaluated but none triggered
             expect(mockAiManager.shouldTriggerText).toHaveBeenCalled();
             expect(mockEmoteManager.getEmoteResponse).toHaveBeenCalled();
-            // Not a command, so command handler not called
             expect(mockCommandManager.handleCommand).not.toHaveBeenCalled();
         });
     });
