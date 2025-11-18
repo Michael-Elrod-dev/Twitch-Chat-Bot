@@ -44,6 +44,15 @@ class Config {
         this.twitchApiEndpoint = 'https://api.twitch.tv/helix';
         this.claudeApiEndpoint = 'https://api.anthropic.com/v1';
 
+        // Discord Notification Configuration
+        this.discord = {
+            webhookUrl: process.env.DISCORD_WEBHOOK_URL,
+            notificationDelay: 30000 // 30 seconds delay after stream goes live
+        };
+
+        // Twitch Channel URL
+        this.twitchChannelUrl = `https://www.twitch.tv/${this.channelName}`;
+
         // Intervals
         this.tokenRefreshInterval = 300000;  // 5 minutes
         this.viewerTrackingInterval = 60000; // 1 minute

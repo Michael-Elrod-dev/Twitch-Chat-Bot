@@ -19,6 +19,7 @@ const WebSocketManager = require('./websocket/webSocketManager');
 const RedemptionHandler = require('./messages/redemptionHandler');
 const ChatMessageHandler = require('./messages/chatMessageHandler');
 const SubscriptionManager = require('./websocket/subscriptionManager');
+const DiscordNotifier = require('./notifications/discordNotifier');
 
 const handleQuote = require('./redemptions/quotes/handleQuote');
 const handleSongRequest = require('./redemptions/songs/songRequest');
@@ -34,6 +35,10 @@ class Bot {
         this.tokenRefreshInterval = null;
         this.backupInterval = null;
         this.backupManager = new DbBackupManager();
+        this.discordNotifier = new DiscordNotifier(
+            config.discord.webhookUrl,
+            config.twitchChannelUrl
+        );
         logger.info('Bot', 'Bot instance created', { channelName: this.channelName });
     }
 
@@ -398,6 +403,57 @@ class Bot {
         }
 
         await this.startFullOperation();
+
+        // Send Discord notification after delay (only if not in debug mode)
+        if (!config.isDebugMode) {
+            logger.info('Bot', `Scheduling Discord notification in ${config.discord.notificationDelay / 1000} seconds`);
+            setTimeout(async () => {
+                try {
+                    await this.sendDiscordStreamNotification();
+                } catch (error) {
+                    logger.error('Bot', 'Error sending Discord notification', {
+                        error: error.message,
+                        stack: error.stack
+                    });
+                }
+            }, config.discord.notificationDelay);
+        }
+    }
+
+    async sendDiscordStreamNotification() {
+        if (!this.currentStreamId || !this.dbManager) {
+            logger.warn('Bot', 'Cannot send Discord notification - no active stream or database');
+            return;
+        }
+
+        try {
+            logger.debug('Bot', 'Fetching stream information for Discord notification', {
+                streamId: this.currentStreamId
+            });
+
+            // Fetch stream info from database
+            const sql = `
+                SELECT title, category
+                FROM streams
+                WHERE stream_id = ?
+            `;
+            const results = await this.dbManager.query(sql, [this.currentStreamId]);
+
+            if (results && results.length > 0) {
+                const { title, category } = results[0];
+                logger.info('Bot', 'Sending Discord notification', { title, category });
+                await this.discordNotifier.sendStreamLiveNotification(title, category);
+            } else {
+                logger.warn('Bot', 'No stream data found in database for Discord notification', {
+                    streamId: this.currentStreamId
+                });
+            }
+        } catch (error) {
+            logger.error('Bot', 'Failed to send Discord stream notification', {
+                error: error.message,
+                stack: error.stack
+            });
+        }
     }
 
     async handleStreamOffline() {

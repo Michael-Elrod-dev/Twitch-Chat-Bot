@@ -20,6 +20,7 @@ jest.mock('../../src/redemptions/redemptionManager');
 jest.mock('../../src/messages/messageSender');
 jest.mock('../../src/websocket/webSocketManager');
 jest.mock('../../src/websocket/subscriptionManager');
+jest.mock('../../src/notifications/discordNotifier');
 jest.mock('../../src/logger/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
@@ -36,6 +37,11 @@ jest.mock('../../src/config/config', () => ({
         password: 'testpass',
         database: 'testdb'
     },
+    discord: {
+        webhookUrl: 'https://discord.com/api/webhooks/test/webhook',
+        notificationDelay: 30000
+    },
+    twitchChannelUrl: 'https://www.twitch.tv/testchannel',
     tokenRefreshInterval: 300000,
     viewerTrackingInterval: 60000,
     backupInterval: 3600000,
