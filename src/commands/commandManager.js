@@ -170,7 +170,9 @@ class CommandManager {
                     },
                     viewerManager: twitchBot.viewerManager,
                     analyticsManager: twitchBot.analyticsManager,
-                    emoteManager: twitchBot.emoteManager
+                    emoteManager: twitchBot.emoteManager,
+                    aiManager: twitchBot.aiManager,
+                    currentStreamId: twitchBot.currentStreamId
                 };
                 await this.specialCommandHandlers[command.handler](twitchBotWrapper, channel, context, args.slice(1), commandName);
                 logger.info('CommandManager', 'Special command executed', {

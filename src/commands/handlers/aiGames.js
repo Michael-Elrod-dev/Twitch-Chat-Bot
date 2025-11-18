@@ -28,7 +28,7 @@ function aiGameHandlers() {
                     targetUsername,
                     twitchBot.currentStreamId,
                     {
-                        userId: context['user-id'],
+                        userId: context.userId,
                         userName: context.username,
                         isBroadcaster: context.badges?.broadcaster || false,
                         isMod: context.mod || false
@@ -80,7 +80,7 @@ function aiGameHandlers() {
                     targetUsername,
                     twitchBot.currentStreamId,
                     {
-                        userId: context['user-id'],
+                        userId: context.userId,
                         userName: context.username,
                         isBroadcaster: context.badges?.broadcaster || false,
                         isMod: context.mod || false
