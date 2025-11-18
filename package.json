@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.933.0",
     "@twurple/api": "^7.2.0",
     "@twurple/auth": "^7.2.0",
     "@twurple/eventsub-ws": "^7.2.0",

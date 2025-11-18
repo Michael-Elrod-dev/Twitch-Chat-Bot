@@ -15,6 +15,7 @@ package-lock.json
 db.json
 pendingQueue.json
 insert.sql
+temp_backups/
 
 # Project specific
 files/

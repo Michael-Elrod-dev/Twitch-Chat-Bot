@@ -12,6 +12,7 @@ const AnalyticsManager = require('./analytics/analyticsManager');
 const QuoteManager = require('./redemptions/quotes/quoteManager');
 const SpotifyManager = require('./redemptions/songs/spotifyManager');
 const RedemptionManager = require('./redemptions/redemptionManager');
+const DbBackupManager = require('./database/dbBackupManager');
 
 const MessageSender = require('./messages/messageSender');
 const WebSocketManager = require('./websocket/webSocketManager');
@@ -31,6 +32,8 @@ class Bot {
         this.channelName = config.channelName;
         this.shutdownTimer = null;
         this.tokenRefreshInterval = null;
+        this.backupInterval = null;
+        this.backupManager = new DbBackupManager();
         logger.info('Bot', 'Bot instance created', { channelName: this.channelName });
     }
 
@@ -266,6 +269,12 @@ class Bot {
             logger.debug('Bot', 'Starting viewer tracking');
             this.startViewerTracking();
 
+            // Start hourly database backups (only when streaming, not in debug mode)
+            if (!config.isDebugMode) {
+                logger.debug('Bot', 'Starting database backup interval');
+                this.startDatabaseBackups();
+            }
+
             logger.info('Bot', 'Bot is now fully operational');
 
             // Send success message to chat if all checks passed
@@ -319,6 +328,45 @@ class Bot {
         }, config.viewerTrackingInterval);
 
         logger.info('Bot', 'Viewer tracking started', { intervalMs: config.viewerTrackingInterval });
+    }
+
+    startDatabaseBackups() {
+        if (this.backupInterval) {
+            logger.debug('Bot', 'Clearing existing backup interval');
+            clearInterval(this.backupInterval);
+        }
+
+        // Create initial backup when starting
+        this.backupManager.createBackup('stream-start')
+            .then((success) => {
+                if (success) {
+                    logger.info('Bot', 'Initial database backup completed');
+                } else {
+                    logger.warn('Bot', 'Initial database backup failed');
+                }
+            })
+            .catch((error) => {
+                logger.error('Bot', 'Error creating initial backup', { error: error.message });
+            });
+
+        // Set up hourly backups
+        this.backupInterval = setInterval(async () => {
+            try {
+                if (!this.isStreaming || this.isShuttingDown) return;
+
+                logger.info('Bot', 'Creating scheduled database backup');
+                const success = await this.backupManager.createBackup('scheduled');
+                if (success) {
+                    logger.info('Bot', 'Scheduled database backup completed');
+                } else {
+                    logger.warn('Bot', 'Scheduled database backup failed');
+                }
+            } catch (error) {
+                logger.error('Bot', 'Error in backup interval', { error: error.message });
+            }
+        }, config.backupInterval);
+
+        logger.info('Bot', 'Database backup interval started', { intervalMs: config.backupInterval });
     }
 
     async handleChatMessage(payload) {
@@ -379,6 +427,13 @@ class Bot {
                 logger.debug('Bot', 'Stopping viewer tracking');
                 clearInterval(this.viewerTrackingInterval);
                 this.viewerTrackingInterval = null;
+            }
+
+            // Clear backup interval
+            if (this.backupInterval) {
+                logger.debug('Bot', 'Stopping database backup interval');
+                clearInterval(this.backupInterval);
+                this.backupInterval = null;
             }
 
             // Reset to minimal operation
@@ -594,6 +649,28 @@ class Bot {
                 this.tokenRefreshInterval = null;
             }
 
+            // Clear backup interval
+            if (this.backupInterval) {
+                logger.debug('Bot', 'Clearing backup interval');
+                clearInterval(this.backupInterval);
+                this.backupInterval = null;
+            }
+
+            // Create final database backup before shutdown (only if not in debug mode)
+            if (this.backupManager && !config.isDebugMode) {
+                logger.info('Bot', 'Creating final database backup before shutdown');
+                try {
+                    const success = await this.backupManager.createBackup('shutdown');
+                    if (success) {
+                        logger.info('Bot', 'Final database backup completed');
+                    } else {
+                        logger.warn('Bot', 'Final database backup failed');
+                    }
+                } catch (error) {
+                    logger.error('Bot', 'Error creating final backup', { error: error.message });
+                }
+            }
+
             // Close WebSocket connection
             if (this.webSocketManager) {
                 logger.info('Bot', 'Closing WebSocket connection');
@@ -686,6 +763,10 @@ async function startBot() {
         process.exit(1);
     }
 }
-startBot();
 
-module.exports = bot;
+// Only start bot if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+    startBot();
+}
+
+module.exports = Bot;

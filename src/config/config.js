@@ -19,6 +19,14 @@ class Config {
             database: this.isDebugMode ? process.env.DB_NAME + '_debug' : process.env.DB_NAME
         };
 
+        // AWS S3 Backup Configuration
+        this.aws = {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            region: process.env.AWS_REGION || 'us-east-1',
+            s3BucketName: process.env.AWS_S3_BUCKET_NAME
+        };
+
         // Logging Configuration
         this.logging = {
             level: 'info', // Levels: 'error', 'warn', 'info', 'debug'
@@ -43,6 +51,7 @@ class Config {
         this.emoteCacheInterval = 300000;    // 5 minutes
         this.commandCacheInterval = 300000;  // 5 minutes
         this.shutdownGracePeriod = 1800000;  // 30 minutes
+        this.backupInterval = 3600000;       // 1 hour (for database backups when streaming)
 
         // AI Model Settings
         this.aiModels = {

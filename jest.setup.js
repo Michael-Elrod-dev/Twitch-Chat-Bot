@@ -2,6 +2,9 @@
 
 // Global setup for all tests - runs before each test file
 
+// Set NODE_ENV to test
+process.env.NODE_ENV = 'test';
+
 // Suppress console output during tests for cleaner output
 // Tests that specifically verify console.error/log calls will override these mocks
 global.console = {
