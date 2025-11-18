@@ -10,13 +10,7 @@ const logger = require('../logger/logger');
 
 const execAsync = promisify(exec);
 
-/**
- * Manages database backups to S3 with automatic rotation
- * - Creates MySQL backups using mysqldump
- * - Uploads to S3 bucket
- * - Maintains up to 10 backup versions
- * - Only runs when stream is live (not in debug mode)
- */
+
 class DbBackupManager {
     constructor() {
         this.s3Client = new S3Client({
@@ -32,11 +26,6 @@ class DbBackupManager {
         this.tempBackupDir = path.join(process.cwd(), 'temp_backups');
     }
 
-    /**
-     * Creates a MySQL database backup and uploads it to S3
-     * @param {string} reason - Reason for backup (e.g., 'scheduled', 'shutdown')
-     * @returns {Promise<boolean>} - Success status
-     */
     async createBackup(reason = 'manual') {
         // Skip backups in debug mode
         if (config.isDebugMode) {
@@ -105,27 +94,11 @@ class DbBackupManager {
         }
     }
 
-    /**
-     * Builds the mysqldump command with proper credentials
-     * @param {string} outputPath - Path for the backup file
-     * @returns {string} - mysqldump command
-     */
     buildMysqldumpCommand(outputPath) {
         const dbConfig = config.database;
-
-        // Build mysqldump command with credentials
-        // Note: Using password on command line is not ideal for production,
-        // but works for this use case. Consider using .my.cnf for better security.
-        const command = `mysqldump -h ${dbConfig.host} -P ${dbConfig.port} -u ${dbConfig.user} -p${dbConfig.password} ${dbConfig.database} > "${outputPath}"`;
-
-        return command;
+        return `mysqldump -h ${dbConfig.host} -P ${dbConfig.port} -u ${dbConfig.user} -p${dbConfig.password} ${dbConfig.database} > "${outputPath}"`;
     }
 
-    /**
-     * Uploads a backup file to S3
-     * @param {string} localPath - Local file path
-     * @param {string} s3Key - S3 object key
-     */
     async uploadToS3(localPath, s3Key) {
         logger.debug('DbBackupManager', 'Uploading to S3', { s3Key });
 
@@ -146,10 +119,6 @@ class DbBackupManager {
         logger.debug('DbBackupManager', 'Upload to S3 completed', { s3Key });
     }
 
-    /**
-     * Lists all backup files in S3
-     * @returns {Promise<Array>} - Array of backup objects with Key and LastModified
-     */
     async listBackups() {
         logger.debug('DbBackupManager', 'Listing backups from S3');
 
@@ -167,10 +136,6 @@ class DbBackupManager {
         return backups.sort((a, b) => b.LastModified - a.LastModified);
     }
 
-    /**
-     * Rotates backups, keeping only the most recent 10
-     * Deletes oldest backups when count exceeds maxBackups
-     */
     async rotateBackups() {
         logger.debug('DbBackupManager', 'Starting backup rotation');
 
@@ -201,10 +166,6 @@ class DbBackupManager {
         });
     }
 
-    /**
-     * Deletes a specific backup from S3
-     * @param {string} key - S3 object key
-     */
     async deleteBackup(key) {
         logger.debug('DbBackupManager', 'Deleting backup', { key });
 
@@ -217,9 +178,6 @@ class DbBackupManager {
         logger.debug('DbBackupManager', 'Backup deleted', { key });
     }
 
-    /**
-     * Cleans up the temp backup directory
-     */
     async cleanup() {
         try {
             const files = await fs.readdir(this.tempBackupDir);

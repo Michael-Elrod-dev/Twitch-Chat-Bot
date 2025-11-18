@@ -1,6 +1,8 @@
-// tests/commands/specialCommandHandlers.test.js
+// tests/commands/commandHandlers.test.js
 
-const specialCommandHandlers = require('../../src/commands/specialCommandHandlers');
+// Tests for modular command handler system
+
+const { loadCommandHandlers } = require('../../src/commands/utils/commandLoader');
 
 // Mock node-fetch
 jest.mock('node-fetch', () => {
@@ -18,7 +20,7 @@ jest.mock('../../src/logger/logger', () => ({
 
 const logger = require('../../src/logger/logger');
 
-describe('SpecialCommandHandlers', () => {
+describe('CommandHandlers (Modular)', () => {
     let handlers;
     let mockTwitchBot;
     let mockQuoteManager;
@@ -86,7 +88,8 @@ describe('SpecialCommandHandlers', () => {
             badges: {}
         };
 
-        handlers = specialCommandHandlers({
+        // Load handlers using the new modular system
+        handlers = loadCommandHandlers({
             quoteManager: mockQuoteManager,
             spotifyManager: mockSpotifyManager
         });

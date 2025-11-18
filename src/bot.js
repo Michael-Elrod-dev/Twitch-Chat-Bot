@@ -23,7 +23,6 @@ const DiscordNotifier = require('./notifications/discordNotifier');
 
 const handleQuote = require('./redemptions/quotes/handleQuote');
 const handleSongRequest = require('./redemptions/songs/songRequest');
-const specialCommandHandlers = require('./commands/specialCommandHandlers');
 
 class Bot {
     constructor() {
@@ -204,12 +203,11 @@ class Bot {
             await this.spotifyManager.authenticate();
 
             logger.debug('Bot', 'Initializing command manager');
-            const handlers = specialCommandHandlers({
+            this.commandManager = CommandManager.createWithDependencies({
                 quoteManager: this.quoteManager,
                 spotifyManager: this.spotifyManager,
                 viewerManager: this.viewerManager
             });
-            this.commandManager = new CommandManager(handlers);
             await this.commandManager.init(this.dbManager);
 
             logger.debug('Bot', 'Initializing message sender');

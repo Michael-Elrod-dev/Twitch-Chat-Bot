@@ -1,5 +1,7 @@
 // tests/commands/commandManager.test.js
 
+// Updated to test both legacy and modular command handler systems
+
 const CommandManager = require('../../src/commands/commandManager');
 
 // Mock logger
@@ -31,6 +33,7 @@ describe('CommandManager', () => {
             handleStats: jest.fn()
         };
 
+        // Test with legacy mode (direct handler object)
         commandManager = new CommandManager(mockSpecialHandlers);
 
         // Mock Twitch bot
@@ -538,6 +541,39 @@ describe('CommandManager', () => {
                 'channel',
                 'Test response'
             );
+        });
+    });
+
+    describe('createWithDependencies - Modular System', () => {
+        it('should create CommandManager with modular handlers', () => {
+            const mockDependencies = {
+                quoteManager: { getTotalQuotes: jest.fn() },
+                spotifyManager: { ensureTokenValid: jest.fn() }
+            };
+
+            const modularManager = CommandManager.createWithDependencies(mockDependencies);
+
+            expect(modularManager).toBeInstanceOf(CommandManager);
+            expect(modularManager.specialCommandHandlers).toBeDefined();
+            // Should have handlers loaded from modular files
+            expect(typeof modularManager.specialCommandHandlers).toBe('object');
+        });
+
+        it('should load handlers from modular files', () => {
+            const mockDependencies = {
+                quoteManager: { getTotalQuotes: jest.fn() },
+                spotifyManager: { ensureTokenValid: jest.fn() }
+            };
+
+            const modularManager = CommandManager.createWithDependencies(mockDependencies);
+
+            // Check that modular handlers are loaded
+            const handlers = modularManager.specialCommandHandlers;
+
+            // Should have handlers from different modules
+            // These will be loaded from the handlers/ directory
+            expect(handlers).toBeDefined();
+            expect(Object.keys(handlers).length).toBeGreaterThan(0);
         });
     });
 

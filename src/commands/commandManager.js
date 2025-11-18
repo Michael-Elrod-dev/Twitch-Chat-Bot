@@ -2,6 +2,7 @@
 
 const config = require('../config/config');
 const logger = require('../logger/logger');
+const { loadCommandHandlers } = require('./utils/commandLoader');
 
 class CommandManager {
     constructor(specialCommandHandlers) {
@@ -10,6 +11,20 @@ class CommandManager {
         this.commandCache = new Map();
         this.cacheExpiry = null;
         this.cacheTimeout = config.commandCacheInterval;
+    }
+
+    /**
+     * Create CommandManager with modular command handlers
+     * @param {Object} dependencies - Dependencies for command handlers (quoteManager, spotifyManager, etc.)
+     * @returns {CommandManager} Initialized command manager instance
+     */
+    static createWithDependencies(dependencies) {
+        const handlers = loadCommandHandlers(dependencies);
+        const manager = new CommandManager(handlers);
+        logger.info('CommandManager', 'Initialized with modular handler system', {
+            handlerCount: Object.keys(handlers).length
+        });
+        return manager;
     }
 
     async init(dbManager) {

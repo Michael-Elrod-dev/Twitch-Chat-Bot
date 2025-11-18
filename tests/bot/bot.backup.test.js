@@ -53,6 +53,7 @@ const DbManager = require('../../src/database/dbManager');
 const DebugDbSetup = require('../../src/database/debugDbSetup');
 const TokenManager = require('../../src/tokens/tokenManager');
 const TwitchAPI = require('../../src/tokens/twitchAPI');
+const CommandManager = require('../../src/commands/commandManager');
 const logger = require('../../src/logger/logger');
 const config = require('../../src/config/config');
 
@@ -62,6 +63,7 @@ describe('Bot - Database Backup Integration', () => {
     let mockDbManager;
     let mockTokenManager;
     let mockTwitchAPI;
+    let mockCommandManager;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -97,6 +99,14 @@ describe('Bot - Database Backup Integration', () => {
             }
         };
         TokenManager.mockImplementation(() => mockTokenManager);
+
+        // Setup mock command manager
+        mockCommandManager = {
+            init: jest.fn().mockResolvedValue(undefined),
+            handleCommand: jest.fn().mockResolvedValue(undefined)
+        };
+        CommandManager.mockImplementation(() => mockCommandManager);
+        CommandManager.createWithDependencies = jest.fn().mockReturnValue(mockCommandManager);
 
         // Setup mock Twitch API
         mockTwitchAPI = {
