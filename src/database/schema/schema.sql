@@ -42,6 +42,7 @@ CREATE TABLE viewers (
     is_vip BOOLEAN DEFAULT FALSE,
     is_broadcaster BOOLEAN DEFAULT FALSE,
     last_seen DATETIME,
+    followed_at DATETIME NULL,
     context TEXT NULL,
     UNIQUE KEY unique_username (username)
 );

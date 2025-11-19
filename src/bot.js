@@ -104,7 +104,8 @@ class Bot {
             null,
             null,
             this.handleStreamOffline.bind(this),
-            this.handleStreamOnline.bind(this)
+            this.handleStreamOnline.bind(this),
+            this.handleFollow.bind(this)
         );
 
         this.webSocketManager.onSessionReady = async (sessionId) => {
@@ -112,6 +113,7 @@ class Bot {
             this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
             await this.subscriptionManager.subscribeToStreamOnline();
             await this.subscriptionManager.subscribeToStreamOffline();
+            await this.subscriptionManager.subscribeToChannelFollow();
         };
 
         await this.webSocketManager.connect();
@@ -225,6 +227,7 @@ class Bot {
                 logger.debug('Bot', 'Reusing existing WebSocket connection');
                 this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
                 this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
+                this.webSocketManager.followHandler = this.handleFollow.bind(this);
 
                 if (this.subscriptionManager) {
                     await this.subscriptionManager.subscribeToChatEvents();
@@ -238,7 +241,8 @@ class Bot {
                     this.handleChatMessage.bind(this),
                     this.handleRedemption.bind(this),
                     this.handleStreamOffline.bind(this),
-                    this.handleStreamOnline.bind(this)
+                    this.handleStreamOnline.bind(this),
+                    this.handleFollow.bind(this)
                 );
 
                 this.webSocketManager.onSessionReady = async (sessionId) => {
@@ -251,6 +255,7 @@ class Bot {
                     await this.subscriptionManager.subscribeToChannelPoints();
                     await this.subscriptionManager.subscribeToStreamOnline();
                     await this.subscriptionManager.subscribeToStreamOffline();
+                    await this.subscriptionManager.subscribeToChannelFollow();
                 };
 
                 await this.webSocketManager.connect();
@@ -368,6 +373,39 @@ class Bot {
         }
         logger.debug('Bot', 'Handling redemption', { userId: payload.user_id, userName: payload.user_name, reward: payload.reward?.title });
         await this.redemptionHandler.handleRedemption(payload, this);
+    }
+
+    async handleFollow(event) {
+        try {
+            logger.debug('Bot', 'Handling follow event', {
+                userId: event.user_id,
+                userName: event.user_name,
+                followedAt: event.followed_at
+            });
+
+            if (!this.viewerManager) {
+                logger.warn('Bot', 'ViewerManager not initialized, cannot process follow event');
+                return;
+            }
+
+            await this.viewerManager.handleFollowEvent(
+                event.user_id,
+                event.user_name,
+                event.followed_at
+            );
+
+            logger.info('Bot', 'Follow event processed successfully', {
+                userId: event.user_id,
+                userName: event.user_name
+            });
+        } catch (error) {
+            logger.error('Bot', 'Error handling follow event', {
+                error: error.message,
+                stack: error.stack,
+                userId: event.user_id,
+                userName: event.user_name
+            });
+        }
     }
 
     async handleStreamOnline() {

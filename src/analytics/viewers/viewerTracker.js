@@ -48,6 +48,60 @@ class ViewerTracker {
         }
     }
 
+    async handleFollowEvent(userId, username, followedAt) {
+        try {
+            logger.debug('ViewerTracker', 'Processing follow event', {
+                userId,
+                username,
+                followedAt
+            });
+
+            const followedAtMySql = new Date(followedAt)
+                .toISOString()
+                .slice(0, 19)
+                .replace('T', ' ');
+
+            const sql = `
+                INSERT INTO viewers (user_id, username, followed_at, last_seen)
+                VALUES (?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    username = VALUES(username),
+                    followed_at = COALESCE(followed_at, VALUES(followed_at)),
+                    last_seen = NOW()
+            `;
+
+            const result = await this.analyticsManager.dbManager.query(sql, [
+                userId,
+                username,
+                followedAtMySql
+            ]);
+
+            if (result.affectedRows === 1) {
+                logger.info('ViewerTracker', 'New follower added to database', {
+                    userId,
+                    username,
+                    followedAt: followedAtMySql
+                });
+            } else if (result.affectedRows === 2) {
+                logger.info('ViewerTracker', 'Existing viewer followed (follow date preserved)', {
+                    userId,
+                    username
+                });
+            }
+
+            return true;
+        } catch (error) {
+            logger.error('ViewerTracker', 'Error handling follow event', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                username,
+                followedAt
+            });
+            throw error;
+        }
+    }
+
     async trackInteraction(username, userId, streamId, type, content = null, userContext = {}) {
         try {
             if (!username) {

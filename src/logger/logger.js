@@ -1,7 +1,6 @@
 // src/logger/logger.js
 
 const winston = require('winston');
-const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config/config');
@@ -54,45 +53,28 @@ class Logger {
             )
         });
 
-        const logPrefix = config.isDebugMode ? 'debug-' : '';
+        const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+        const transports = [consoleTransport];
 
-        const mainFileTransport = new DailyRotateFile({
-            filename: `${logPrefix}bot-%DATE%.log`,
-            dirname: this.logDirectory,
-            auditFile: path.join(this.configDirectory, `${logPrefix}bot-audit.json`),
-            datePattern: 'YYYY-MM-DD',
-            maxSize: config.logging.maxSize || '20m',
-            maxFiles: config.logging.maxFiles || 10,
-            zippedArchive: false,
-            level: config.logging.level || 'info',
-            format: winston.format.combine(
-                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-                customFormat
-            )
-        });
-
-        const errorFileTransport = new DailyRotateFile({
-            filename: `${logPrefix}error-%DATE%.log`,
-            dirname: this.logDirectory,
-            auditFile: path.join(this.configDirectory, `${logPrefix}error-audit.json`),
-            datePattern: 'YYYY-MM-DD',
-            maxSize: config.logging.maxSize || '20m',
-            maxFiles: config.logging.maxFiles || 10,
-            zippedArchive: false,
-            level: 'error',
-            format: winston.format.combine(
-                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-                customFormat
-            )
-        });
+        if (!isTestEnvironment) {
+            const filename = config.isDebugMode ? 'debug-bot.log' : 'bot.log';
+            const fileTransport = new winston.transports.File({
+                filename: path.join(this.logDirectory, filename),
+                maxsize: this.parseSize(config.logging.maxSize || '20m'),
+                maxFiles: config.logging.maxFiles || 10,
+                tailable: true,
+                level: config.logging.level || 'info',
+                format: winston.format.combine(
+                    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+                    customFormat
+                )
+            });
+            transports.push(fileTransport);
+        }
 
         this.winstonLogger = winston.createLogger({
             level: config.logging.level || 'info',
-            transports: [
-                consoleTransport,
-                mainFileTransport,
-                errorFileTransport
-            ]
+            transports: transports
         });
 
         this.info('Logger', 'Logger initialized', {
@@ -102,6 +84,15 @@ class Logger {
             maxFiles: config.logging.maxFiles || 10,
             logDirectory: this.logDirectory
         });
+    }
+
+    parseSize(sizeString) {
+        const units = { k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024 };
+        const match = sizeString.toLowerCase().match(/^(\d+)([kmg])?$/);
+        if (!match) return 20 * 1024 * 1024; // Default 20MB
+        const value = parseInt(match[1]);
+        const unit = match[2] || 'b';
+        return value * (units[unit] || 1);
     }
 
     _createErrorHash(module, message) {

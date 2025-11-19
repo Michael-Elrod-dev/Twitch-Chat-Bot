@@ -117,6 +117,135 @@ describe('CommandHandlers (Modular)', () => {
         });
     });
 
+    describe('followAge command', () => {
+        it('should display follow age for requesting user', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2); // 2 years ago
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(mockTwitchBot.analyticsManager.dbManager.query).toHaveBeenCalledWith(
+                'SELECT followed_at FROM viewers WHERE username = ?',
+                ['testuser']
+            );
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                expect.stringMatching(/@testuser followed on \d{2}\/\d{2}\/\d{2}\. 2 years.*/)
+            );
+        });
+
+        it('should display follow age for mentioned user', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30); // 30 days ago
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, ['@otheruser']);
+
+            expect(mockTwitchBot.analyticsManager.dbManager.query).toHaveBeenCalledWith(
+                'SELECT followed_at FROM viewers WHERE username = ?',
+                ['otheruser']
+            );
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                expect.stringMatching(/@otheruser followed on \d{2}\/\d{2}\/\d{2}\..*/)
+            );
+        });
+
+        it('should handle user without @ symbol', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60); // 1 hour ago
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, ['otheruser']);
+
+            expect(mockTwitchBot.analyticsManager.dbManager.query).toHaveBeenCalledWith(
+                'SELECT followed_at FROM viewers WHERE username = ?',
+                ['otheruser']
+            );
+        });
+
+        it('should handle user not following', async () => {
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, ['@nonfollow']);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                '@nonfollow is not following this channel or follow data is not available.'
+            );
+        });
+
+        it('should handle user with null followed_at', async () => {
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: null }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                '@testuser is not following this channel or follow data is not available.'
+            );
+        });
+
+        it('should format time correctly for recent follow (seconds/minutes)', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 90); // 90 seconds ago
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                expect.stringMatching(/@testuser followed on \d{2}\/\d{2}\/\d{2}\. 1 minute, 30 seconds ago\./)
+            );
+        });
+
+        it('should format time correctly for older follow (years/days)', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 400); // ~1 year and 35 days
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                expect.stringMatching(/@testuser followed on \d{2}\/\d{2}\/\d{2}\. 1 year.*/)
+            );
+        });
+
+        it('should handle database error gracefully', async () => {
+            mockTwitchBot.analyticsManager.dbManager.query.mockRejectedValue(new Error('DB connection lost'));
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            expect(logger.error).toHaveBeenCalled();
+            expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
+                'channel',
+                'Error: DB connection lost'
+            );
+        });
+
+        it('should use singular forms correctly', async () => {
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365); // 1 year ago exactly
+            mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
+                { followed_at: followedAt }
+            ]);
+
+            await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
+
+            const message = mockTwitchBot.sendMessage.mock.calls[0][1];
+            expect(message).toMatch(/1 year/);
+            expect(message).not.toMatch(/1 years/);
+        });
+    });
+
     describe('fursona command', () => {
         it('should generate fursona for requesting user', async () => {
             await handlers.fursona(mockTwitchBot, 'channel', mockContext, []);

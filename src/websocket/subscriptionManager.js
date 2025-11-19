@@ -205,6 +205,54 @@ class SubscriptionManager {
         }
     }
 
+    async subscribeToChannelFollow() {
+        try {
+            logger.debug('SubscriptionManager', 'Subscribing to channel follow events');
+
+            if (!this.tokenManager.tokens.channelId) {
+                throw new Error('Missing required channel ID');
+            }
+
+            const subscription = {
+                type: 'channel.follow',
+                version: '2',
+                condition: {
+                    broadcaster_user_id: this.tokenManager.tokens.channelId,
+                    moderator_user_id: this.tokenManager.tokens.channelId
+                },
+                transport: {
+                    method: 'websocket',
+                    session_id: this.sessionId
+                }
+            };
+
+            const response = await fetch(`${config.twitchApiEndpoint}/eventsub/subscriptions`, {
+                method: 'POST',
+                headers: {
+                    'Client-Id': this.tokenManager.tokens.clientId,
+                    'Authorization': `Bearer ${this.tokenManager.tokens.broadcasterAccessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(subscription)
+            });
+
+            const responseData = await response.json();
+
+            if (!response.ok) {
+                logger.error('SubscriptionManager', 'Failed to subscribe to channel follow events', {
+                    status: response.status,
+                    error: JSON.stringify(responseData)
+                });
+                throw new Error(`Failed to subscribe to channel follow events: ${JSON.stringify(responseData)}`);
+            }
+
+            logger.info('SubscriptionManager', 'Subscribed to channel follow events', { subscriptionId: responseData.data?.[0]?.id });
+        } catch (error) {
+            logger.error('SubscriptionManager', 'Error subscribing to channel follow events', { error: error.message, stack: error.stack });
+            throw error;
+        }
+    }
+
     async unsubscribeFromChatEvents() {
         try {
             logger.debug('SubscriptionManager', 'Unsubscribing from chat events');
@@ -223,6 +271,17 @@ class SubscriptionManager {
             logger.info('SubscriptionManager', 'Unsubscribed from channel point redemptions');
         } catch (error) {
             logger.error('SubscriptionManager', 'Error unsubscribing from channel points', { error: error.message });
+            throw error;
+        }
+    }
+
+    async unsubscribeFromChannelFollow() {
+        try {
+            logger.debug('SubscriptionManager', 'Unsubscribing from channel follow events');
+            await this.unsubscribeFromEventType('channel.follow');
+            logger.info('SubscriptionManager', 'Unsubscribed from channel follow events');
+        } catch (error) {
+            logger.error('SubscriptionManager', 'Error unsubscribing from channel follow events', { error: error.message });
             throw error;
         }
     }

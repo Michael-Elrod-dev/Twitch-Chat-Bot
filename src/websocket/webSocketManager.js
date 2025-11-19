@@ -5,7 +5,7 @@ const config = require('../config/config');
 const logger = require('../logger/logger');
 
 class WebSocketManager {
-    constructor(tokenManager, chatHandler, redemptionHandler, streamOnlineHandler, streamOfflineHandler) {
+    constructor(tokenManager, chatHandler, redemptionHandler, streamOnlineHandler, streamOfflineHandler, followHandler = null) {
         this.tokenManager = tokenManager;
         this.wsConnection = null;
         this.sessionId = null;
@@ -13,6 +13,7 @@ class WebSocketManager {
         this.redemptionHandler = redemptionHandler;
         this.streamOnlineHandler = streamOnlineHandler;
         this.streamOfflineHandler = streamOfflineHandler;
+        this.followHandler = followHandler;
         this.onSessionReady = null;
 
         logger.debug('WebSocketManager', 'WebSocketManager instance created');
@@ -96,6 +97,16 @@ class WebSocketManager {
                     logger.info('WebSocketManager', 'Received stream offline event');
                     if (this.streamOfflineHandler) {
                         await this.streamOfflineHandler();
+                    }
+                } else if (subscriptionType === 'channel.follow') {
+                    logger.info('WebSocketManager', 'Received channel follow event', {
+                        userId: message.payload.event?.user_id,
+                        userName: message.payload.event?.user_name
+                    });
+                    if (this.followHandler) {
+                        await this.followHandler(message.payload.event);
+                    } else {
+                        logger.debug('WebSocketManager', 'Received follow event but no handler registered');
                     }
                 } else {
                     logger.debug('WebSocketManager', 'Received unknown subscription type', { subscriptionType });
