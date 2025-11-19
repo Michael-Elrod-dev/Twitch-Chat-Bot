@@ -26,11 +26,13 @@ class ChatMessageHandler {
             const isBroadcaster = event.badges?.some(badge => badge.set_id === 'broadcaster') || false;
             const isMod = event.badges?.some(badge => badge.set_id === 'moderator') || false;
             const isSubscriber = event.badges?.some(badge => badge.set_id === 'subscriber') || false;
+            const isVip = event.badges?.some(badge => badge.set_id === 'vip') || false;
 
             const userContext = {
                 userName: event.chatter_user_name,
                 isMod: isMod,
                 isSubscriber: isSubscriber,
+                isVip: isVip,
                 isBroadcaster: isBroadcaster
             };
 

@@ -67,7 +67,8 @@ class Config {
                 streamLimits: {
                     broadcaster: 999999,
                     mod: 15,
-                    subscriber: 10,
+                    subscriber: 15,
+                    vip: 10,
                     everyone: 5
                 }
             }

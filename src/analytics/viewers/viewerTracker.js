@@ -7,31 +7,33 @@ class ViewerTracker {
         this.analyticsManager = analyticsManager;
     }
 
-    async ensureUserExists(username, userId = null, isMod = false, isSubscriber = false, isBroadcaster = false) {
+    async ensureUserExists(username, userId = null, isMod = false, isSubscriber = false, isVip = false, isBroadcaster = false) {
         try {
             if (!userId) {
                 userId = username;
             }
 
             const sql = `
-                INSERT IGNORE INTO viewers (user_id, username, is_moderator, is_subscriber, is_broadcaster, last_seen)
-                VALUES (?, ?, ?, ?, ?, NOW())
+                INSERT IGNORE INTO viewers (user_id, username, is_moderator, is_subscriber, is_vip, is_broadcaster, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE
                     last_seen = NOW(),
                     username = ?,
                     is_moderator = ?,
                     is_subscriber = ?,
+                    is_vip = ?,
                     is_broadcaster = ?
             `;
             await this.analyticsManager.dbManager.query(sql, [
-                userId, username, isMod, isSubscriber, isBroadcaster,
-                username, isMod, isSubscriber, isBroadcaster
+                userId, username, isMod, isSubscriber, isVip, isBroadcaster,
+                username, isMod, isSubscriber, isVip, isBroadcaster
             ]);
             logger.debug('ViewerTracker', 'User record ensured', {
                 username,
                 userId,
                 isMod,
                 isSubscriber,
+                isVip,
                 isBroadcaster
             });
             return userId;
@@ -59,8 +61,9 @@ class ViewerTracker {
 
             const isMod = userContext.isMod || false;
             const isSubscriber = userContext.isSubscriber || false;
+            const isVip = userContext.isVip || false;
             const isBroadcaster = userContext.isBroadcaster || false;
-            const dbUserId = await this.ensureUserExists(username, userId, isMod, isSubscriber, isBroadcaster);
+            const dbUserId = await this.ensureUserExists(username, userId, isMod, isSubscriber, isVip, isBroadcaster);
 
             const checkFirstMessageSql = `
                 SELECT COUNT(*) as count FROM chat_messages

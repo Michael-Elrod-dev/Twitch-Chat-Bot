@@ -100,7 +100,8 @@ describe('ChatMessageHandler', () => {
                     badges: [
                         { set_id: 'broadcaster' },
                         { set_id: 'moderator' },
-                        { set_id: 'subscriber' }
+                        { set_id: 'subscriber' },
+                        { set_id: 'vip' }
                     ],
                     message: { text: 'hello' }
                 }
@@ -117,7 +118,8 @@ describe('ChatMessageHandler', () => {
                 expect.objectContaining({
                     isBroadcaster: true,
                     isMod: true,
-                    isSubscriber: true
+                    isSubscriber: true,
+                    isVip: true
                 })
             );
         });
@@ -143,7 +145,8 @@ describe('ChatMessageHandler', () => {
                 expect.objectContaining({
                     isBroadcaster: false,
                     isMod: false,
-                    isSubscriber: false
+                    isSubscriber: false,
+                    isVip: false
                 })
             );
         });

@@ -45,13 +45,14 @@ describe('ViewerTracker', () => {
                 '123456',
                 true,  // isMod
                 false, // isSubscriber
+                false, // isVip
                 false  // isBroadcaster
             );
 
             expect(userId).toBe('123456');
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT IGNORE INTO viewers'),
-                ['123456', 'testuser', true, false, false, 'testuser', true, false, false]
+                ['123456', 'testuser', true, false, false, false, 'testuser', true, false, false, false]
             );
         });
 
@@ -70,7 +71,7 @@ describe('ViewerTracker', () => {
         it('should update existing user on duplicate key', async () => {
             mockDbManager.query.mockResolvedValueOnce([]);
 
-            await viewerTracker.ensureUserExists('testuser', '123', false, true, false);
+            await viewerTracker.ensureUserExists('testuser', '123', false, true, false, false);
 
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('ON DUPLICATE KEY UPDATE'),

@@ -39,6 +39,7 @@ CREATE TABLE viewers (
     username VARCHAR(25) NOT NULL,
     is_moderator BOOLEAN DEFAULT FALSE,
     is_subscriber BOOLEAN DEFAULT FALSE,
+    is_vip BOOLEAN DEFAULT FALSE,
     is_broadcaster BOOLEAN DEFAULT FALSE,
     last_seen DATETIME,
     context TEXT NULL,

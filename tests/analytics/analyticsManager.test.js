@@ -103,6 +103,7 @@ describe('AnalyticsManager', () => {
             const userContext = {
                 isMod: false,
                 isSubscriber: true,
+                isVip: false,
                 isBroadcaster: false
             };
 
@@ -285,6 +286,7 @@ describe('AnalyticsManager', () => {
             const fullContext = {
                 isMod: true,
                 isSubscriber: true,
+                isVip: false,
                 isBroadcaster: false,
                 badges: { moderator: '1', subscriber: '12' }
             };

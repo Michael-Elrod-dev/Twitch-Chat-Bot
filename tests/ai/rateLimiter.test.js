@@ -16,6 +16,7 @@ jest.mock('../../src/config/config', () => ({
                 broadcaster: 999999,
                 mod: 50,
                 subscriber: 50,
+                vip: 50,
                 everyone: 5
             }
         }
@@ -68,6 +69,20 @@ describe('RateLimiter', () => {
         it('should return subscriber limits for subscribers', () => {
             const limits = rateLimiter.getUserLimits('claude', {
                 isSubscriber: true,
+                isVip: false,
+                isMod: false,
+                isBroadcaster: false
+            });
+
+            expect(limits).toEqual({
+                streamLimit: 50
+            });
+        });
+
+        it('should return vip limits for vips', () => {
+            const limits = rateLimiter.getUserLimits('claude', {
+                isVip: true,
+                isSubscriber: false,
                 isMod: false,
                 isBroadcaster: false
             });
@@ -81,7 +96,8 @@ describe('RateLimiter', () => {
             const limits = rateLimiter.getUserLimits('claude', {
                 isBroadcaster: false,
                 isMod: false,
-                isSubscriber: false
+                isSubscriber: false,
+                isVip: false
             });
 
             expect(limits).toEqual({

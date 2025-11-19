@@ -14,13 +14,25 @@ class RateLimiter {
             throw new Error(`No rate limit config found for service: ${service}`);
         }
 
-        let userType = 'everyone';
-        if (userContext.isBroadcaster) userType = 'broadcaster';
-        else if (userContext.isMod) userType = 'mod';
-        else if (userContext.isSubscriber) userType = 'subscriber';
+        const applicableLimits = [serviceConfig.streamLimits.everyone];
+
+        if (userContext.isSubscriber) {
+            applicableLimits.push(serviceConfig.streamLimits.subscriber);
+        }
+        if (userContext.isVip) {
+            applicableLimits.push(serviceConfig.streamLimits.vip);
+        }
+        if (userContext.isMod) {
+            applicableLimits.push(serviceConfig.streamLimits.mod);
+        }
+        if (userContext.isBroadcaster) {
+            applicableLimits.push(serviceConfig.streamLimits.broadcaster);
+        }
+
+        const streamLimit = Math.max(...applicableLimits);
 
         return {
-            streamLimit: serviceConfig.streamLimits[userType]
+            streamLimit: streamLimit
         };
     }
 
