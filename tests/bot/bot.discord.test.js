@@ -7,7 +7,8 @@ jest.mock('../../src/config/config', () => ({
     isDebugMode: false,
     discord: {
         webhookUrl: 'https://discord.com/api/webhooks/test/webhook',
-        notificationDelay: 100 // Short delay for testing
+        notificationDelay: 100, // Short delay for testing
+        notificationCooldown: 14400000 // 4 hours in milliseconds
     },
     twitchChannelUrl: 'https://www.twitch.tv/testchannel',
     database: {
@@ -161,7 +162,10 @@ describe('Bot - Discord Notification Integration', () => {
                     category: 'Fortnite'
                 }
             ];
-            bot.dbManager.query.mockResolvedValue(mockStreamData);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
 
             await bot.sendDiscordStreamNotification();
 
@@ -190,7 +194,10 @@ describe('Bot - Discord Notification Integration', () => {
                     category: 'Just Chatting'
                 }
             ];
-            bot.dbManager.query.mockResolvedValue(mockStreamData);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
 
             await bot.sendDiscordStreamNotification();
 
@@ -207,7 +214,10 @@ describe('Bot - Discord Notification Integration', () => {
                     category: null
                 }
             ];
-            bot.dbManager.query.mockResolvedValue(mockStreamData);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
 
             await bot.sendDiscordStreamNotification();
 
@@ -218,7 +228,9 @@ describe('Bot - Discord Notification Integration', () => {
         });
 
         it('should warn when no stream data found in database', async () => {
-            bot.dbManager.query.mockResolvedValue([]);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([]); // No stream data
 
             await bot.sendDiscordStreamNotification();
 
@@ -260,7 +272,9 @@ describe('Bot - Discord Notification Integration', () => {
         it('should handle database query error', async () => {
             const dbError = new Error('Database connection failed');
             dbError.stack = 'Error stack';
-            bot.dbManager.query.mockRejectedValue(dbError);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockRejectedValueOnce(dbError); // Query fails
 
             await bot.sendDiscordStreamNotification();
 
@@ -282,7 +296,9 @@ describe('Bot - Discord Notification Integration', () => {
                     category: 'Gaming'
                 }
             ];
-            bot.dbManager.query.mockResolvedValue(mockStreamData);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData);
 
             const discordError = new Error('Discord webhook failed');
             discordError.stack = 'Error stack';
@@ -307,7 +323,9 @@ describe('Bot - Discord Notification Integration', () => {
                     category: 'Gaming'
                 }
             ];
-            bot.dbManager.query.mockResolvedValue(mockStreamData);
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData);
 
             await bot.sendDiscordStreamNotification();
 
@@ -319,6 +337,155 @@ describe('Bot - Discord Notification Integration', () => {
                 })
             );
         });
+
+        it('should send notification on first run (no previous notification)', async () => {
+            const mockStreamData = [
+                {
+                    title: 'First Stream',
+                    category: 'Gaming'
+                }
+            ];
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
+
+            await bot.sendDiscordStreamNotification();
+
+            expect(logger.debug).toHaveBeenCalledWith(
+                'Bot',
+                'No previous Discord notification found, this is the first notification'
+            );
+            expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
+                'First Stream',
+                'Gaming'
+            );
+            expect(bot.dbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO tokens'),
+                expect.arrayContaining(['lastDiscordNotification'])
+            );
+        });
+
+        it('should skip notification when cooldown is active', async () => {
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            bot.dbManager.query.mockResolvedValueOnce([
+                { token_value: twoHoursAgo.toISOString() }
+            ]);
+
+            await bot.sendDiscordStreamNotification();
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'Bot',
+                'Discord notification cooldown active, skipping notification',
+                expect.objectContaining({
+                    lastNotificationTime: twoHoursAgo.toISOString(),
+                    timeSinceLastNotification: expect.any(Number),
+                    remainingMinutes: expect.any(Number)
+                })
+            );
+            expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
+        });
+
+        it('should send notification when cooldown has passed', async () => {
+            const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
+            const mockStreamData = [
+                {
+                    title: 'After Cooldown Stream',
+                    category: 'Gaming'
+                }
+            ];
+            bot.dbManager.query
+                .mockResolvedValueOnce([{ token_value: fiveHoursAgo.toISOString() }])
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
+
+            await bot.sendDiscordStreamNotification();
+
+            expect(logger.debug).toHaveBeenCalledWith(
+                'Bot',
+                'Cooldown period has passed, proceeding with notification',
+                expect.objectContaining({
+                    lastNotificationTime: fiveHoursAgo.toISOString(),
+                    timeSinceLastNotification: expect.any(Number)
+                })
+            );
+            expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
+                'After Cooldown Stream',
+                'Gaming'
+            );
+        });
+
+        it('should update timestamp after successful notification', async () => {
+            const mockStreamData = [
+                {
+                    title: 'Test Stream',
+                    category: 'Gaming'
+                }
+            ];
+            const mockDate = new Date('2025-01-15T12:00:00.000Z');
+            jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
+
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData)
+                .mockResolvedValueOnce({}); // Timestamp update
+
+            await bot.sendDiscordStreamNotification();
+
+            expect(bot.dbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO tokens'),
+                [
+                    'lastDiscordNotification',
+                    mockDate.toISOString(),
+                    mockDate.toISOString()
+                ]
+            );
+            expect(logger.debug).toHaveBeenCalledWith(
+                'Bot',
+                'Updated last Discord notification timestamp',
+                expect.objectContaining({
+                    timestamp: mockDate.toISOString()
+                })
+            );
+
+            global.Date.mockRestore();
+        });
+
+        it('should not update timestamp if notification fails', async () => {
+            const mockStreamData = [
+                {
+                    title: 'Test Stream',
+                    category: 'Gaming'
+                }
+            ];
+            const discordError = new Error('Discord webhook failed');
+            mockDiscordNotifier.sendStreamLiveNotification.mockRejectedValue(discordError);
+
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce(mockStreamData);
+
+            await bot.sendDiscordStreamNotification();
+
+            const updateCalls = bot.dbManager.query.mock.calls.filter(call =>
+                call[0].includes('INSERT INTO tokens')
+            );
+            expect(updateCalls.length).toBe(0);
+        });
+
+        it('should not update timestamp if no stream data found', async () => {
+            bot.dbManager.query
+                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([]); // No stream data
+
+            await bot.sendDiscordStreamNotification();
+
+            expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
+            const updateCalls = bot.dbManager.query.mock.calls.filter(call =>
+                call[0].includes('INSERT INTO tokens')
+            );
+            expect(updateCalls.length).toBe(0);
+        });
     });
 
     describe('End-to-end stream online flow', () => {
@@ -327,12 +494,15 @@ describe('Bot - Discord Notification Integration', () => {
             bot.startFullOperation = jest.fn().mockResolvedValue();
             bot.currentStreamId = 'test-stream-456';
             bot.dbManager = {
-                query: jest.fn().mockResolvedValue([
-                    {
-                        title: 'End-to-End Test Stream',
-                        category: 'Software Development'
-                    }
-                ])
+                query: jest.fn()
+                    .mockResolvedValueOnce([]) // No previous notification
+                    .mockResolvedValueOnce([
+                        {
+                            title: 'End-to-End Test Stream',
+                            category: 'Software Development'
+                        }
+                    ])
+                    .mockResolvedValueOnce({}) // Timestamp update
             };
         });
 

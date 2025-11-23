@@ -441,6 +441,38 @@ class Bot {
         }
 
         try {
+            logger.debug('Bot', 'Checking Discord notification cooldown');
+
+            const cooldownSql = `
+                SELECT token_value
+                FROM tokens
+                WHERE token_key = ?
+            `;
+            const cooldownResults = await this.dbManager.query(cooldownSql, ['lastDiscordNotification']);
+
+            if (cooldownResults && cooldownResults.length > 0) {
+                const lastNotificationTime = new Date(cooldownResults[0].token_value);
+                const currentTime = new Date();
+                const timeSinceLastNotification = currentTime - lastNotificationTime;
+
+                if (timeSinceLastNotification < config.discord.notificationCooldown) {
+                    const remainingTime = Math.ceil((config.discord.notificationCooldown - timeSinceLastNotification) / 1000 / 60);
+                    logger.info('Bot', 'Discord notification cooldown active, skipping notification', {
+                        lastNotificationTime: lastNotificationTime.toISOString(),
+                        timeSinceLastNotification: Math.floor(timeSinceLastNotification / 1000 / 60),
+                        remainingMinutes: remainingTime
+                    });
+                    return;
+                }
+
+                logger.debug('Bot', 'Cooldown period has passed, proceeding with notification', {
+                    lastNotificationTime: lastNotificationTime.toISOString(),
+                    timeSinceLastNotification: Math.floor(timeSinceLastNotification / 1000 / 60)
+                });
+            } else {
+                logger.debug('Bot', 'No previous Discord notification found, this is the first notification');
+            }
+
             logger.debug('Bot', 'Fetching stream information for Discord notification', {
                 streamId: this.currentStreamId
             });
@@ -456,6 +488,22 @@ class Bot {
                 const { title, category } = results[0];
                 logger.info('Bot', 'Sending Discord notification', { title, category });
                 await this.discordNotifier.sendStreamLiveNotification(title, category);
+
+                const currentTime = new Date();
+                const updateSql = `
+                    INSERT INTO tokens (token_key, token_value)
+                    VALUES (?, ?)
+                    ON DUPLICATE KEY UPDATE token_value = ?, updated_at = CURRENT_TIMESTAMP
+                `;
+                await this.dbManager.query(updateSql, [
+                    'lastDiscordNotification',
+                    currentTime.toISOString(),
+                    currentTime.toISOString()
+                ]);
+
+                logger.debug('Bot', 'Updated last Discord notification timestamp', {
+                    timestamp: currentTime.toISOString()
+                });
             } else {
                 logger.warn('Bot', 'No stream data found in database for Discord notification', {
                     streamId: this.currentStreamId

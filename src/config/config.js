@@ -39,7 +39,8 @@ class Config {
 
         this.discord = {
             webhookUrl: process.env.DISCORD_WEBHOOK_URL,
-            notificationDelay: 30000
+            notificationDelay: 30000,
+            notificationCooldown: 14400000
         };
 
         this.twitchChannelUrl = `https://www.twitch.tv/${this.channelName}`;
