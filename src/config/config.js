@@ -45,6 +45,16 @@ class Config {
 
         this.twitchChannelUrl = `https://www.twitch.tv/${this.channelName}`;
 
+        this.api = {
+            enabled: process.env.API_ENABLED === 'true',
+            port: parseInt(process.env.API_PORT) || 3000,
+            key: process.env.API_KEY
+        };
+
+        this.apiEnabled = this.api.enabled;
+        this.apiPort = this.api.port;
+        this.apiKey = this.api.key;
+
         this.tokenRefreshInterval = 300000;
         this.viewerTrackingInterval = 60000;
         this.spotifyInterval = 3000;

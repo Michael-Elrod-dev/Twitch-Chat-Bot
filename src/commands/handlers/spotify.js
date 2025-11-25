@@ -3,7 +3,7 @@
 const logger = require('../../logger/logger');
 
 function spotifyHandlers(dependencies) {
-    const { spotifyManager } = dependencies;
+    const { spotifyManager, songToggleService } = dependencies;
 
     return {
         async currentSong(twitchBot, channel) {
@@ -159,49 +159,23 @@ function spotifyHandlers(dependencies) {
                 }
 
                 const enable = args[0].toLowerCase() === 'on';
+                const result = await songToggleService.toggleSongs(channel, enable);
 
-                const channelId = await twitchBot.users.getUserByName(channel);
-                if (!channelId) {
-                    logger.error('SpotifyHandlers', 'Channel not found for toggleSongs', { channel });
-                    return;
-                }
+                await twitchBot.sendMessage(channel, result.message);
 
-                const rewards = await twitchBot.channelPoints.getCustomRewards(channelId.id);
-                const songReward = rewards.find(reward => reward.title.toLowerCase() === 'song request');
-                const skipQueueReward = rewards.find(reward => reward.title.toLowerCase() === 'skip song queue');
-
-                if (!songReward || !skipQueueReward) {
-                    await twitchBot.sendMessage(channel, 'Could not find one or both song-related rewards!');
-                    logger.warn('SpotifyHandlers', 'Song rewards not found', {
+                if (result.success && !result.alreadyInState) {
+                    logger.info('SpotifyHandlers', 'Song requests toggled via chat command', {
                         channel,
-                        hasSongReward: !!songReward,
-                        hasSkipReward: !!skipQueueReward
+                        enabled: result.enabled,
+                        requestedBy: context.username
                     });
-                    return;
                 }
-
-                if (songReward.isEnabled === enable && skipQueueReward.isEnabled === enable) {
-                    await twitchBot.sendMessage(channel, `Song requests are already turned ${enable ? 'on' : 'off'}`);
-                    return;
-                }
-
-                await Promise.all([
-                    twitchBot.channelPoints.updateCustomReward(channelId.id, songReward.id, {
-                        isEnabled: enable
-                    }),
-                    twitchBot.channelPoints.updateCustomReward(channelId.id, skipQueueReward.id, {
-                        isEnabled: enable
-                    })
-                ]);
-
-                await twitchBot.sendMessage(channel, `Song requests have been turned ${enable ? 'on' : 'off'}`);
-                logger.info('SpotifyHandlers', 'Song requests toggled', {
-                    channel,
-                    enabled: enable,
-                    requestedBy: context.username
-                });
             } catch (error) {
-                logger.error('SpotifyHandlers', 'Error toggling songs', { error: error.message, stack: error.stack, channel });
+                logger.error('SpotifyHandlers', 'Error in toggleSongs handler', {
+                    error: error.message,
+                    stack: error.stack,
+                    channel
+                });
                 await twitchBot.sendMessage(channel, `Failed to ${args[0]?.toLowerCase() === 'on' ? 'enable' : 'disable'} song requests: ${error.message}`);
             }
         }

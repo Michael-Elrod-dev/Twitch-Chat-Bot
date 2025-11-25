@@ -13,6 +13,8 @@ const QuoteManager = require('./redemptions/quotes/quoteManager');
 const SpotifyManager = require('./redemptions/songs/spotifyManager');
 const RedemptionManager = require('./redemptions/redemptionManager');
 const DbBackupManager = require('./database/dbBackupManager');
+const SongToggleService = require('./services/songToggleService');
+const ApiServer = require('./api/apiServer');
 
 const MessageSender = require('./messages/messageSender');
 const WebSocketManager = require('./websocket/webSocketManager');
@@ -194,16 +196,30 @@ class Bot {
             await this.spotifyManager.init(this.dbManager);
             await this.spotifyManager.authenticate();
 
+            logger.debug('Bot', 'Initializing song toggle service');
+            this.songToggleService = new SongToggleService(this.twitchAPI);
+
             logger.debug('Bot', 'Initializing command manager');
             this.commandManager = CommandManager.createWithDependencies({
                 quoteManager: this.quoteManager,
                 spotifyManager: this.spotifyManager,
-                viewerManager: this.viewerManager
+                viewerManager: this.viewerManager,
+                songToggleService: this.songToggleService
             });
             await this.commandManager.init(this.dbManager);
 
             logger.debug('Bot', 'Initializing message sender');
             this.messageSender = new MessageSender(this.tokenManager);
+
+            if (config.apiEnabled) {
+                logger.debug('Bot', 'Initializing API server');
+                this.apiServer = new ApiServer(config, this.songToggleService, this.messageSender);
+                try {
+                    await this.apiServer.start();
+                } catch (error) {
+                    logger.error('Bot', 'Failed to start API server', { error: error.message });
+                }
+            }
 
             logger.debug('Bot', 'Initializing chat message handler');
             this.chatMessageHandler = new ChatMessageHandler(
@@ -759,6 +775,15 @@ class Bot {
                     }
                 } catch (error) {
                     logger.error('Bot', 'Error creating final backup', { error: error.message });
+                }
+            }
+
+            if (this.apiServer) {
+                logger.info('Bot', 'Stopping API server');
+                try {
+                    await this.apiServer.stop();
+                } catch (error) {
+                    logger.error('Bot', 'Error stopping API server', { error: error.message });
                 }
             }
 
