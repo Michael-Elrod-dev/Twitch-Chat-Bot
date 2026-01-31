@@ -3,8 +3,16 @@
 const logger = require('../../logger/logger');
 
 class ViewerTracker {
-    constructor(analyticsManager) {
+    constructor(analyticsManager, redisManager = null) {
         this.analyticsManager = analyticsManager;
+        this.redisManager = redisManager;
+    }
+
+    getQueueManager() {
+        if (this.redisManager && this.redisManager.connected()) {
+            return this.redisManager.getQueueManager();
+        }
+        return null;
     }
 
     async ensureUserExists(username, userId = null, isMod = false, isSubscriber = false, isVip = false, isBroadcaster = false) {
@@ -139,13 +147,41 @@ class ViewerTracker {
                 });
             }
 
+            const queueManager = this.getQueueManager();
+            if (queueManager) {
+                const chatMsgQueued = await queueManager.push('analytics:chat_messages', {
+                    type: 'chat_message',
+                    userId: dbUserId,
+                    streamId,
+                    messageType: type,
+                    content,
+                    messageTime: new Date()
+                });
+
+                const chatTotalsQueued = await queueManager.push('analytics:chat_totals', {
+                    type: 'chat_totals',
+                    userId: dbUserId,
+                    messageType: type
+                });
+
+                if (chatMsgQueued && chatTotalsQueued) {
+                    logger.debug('ViewerTracker', 'Interaction queued for batch processing', {
+                        username,
+                        userId: dbUserId,
+                        streamId,
+                        type
+                    });
+                    return;
+                }
+            }
+
             const sql = `
                 INSERT INTO chat_messages (user_id, stream_id, message_time, message_type, message_content)
                 VALUES (?, ?, NOW(), ?, ?)
             `;
             await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
             await this.updateChatTotals(dbUserId, type);
-            logger.debug('ViewerTracker', 'Interaction tracked', {
+            logger.debug('ViewerTracker', 'Interaction tracked (direct)', {
                 username,
                 userId: dbUserId,
                 streamId,

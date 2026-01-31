@@ -28,7 +28,7 @@ class RedisManager {
             this.client = new Redis({
                 host: config.redis.host,
                 port: config.redis.port,
-                password: config.redis.password || undefined,
+                password: config.redis.password,
                 db: config.redis.db,
                 keyPrefix: config.redis.keyPrefix,
                 retryStrategy: (times) => {

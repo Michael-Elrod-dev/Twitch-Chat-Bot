@@ -4,10 +4,13 @@ const config = require('../config/config');
 const logger = require('../logger/logger');
 const { loadCommandHandlers } = require('./utils/commandLoader');
 
+const CACHE_KEY = 'cache:commands';
+
 class CommandManager {
     constructor(specialCommandHandlers) {
         this.specialCommandHandlers = specialCommandHandlers;
         this.dbManager = null;
+        this.redisManager = null;
         this.commandCache = new Map();
         this.cacheExpiry = null;
         this.cacheTimeout = config.commandCacheInterval;
@@ -22,9 +25,17 @@ class CommandManager {
         return manager;
     }
 
-    async init(dbManager) {
+    async init(dbManager, redisManager = null) {
         this.dbManager = dbManager;
+        this.redisManager = redisManager;
         await this.loadCommands();
+    }
+
+    getCacheManager() {
+        if (this.redisManager && this.redisManager.connected()) {
+            return this.redisManager.getCacheManager();
+        }
+        return null;
     }
 
     async loadCommands() {
@@ -36,17 +47,34 @@ class CommandManager {
             const results = await this.dbManager.query(sql);
 
             this.commandCache.clear();
+            const cacheData = {};
+
             for (const row of results) {
-                this.commandCache.set(row.command_name.toLowerCase(), {
+                const commandData = {
                     response: row.response_text,
                     handler: row.handler_name,
                     userLevel: row.user_level
+                };
+                this.commandCache.set(row.command_name.toLowerCase(), commandData);
+                cacheData[row.command_name.toLowerCase()] = commandData;
+            }
+
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                await cacheManager.del(CACHE_KEY);
+                if (Object.keys(cacheData).length > 0) {
+                    await cacheManager.hmset(CACHE_KEY, cacheData);
+                    await cacheManager.expire(CACHE_KEY, config.cache.commandsTTL);
+                }
+                logger.debug('CommandManager', 'Commands cached in Redis', {
+                    commandCount: Object.keys(cacheData).length
                 });
             }
 
             this.cacheExpiry = Date.now() + this.cacheTimeout;
             logger.info('CommandManager', 'Commands loaded successfully', {
-                commandCount: this.commandCache.size
+                commandCount: this.commandCache.size,
+                redisEnabled: !!cacheManager
             });
         } catch (error) {
             logger.error('CommandManager', 'Error loading commands', {
@@ -59,19 +87,38 @@ class CommandManager {
 
     async getCommand(commandName) {
         try {
+            const normalizedName = commandName.toLowerCase();
+
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                const cached = await cacheManager.hget(CACHE_KEY, normalizedName);
+                if (cached) {
+                    return cached;
+                }
+
+                const allCached = await cacheManager.hgetall(CACHE_KEY);
+                if (!allCached || Object.keys(allCached).length === 0) {
+                    logger.debug('CommandManager', 'Redis cache empty, reloading commands');
+                    await this.loadCommands();
+                    return this.commandCache.get(normalizedName) || null;
+                }
+
+                return null;
+            }
+
             if (Date.now() > this.cacheExpiry) {
                 logger.debug('CommandManager', 'Cache expired, reloading commands');
                 await this.loadCommands();
             }
 
-            return this.commandCache.get(commandName.toLowerCase()) || null;
+            return this.commandCache.get(normalizedName) || null;
         } catch (error) {
             logger.error('CommandManager', 'Error getting command', {
                 error: error.message,
                 stack: error.stack,
                 commandName
             });
-            return null;
+            return this.commandCache.get(commandName.toLowerCase()) || null;
         }
     }
 
@@ -218,11 +265,18 @@ class CommandManager {
             `;
             await this.dbManager.query(sql, [name.toLowerCase(), response, userLevel]);
 
-            this.commandCache.set(name.toLowerCase(), {
+            const commandData = {
                 response: response,
                 handler: null,
                 userLevel: userLevel
-            });
+            };
+
+            this.commandCache.set(name.toLowerCase(), commandData);
+
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                await cacheManager.hset(CACHE_KEY, name.toLowerCase(), commandData);
+            }
 
             logger.info('CommandManager', 'Command added successfully', {
                 commandName: name,
@@ -264,11 +318,19 @@ class CommandManager {
             const result = await this.dbManager.query(sql, [response, name.toLowerCase()]);
 
             if (result.affectedRows > 0) {
-                this.commandCache.set(name.toLowerCase(), {
+                const commandData = {
                     response: response,
                     handler: null,
                     userLevel: command.userLevel
-                });
+                };
+
+                this.commandCache.set(name.toLowerCase(), commandData);
+
+                const cacheManager = this.getCacheManager();
+                if (cacheManager) {
+                    await cacheManager.hset(CACHE_KEY, name.toLowerCase(), commandData);
+                }
+
                 logger.info('CommandManager', 'Command edited successfully', {
                     commandName: name
                 });
@@ -305,6 +367,12 @@ class CommandManager {
 
             if (result.affectedRows > 0) {
                 this.commandCache.delete(name.toLowerCase());
+
+                const cacheManager = this.getCacheManager();
+                if (cacheManager) {
+                    await cacheManager.hdel(CACHE_KEY, name.toLowerCase());
+                }
+
                 logger.info('CommandManager', 'Command deleted successfully', {
                     commandName: name
                 });

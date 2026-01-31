@@ -28,14 +28,38 @@ jest.mock('../../src/config/config', () => ({
     }
 }));
 
+const createMockRedisManager = (connected = true) => {
+    const mockCacheManager = connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        del: jest.fn().mockResolvedValue(true),
+        hget: jest.fn().mockResolvedValue(null),
+        hset: jest.fn().mockResolvedValue(true),
+        hdel: jest.fn().mockResolvedValue(true),
+        hgetall: jest.fn().mockResolvedValue(null),
+        hmset: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
+        getQueueManager: jest.fn().mockReturnValue(null)
+    };
+};
+
 describe('RateLimiter', () => {
     let rateLimiter;
     let mockDbManager;
+    let mockRedisManager;
 
     beforeEach(() => {
         mockDbManager = {
             query: jest.fn()
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         rateLimiter = new RateLimiter(mockDbManager);
     });
@@ -399,6 +423,116 @@ describe('RateLimiter', () => {
             mockDbManager.query.mockResolvedValueOnce([{ stream_count: 4 }]);
             result = await rateLimiter.checkRateLimit(userId, service, streamId, { isMod: true });
             expect(result.allowed).toBe(true);
+        });
+    });
+
+    describe('Redis caching', () => {
+        beforeEach(() => {
+            rateLimiter = new RateLimiter(mockDbManager, mockRedisManager);
+        });
+
+        it('should get rate limit from Redis cache', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce('3');
+
+            const result = await rateLimiter.checkRateLimit(
+                'user123',
+                'claude',
+                'stream456',
+                { isBroadcaster: false }
+            );
+
+            expect(cacheManager.get).toHaveBeenCalledWith('ratelimit:user123:claude:stream456');
+            expect(result.allowed).toBe(true);
+            expect(mockDbManager.query).not.toHaveBeenCalled();
+        });
+
+        it('should use correct cache key format', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce(null);
+            mockDbManager.query.mockResolvedValueOnce([{ stream_count: 2 }]);
+
+            await rateLimiter.checkRateLimit('user123', 'claude', 'stream456', {});
+
+            expect(cacheManager.get).toHaveBeenCalledWith('ratelimit:user123:claude:stream456');
+            expect(cacheManager.set).toHaveBeenCalledWith('ratelimit:user123:claude:stream456', '2');
+        });
+
+        it('should fall back to DB when cache miss', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce(null);
+            mockDbManager.query.mockResolvedValueOnce([{ stream_count: 2 }]);
+
+            const result = await rateLimiter.checkRateLimit(
+                'user123',
+                'claude',
+                'stream456',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalled();
+            expect(cacheManager.set).toHaveBeenCalledWith('ratelimit:user123:claude:stream456', '2');
+            expect(result.allowed).toBe(true);
+        });
+
+        it('should increment Redis counter on updateUsage', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            mockDbManager.query.mockResolvedValueOnce([]);
+
+            await rateLimiter.updateUsage('user123', 'claude', 'stream456');
+
+            expect(cacheManager.incr).toHaveBeenCalledWith('ratelimit:user123:claude:stream456');
+        });
+
+        it('should work without Redis (fallback mode)', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            rateLimiter = new RateLimiter(mockDbManager, disconnectedRedis);
+            mockDbManager.query.mockResolvedValueOnce([{ stream_count: 2 }]);
+
+            const result = await rateLimiter.checkRateLimit(
+                'user123',
+                'claude',
+                'stream456',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalled();
+            expect(result.allowed).toBe(true);
+        });
+
+        it('should work with null redisManager', async () => {
+            rateLimiter = new RateLimiter(mockDbManager, null);
+            mockDbManager.query.mockResolvedValueOnce([{ stream_count: 2 }]);
+
+            const result = await rateLimiter.checkRateLimit(
+                'user123',
+                'claude',
+                'stream456',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalled();
+            expect(result.allowed).toBe(true);
+        });
+
+        it('should log when using Redis cache', async () => {
+            const logger = require('../../src/logger/logger');
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce('2');
+
+            await rateLimiter.checkRateLimit('user123', 'claude', 'stream456', { userName: 'testuser' });
+
+            expect(logger.debug).toHaveBeenCalledWith(
+                'RateLimiter',
+                'Rate limit from Redis cache',
+                expect.objectContaining({
+                    userId: 'user123',
+                    userName: 'testuser',
+                    service: 'claude',
+                    currentCount: 2,
+                    streamId: 'stream456'
+                })
+            );
         });
     });
 });

@@ -4,8 +4,20 @@ const config = require('../config/config');
 const logger = require('../logger/logger');
 
 class RateLimiter {
-    constructor(dbManager) {
+    constructor(dbManager, redisManager = null) {
         this.dbManager = dbManager;
+        this.redisManager = redisManager;
+    }
+
+    getCacheManager() {
+        if (this.redisManager && this.redisManager.connected()) {
+            return this.redisManager.getCacheManager();
+        }
+        return null;
+    }
+
+    getRateLimitKey(userId, service, streamId) {
+        return `ratelimit:${userId}:${service}:${streamId}`;
     }
 
     getUserLimits(service, userContext = {}) {
@@ -39,15 +51,41 @@ class RateLimiter {
     async checkRateLimit(userId, service, streamId, userContext = {}) {
         try {
             const userLimits = this.getUserLimits(service, userContext);
+            let currentCount;
 
-            const sql = `
-                SELECT stream_count
-                FROM api_usage
-                WHERE user_id = ? AND api_type = ? AND stream_id = ?
-            `;
-            const results = await this.dbManager.query(sql, [userId, service, streamId]);
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                const cacheKey = this.getRateLimitKey(userId, service, streamId);
+                const cached = await cacheManager.get(cacheKey);
+                if (cached !== null) {
+                    currentCount = parseInt(cached, 10) || 0;
+                    logger.debug('RateLimiter', 'Rate limit from Redis cache', {
+                        userId,
+                        userName: userContext.userName,
+                        service,
+                        currentCount,
+                        streamId
+                    });
+                } else {
+                    const sql = `
+                        SELECT stream_count
+                        FROM api_usage
+                        WHERE user_id = ? AND api_type = ? AND stream_id = ?
+                    `;
+                    const results = await this.dbManager.query(sql, [userId, service, streamId]);
+                    currentCount = results.length > 0 ? results[0].stream_count : 0;
 
-            const currentCount = results.length > 0 ? results[0].stream_count : 0;
+                    await cacheManager.set(cacheKey, currentCount.toString());
+                }
+            } else {
+                const sql = `
+                    SELECT stream_count
+                    FROM api_usage
+                    WHERE user_id = ? AND api_type = ? AND stream_id = ?
+                `;
+                const results = await this.dbManager.query(sql, [userId, service, streamId]);
+                currentCount = results.length > 0 ? results[0].stream_count : 0;
+            }
 
             logger.debug('RateLimiter', 'Checking rate limit', {
                 userId,
@@ -103,6 +141,13 @@ class RateLimiter {
                     stream_count = stream_count + 1
             `;
             await this.dbManager.query(sql, [userId, service, streamId]);
+
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                const cacheKey = this.getRateLimitKey(userId, service, streamId);
+                await cacheManager.incr(cacheKey);
+            }
+
             logger.debug('RateLimiter', 'Usage updated', {
                 userId,
                 service,

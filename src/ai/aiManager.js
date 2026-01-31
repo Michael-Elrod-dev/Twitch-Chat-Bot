@@ -10,19 +10,23 @@ const logger = require('../logger/logger');
 class AIManager {
     constructor() {
         this.dbManager = null;
+        this.redisManager = null;
         this.claudeModel = null;
         this.rateLimiter = null;
         this.promptBuilder = null;
         this.contextBuilder = null;
     }
 
-    async init(dbManager, claudeApiKey) {
+    async init(dbManager, claudeApiKey, redisManager = null) {
         this.dbManager = dbManager;
+        this.redisManager = redisManager;
         this.claudeModel = new ClaudeModel(claudeApiKey);
-        this.rateLimiter = new RateLimiter(dbManager);
+        this.rateLimiter = new RateLimiter(dbManager, redisManager);
         this.contextBuilder = new ContextBuilder(dbManager);
         this.promptBuilder = new PromptBuilder();
-        logger.info('AIManager', 'AIManager initialized successfully');
+        logger.info('AIManager', 'AIManager initialized successfully', {
+            redisEnabled: !!redisManager
+        });
     }
 
     async handleTextRequest(prompt, userId, streamId, userContext = {}) {

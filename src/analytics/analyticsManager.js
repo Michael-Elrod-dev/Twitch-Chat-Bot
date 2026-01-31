@@ -6,15 +6,28 @@ const logger = require('../logger/logger');
 class AnalyticsManager {
     constructor() {
         this.dbManager = null;
+        this.redisManager = null;
         this.currentStreamId = null;
         this.viewerTracker = null;
     }
 
-    async init(dbManager) {
+    async init(dbManager, redisManager = null) {
         try {
             this.dbManager = dbManager;
-            this.viewerTracker = new ViewerTracker(this);
-            logger.info('AnalyticsManager', 'Analytics manager initialized successfully');
+            this.redisManager = redisManager;
+            this.viewerTracker = new ViewerTracker(this, redisManager);
+
+            if (redisManager && redisManager.connected()) {
+                const queueManager = redisManager.getQueueManager();
+                if (queueManager) {
+                    await queueManager.startConsumer();
+                    logger.info('AnalyticsManager', 'Analytics queue consumer started');
+                }
+            }
+
+            logger.info('AnalyticsManager', 'Analytics manager initialized successfully', {
+                redisEnabled: !!(redisManager && redisManager.connected())
+            });
         } catch (error) {
             logger.error('AnalyticsManager', 'Failed to initialize analytics manager', {
                 error: error.message,

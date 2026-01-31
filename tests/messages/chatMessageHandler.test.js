@@ -9,7 +9,34 @@ jest.mock('../../src/logger/logger', () => ({
     error: jest.fn()
 }));
 
+jest.mock('../../src/config/config', () => ({
+    cache: {
+        aiEnabledTTL: 60
+    }
+}));
+
 const logger = require('../../src/logger/logger');
+
+const createMockRedisManager = (connected = true) => {
+    const mockCacheManager = connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        del: jest.fn().mockResolvedValue(true),
+        hget: jest.fn().mockResolvedValue(null),
+        hset: jest.fn().mockResolvedValue(true),
+        hdel: jest.fn().mockResolvedValue(true),
+        hgetall: jest.fn().mockResolvedValue(null),
+        hmset: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
+        getQueueManager: jest.fn().mockReturnValue(null)
+    };
+};
 
 describe('ChatMessageHandler', () => {
     let chatMessageHandler;
@@ -17,6 +44,7 @@ describe('ChatMessageHandler', () => {
     let mockCommandManager;
     let mockEmoteManager;
     let mockAiManager;
+    let mockRedisManager;
     let mockBot;
 
     beforeEach(() => {
@@ -38,6 +66,8 @@ describe('ChatMessageHandler', () => {
             handleTextRequest: jest.fn().mockResolvedValue({ success: true, response: 'AI response' })
         };
 
+        mockRedisManager = createMockRedisManager(true);
+
         mockBot = {
             tokenManager: {
                 tokens: {
@@ -48,7 +78,10 @@ describe('ChatMessageHandler', () => {
             channelName: 'testchannel',
             sendMessage: jest.fn().mockResolvedValue(undefined),
             analyticsManager: {
-                trackChatMessage: jest.fn().mockResolvedValue(undefined)
+                trackChatMessage: jest.fn().mockResolvedValue(undefined),
+                dbManager: {
+                    query: jest.fn().mockResolvedValue([{ token_value: 'true' }])
+                }
             },
             aiManager: mockAiManager
         };
@@ -567,6 +600,158 @@ describe('ChatMessageHandler', () => {
             expect(mockAiManager.shouldTriggerText).toHaveBeenCalled();
             expect(mockEmoteManager.getEmoteResponse).toHaveBeenCalled();
             expect(mockCommandManager.handleCommand).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('AI enabled caching', () => {
+        beforeEach(() => {
+            chatMessageHandler = new ChatMessageHandler(
+                mockViewerManager,
+                mockCommandManager,
+                mockEmoteManager,
+                mockAiManager,
+                mockRedisManager
+            );
+        });
+
+        it('should get AI enabled from Redis cache', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce('true');
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            expect(cacheManager.get).toHaveBeenCalledWith('cache:settings:aiEnabled');
+            expect(mockBot.analyticsManager.dbManager.query).not.toHaveBeenCalled();
+            expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
+        });
+
+        it('should query DB on cache miss and cache result', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce(null);
+            mockBot.analyticsManager.dbManager.query.mockResolvedValueOnce([{ token_value: 'true' }]);
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            expect(mockBot.analyticsManager.dbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('SELECT token_value FROM tokens'),
+                ['aiEnabled']
+            );
+            expect(cacheManager.set).toHaveBeenCalledWith(
+                'cache:settings:aiEnabled',
+                'true',
+                60
+            );
+        });
+
+        it('should respect AI disabled from cache', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce('false');
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            expect(mockAiManager.handleTextRequest).not.toHaveBeenCalled();
+        });
+
+        it('should work without Redis (fallback mode)', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            chatMessageHandler = new ChatMessageHandler(
+                mockViewerManager,
+                mockCommandManager,
+                mockEmoteManager,
+                mockAiManager,
+                disconnectedRedis
+            );
+
+            mockBot.analyticsManager.dbManager.query.mockResolvedValueOnce([{ token_value: 'true' }]);
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            expect(mockBot.analyticsManager.dbManager.query).toHaveBeenCalled();
+            expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
+        });
+
+        it('should default to AI enabled on DB query error', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce(null);
+            mockBot.analyticsManager.dbManager.query.mockRejectedValueOnce(new Error('DB error'));
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            // Should default to enabled and proceed
+            expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
+        });
+
+        it('should log cache hit', async () => {
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.get.mockResolvedValueOnce('true');
+            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
+            mockAiManager.extractPrompt.mockReturnValueOnce('test');
+
+            const payload = {
+                event: {
+                    chatter_user_id: 'user123',
+                    chatter_user_name: 'testuser',
+                    message: { text: '@almosthadai test' }
+                }
+            };
+
+            await chatMessageHandler.handleChatMessage(payload, mockBot);
+
+            expect(logger.debug).toHaveBeenCalledWith(
+                'ChatMessageHandler',
+                'AI enabled status from cache',
+                expect.objectContaining({ aiEnabled: true })
+            );
         });
     });
 });

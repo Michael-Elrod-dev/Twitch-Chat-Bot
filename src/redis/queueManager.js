@@ -8,7 +8,6 @@ class QueueManager {
         this.redisManager = redisManager;
         this.dbManager = dbManager;
         this.consumerRunning = false;
-        this.consumerInterval = null;
         this.analyticsConsumer = null;
     }
 

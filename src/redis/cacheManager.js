@@ -251,48 +251,6 @@ class CacheManager {
             return null;
         }
     }
-
-    async incrWithExpire(key, ttlSeconds) {
-        const client = this.getClient();
-        if (!client) {
-            return null;
-        }
-
-        try {
-            const multi = client.multi();
-            multi.incr(key);
-            if (ttlSeconds && ttlSeconds > 0) {
-                multi.expire(key, ttlSeconds);
-            }
-            const results = await multi.exec();
-            return results[0][1];
-        } catch (error) {
-            logger.error('CacheManager', 'Error incrementing key with expiry', {
-                key,
-                ttlSeconds,
-                error: error.message
-            });
-            return null;
-        }
-    }
-
-    async exists(key) {
-        const client = this.getClient();
-        if (!client) {
-            return false;
-        }
-
-        try {
-            const result = await client.exists(key);
-            return result === 1;
-        } catch (error) {
-            logger.error('CacheManager', 'Error checking key existence', {
-                key,
-                error: error.message
-            });
-            return false;
-        }
-    }
 }
 
 module.exports = CacheManager;

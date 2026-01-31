@@ -10,17 +10,44 @@ jest.mock('../../src/logger/logger', () => ({
 }));
 
 jest.mock('../../src/config/config', () => ({
-    emoteCacheInterval: 60000
+    emoteCacheInterval: 60000,
+    cache: {
+        emotesTTL: 500
+    }
 }));
+
+const createMockRedisManager = (connected = true) => {
+    const mockCacheManager = connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        del: jest.fn().mockResolvedValue(true),
+        hget: jest.fn().mockResolvedValue(null),
+        hset: jest.fn().mockResolvedValue(true),
+        hdel: jest.fn().mockResolvedValue(true),
+        hgetall: jest.fn().mockResolvedValue(null),
+        hmset: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
+        getQueueManager: jest.fn().mockReturnValue(null)
+    };
+};
 
 describe('EmoteManager', () => {
     let emoteManager;
     let mockDbManager;
+    let mockRedisManager;
 
     beforeEach(() => {
         mockDbManager = {
             query: jest.fn()
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         emoteManager = new EmoteManager();
     });
@@ -372,6 +399,122 @@ describe('EmoteManager', () => {
 
         it('should use cache timeout from config', () => {
             expect(emoteManager.cacheTimeout).toBe(60000);
+        });
+    });
+
+    describe('Redis caching', () => {
+        it('should cache emotes in Redis on load', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'KEKW', response_text: 'LUL' }
+            ]);
+
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.del).toHaveBeenCalledWith('cache:emotes');
+            expect(cacheManager.hmset).toHaveBeenCalledWith('cache:emotes', {
+                'kekw': 'LUL'
+            });
+            expect(cacheManager.expire).toHaveBeenCalledWith('cache:emotes', 500);
+        });
+
+        it('should get emote from Redis cache', async () => {
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.hget.mockResolvedValueOnce('CachedResponse');
+
+            const response = await emoteManager.getEmoteResponse('KEKW');
+
+            expect(cacheManager.hget).toHaveBeenCalledWith('cache:emotes', 'kekw');
+            expect(response).toBe('CachedResponse');
+        });
+
+        it('should update Redis cache on add', async () => {
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await emoteManager.addEmote('NewEmote', 'NewResponse');
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.hset).toHaveBeenCalledWith('cache:emotes', 'newemote', 'NewResponse');
+        });
+
+        it('should update Redis cache on update', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'edit', response_text: 'Old Response' }
+            ]);
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 1 });
+            await emoteManager.updateEmote('edit', 'New Response');
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.hset).toHaveBeenCalledWith('cache:emotes', 'edit', 'New Response');
+        });
+
+        it('should delete from Redis cache on delete', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'delete', response_text: 'Will delete' }
+            ]);
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 1 });
+            await emoteManager.deleteEmote('delete');
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.hdel).toHaveBeenCalledWith('cache:emotes', 'delete');
+        });
+
+        it('should fall back to in-memory when Redis unavailable', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'KEKW', response_text: 'LUL' }
+            ]);
+
+            await emoteManager.init(mockDbManager, disconnectedRedis);
+
+            expect(emoteManager.emoteCache.has('kekw')).toBe(true);
+            expect(emoteManager.getCacheManager()).toBeNull();
+        });
+
+        it('should reload from DB when Redis cache empty', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'KEKW', response_text: 'LUL' }
+            ]);
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.hget.mockResolvedValueOnce(null);
+            cacheManager.hgetall.mockResolvedValueOnce(null);
+
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'KEKW', response_text: 'Reloaded' }
+            ]);
+
+            const response = await emoteManager.getEmoteResponse('KEKW');
+
+            expect(mockDbManager.query).toHaveBeenCalledTimes(2);
+            expect(response).toBe('Reloaded');
+        });
+
+        it('should log redisEnabled status on load', async () => {
+            const logger = require('../../src/logger/logger');
+            mockDbManager.query.mockResolvedValueOnce([
+                { trigger_text: 'KEKW', response_text: 'LUL' }
+            ]);
+
+            await emoteManager.init(mockDbManager, mockRedisManager);
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'EmoteManager',
+                'Emotes loaded successfully',
+                expect.objectContaining({
+                    redisEnabled: true
+                })
+            );
         });
     });
 });

@@ -11,15 +11,33 @@ jest.mock('../../src/logger/logger', () => ({
 
 const logger = require('../../src/logger/logger');
 
+const createMockRedisManager = (connected = true) => {
+    const mockQueueManager = connected ? {
+        push: jest.fn().mockResolvedValue(true),
+        pop: jest.fn().mockResolvedValue([]),
+        startConsumer: jest.fn().mockResolvedValue(undefined),
+        stopConsumer: jest.fn().mockResolvedValue(undefined)
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(null),
+        getQueueManager: jest.fn().mockReturnValue(mockQueueManager)
+    };
+};
+
 describe('ViewerTracker', () => {
     let viewerTracker;
     let mockDbManager;
+    let mockRedisManager;
     let mockAnalyticsManager;
 
     beforeEach(() => {
         mockDbManager = {
             query: jest.fn()
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         mockAnalyticsManager = {
             dbManager: mockDbManager
@@ -531,6 +549,185 @@ describe('ViewerTracker', () => {
             const result = await viewerTracker.getTopUsers();
 
             expect(result).toEqual([]);
+        });
+    });
+
+    describe('Queue integration', () => {
+        beforeEach(() => {
+            viewerTracker = new ViewerTracker(mockAnalyticsManager, mockRedisManager);
+        });
+
+        it('should queue chat message when Redis available', async () => {
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]); // first message check (not first)
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'Hello world!',
+                {}
+            );
+
+            const queueManager = mockRedisManager.getQueueManager();
+            expect(queueManager.push).toHaveBeenCalledWith(
+                'analytics:chat_messages',
+                expect.objectContaining({
+                    type: 'chat_message',
+                    userId: 'user123',
+                    streamId: 'stream456',
+                    messageType: 'message',
+                    content: 'Hello world!'
+                })
+            );
+        });
+
+        it('should queue chat totals when Redis available', async () => {
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]); // not first message
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'command',
+                '!test',
+                {}
+            );
+
+            const queueManager = mockRedisManager.getQueueManager();
+            expect(queueManager.push).toHaveBeenCalledWith(
+                'analytics:chat_totals',
+                expect.objectContaining({
+                    type: 'chat_totals',
+                    userId: 'user123',
+                    messageType: 'command'
+                })
+            );
+        });
+
+        it('should insert directly when Redis unavailable', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            viewerTracker = new ViewerTracker(mockAnalyticsManager, disconnectedRedis);
+
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]) // not first message
+                .mockResolvedValueOnce([]) // chat_messages insert
+                .mockResolvedValueOnce([]); // updateChatTotals
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'Hello',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO chat_messages'),
+                expect.arrayContaining(['user123', 'stream456', 'message', 'Hello'])
+            );
+        });
+
+        it('should insert directly when queueing fails', async () => {
+            const queueManager = mockRedisManager.getQueueManager();
+            queueManager.push.mockResolvedValue(false); // Simulate queue failure
+
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]) // not first message
+                .mockResolvedValueOnce([]) // chat_messages insert
+                .mockResolvedValueOnce([]); // updateChatTotals
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'Hello',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO chat_messages'),
+                expect.any(Array)
+            );
+        });
+
+        it('should log when interaction is queued', async () => {
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]); // not first message
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'Hello',
+                {}
+            );
+
+            expect(logger.debug).toHaveBeenCalledWith(
+                'ViewerTracker',
+                'Interaction queued for batch processing',
+                expect.objectContaining({
+                    username: 'testuser',
+                    userId: 'user123',
+                    streamId: 'stream456',
+                    type: 'message'
+                })
+            );
+        });
+
+        it('should work with null redisManager', async () => {
+            viewerTracker = new ViewerTracker(mockAnalyticsManager, null);
+
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 1 }]) // not first message
+                .mockResolvedValueOnce([]) // chat_messages insert
+                .mockResolvedValueOnce([]); // updateChatTotals
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'Hello',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO chat_messages'),
+                expect.any(Array)
+            );
+        });
+
+        it('should update unique_chatters before queueing for first message', async () => {
+            mockDbManager.query
+                .mockResolvedValueOnce([]) // ensureUserExists
+                .mockResolvedValueOnce([{ count: 0 }]) // first message
+                .mockResolvedValueOnce([]); // update unique_chatters
+
+            await viewerTracker.trackInteraction(
+                'testuser',
+                'user123',
+                'stream456',
+                'message',
+                'First message!',
+                {}
+            );
+
+            expect(mockDbManager.query).toHaveBeenCalledWith(
+                expect.stringContaining('SET unique_chatters = unique_chatters + 1'),
+                ['stream456']
+            );
         });
     });
 });

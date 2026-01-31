@@ -12,8 +12,8 @@ module.exports = {
 
     collectCoverageFrom: [
         'src/**/*.js',
-        '!src/bot.js', // Main entry point - tested via integration
-        '!src/logger/**', // Logger - simple utility
+        '!src/bot.js',
+        '!src/logger/**',
         '!**/node_modules/**'
     ],
 

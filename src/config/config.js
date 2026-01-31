@@ -95,6 +95,29 @@ class Config {
             }
         };
 
+        this.redis = {
+            host: process.env.REDIS_HOST,
+            port: parseInt(process.env.REDIS_PORT),
+            password: process.env.REDIS_PASSWORD,
+            db: parseInt(process.env.REDIS_DB),
+            keyPrefix: 'twitchbot:'
+        };
+
+        this.cache = {
+            commandsTTL: 500,
+            emotesTTL: 500,
+            tokensTTL: 1800,
+            aiEnabledTTL: 60,
+            rateLimitTTL: null
+        };
+
+        this.analyticsQueue = {
+            batchSize: 50,
+            batchIntervalMs: 5000,
+            maxRetries: 3,
+            drainTimeoutMs: 30000
+        };
+
         this.aiTriggers = {
             text: ['@almosthadai', 'almosthadai']
         };

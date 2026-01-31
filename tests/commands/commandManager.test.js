@@ -11,12 +11,37 @@ jest.mock('../../src/logger/logger', () => ({
 }));
 
 jest.mock('../../src/config/config', () => ({
-    commandCacheInterval: 60000
+    commandCacheInterval: 60000,
+    cache: {
+        commandsTTL: 500
+    }
 }));
+
+const createMockRedisManager = (connected = true) => {
+    const mockCacheManager = connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        del: jest.fn().mockResolvedValue(true),
+        hget: jest.fn().mockResolvedValue(null),
+        hset: jest.fn().mockResolvedValue(true),
+        hdel: jest.fn().mockResolvedValue(true),
+        hgetall: jest.fn().mockResolvedValue(null),
+        hmset: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
+        getQueueManager: jest.fn().mockReturnValue(null)
+    };
+};
 
 describe('CommandManager', () => {
     let commandManager;
     let mockDbManager;
+    let mockRedisManager;
     let mockSpecialHandlers;
     let mockTwitchBot;
 
@@ -24,6 +49,8 @@ describe('CommandManager', () => {
         mockDbManager = {
             query: jest.fn()
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         mockSpecialHandlers = {
             handleQuote: jest.fn(),
@@ -586,6 +613,154 @@ describe('CommandManager', () => {
             const commands = await commandManager.getAllCommands();
 
             expect(commands).toEqual([]);
+        });
+    });
+
+    describe('Redis caching', () => {
+        it('should cache commands in Redis on load', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!test', response_text: 'Test response', handler_name: null, user_level: 'everyone' }
+            ]);
+
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.del).toHaveBeenCalledWith('cache:commands');
+            expect(cacheManager.hmset).toHaveBeenCalledWith('cache:commands', expect.objectContaining({
+                '!test': expect.objectContaining({
+                    response: 'Test response',
+                    handler: null,
+                    userLevel: 'everyone'
+                })
+            }));
+            expect(cacheManager.expire).toHaveBeenCalledWith('cache:commands', 500);
+        });
+
+        it('should get command from Redis cache', async () => {
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.hget.mockResolvedValueOnce({
+                response: 'Cached response',
+                handler: null,
+                userLevel: 'everyone'
+            });
+
+            const command = await commandManager.getCommand('!test');
+
+            expect(cacheManager.hget).toHaveBeenCalledWith('cache:commands', '!test');
+            expect(command).toEqual({
+                response: 'Cached response',
+                handler: null,
+                userLevel: 'everyone'
+            });
+        });
+
+        it('should update Redis cache on add', async () => {
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            mockDbManager.query.mockResolvedValueOnce([]);
+            await commandManager.addCommand('!new', 'New response');
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.hset).toHaveBeenCalledWith('cache:commands', '!new', expect.objectContaining({
+                response: 'New response',
+                handler: null,
+                userLevel: 'everyone'
+            }));
+        });
+
+        it('should update Redis cache on edit', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!edit', response_text: 'Old', handler_name: null, user_level: 'everyone' }
+            ]);
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            // Mock hget to return the command so getCommand finds it
+            cacheManager.hget.mockResolvedValueOnce({
+                response: 'Old',
+                handler: null,
+                userLevel: 'everyone'
+            });
+
+            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 1 });
+            await commandManager.editCommand('!edit', 'New response');
+
+            expect(cacheManager.hset).toHaveBeenCalledWith('cache:commands', '!edit', expect.objectContaining({
+                response: 'New response'
+            }));
+        });
+
+        it('should delete from Redis cache on delete', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!delete', response_text: 'Test', handler_name: null, user_level: 'everyone' }
+            ]);
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            // Mock hget to return the command so getCommand finds it
+            cacheManager.hget.mockResolvedValueOnce({
+                response: 'Test',
+                handler: null,
+                userLevel: 'everyone'
+            });
+
+            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 1 });
+            await commandManager.deleteCommand('!delete');
+
+            expect(cacheManager.hdel).toHaveBeenCalledWith('cache:commands', '!delete');
+        });
+
+        it('should fall back to in-memory when Redis unavailable', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!test', response_text: 'Response', handler_name: null, user_level: 'everyone' }
+            ]);
+
+            await commandManager.init(mockDbManager, disconnectedRedis);
+
+            expect(commandManager.commandCache.has('!test')).toBe(true);
+            expect(commandManager.getCacheManager()).toBeNull();
+        });
+
+        it('should reload from DB when Redis cache empty', async () => {
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!test', response_text: 'Response', handler_name: null, user_level: 'everyone' }
+            ]);
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            cacheManager.hget.mockResolvedValueOnce(null);
+            cacheManager.hgetall.mockResolvedValueOnce(null);
+
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!test', response_text: 'Reloaded', handler_name: null, user_level: 'everyone' }
+            ]);
+
+            const command = await commandManager.getCommand('!test');
+
+            expect(mockDbManager.query).toHaveBeenCalledTimes(2);
+            expect(command.response).toBe('Reloaded');
+        });
+
+        it('should log redisEnabled status on load', async () => {
+            const logger = require('../../src/logger/logger');
+            mockDbManager.query.mockResolvedValueOnce([
+                { command_name: '!test', response_text: 'Response', handler_name: null, user_level: 'everyone' }
+            ]);
+
+            await commandManager.init(mockDbManager, mockRedisManager);
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'CommandManager',
+                'Commands loaded successfully',
+                expect.objectContaining({
+                    redisEnabled: true
+                })
+            );
         });
     });
 });

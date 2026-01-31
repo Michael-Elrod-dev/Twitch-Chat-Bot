@@ -8,18 +8,31 @@ const logger = require('../logger/logger');
 class TokenManager {
     constructor() {
         this.dbManager = null;
+        this.redisManager = null;
         this.tokens = {};
         this.isInitialized = false;
         logger.debug('TokenManager', 'TokenManager instance created');
     }
 
-    async init(dbManager) {
+    async init(dbManager, redisManager = null) {
         logger.debug('TokenManager', 'Initializing TokenManager');
         this.dbManager = dbManager;
+        this.redisManager = redisManager;
         await this.loadTokensFromDatabase();
         await this.checkAndRefreshTokens();
         this.isInitialized = true;
         logger.info('TokenManager', 'TokenManager initialized successfully');
+    }
+
+    getCacheManager() {
+        if (this.redisManager && this.redisManager.connected()) {
+            return this.redisManager.getCacheManager();
+        }
+        return null;
+    }
+
+    getCacheKey(tokenKey) {
+        return `cache:token:${tokenKey}`;
     }
 
     async loadTokensFromDatabase() {
@@ -29,13 +42,24 @@ class TokenManager {
             const rows = await this.dbManager.query('SELECT token_key, token_value FROM tokens');
             this.tokens = {};
 
+            const cacheManager = this.getCacheManager();
+
             for (const row of rows) {
                 this.tokens[row.token_key] = row.token_value;
+
+                if (cacheManager) {
+                    await cacheManager.set(
+                        this.getCacheKey(row.token_key),
+                        row.token_value,
+                        config.cache.tokensTTL
+                    );
+                }
             }
 
             logger.info('TokenManager', 'Loaded tokens from database', {
                 tokenCount: rows.length,
-                tokenKeys: Object.keys(this.tokens)
+                tokenKeys: Object.keys(this.tokens),
+                redisEnabled: !!cacheManager
             });
         } catch (error) {
             logger.error('TokenManager', 'Error loading tokens from database', {
@@ -82,6 +106,15 @@ class TokenManager {
                 SET token_value = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE token_key = ?
             `, [tokenValue, tokenKey]);
+
+            const cacheManager = this.getCacheManager();
+            if (cacheManager) {
+                await cacheManager.set(
+                    this.getCacheKey(tokenKey),
+                    tokenValue,
+                    config.cache.tokensTTL
+                );
+            }
 
             logger.debug('TokenManager', 'Successfully updated token', { tokenKey });
         } catch (error) {

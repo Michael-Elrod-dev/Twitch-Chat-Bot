@@ -5,6 +5,7 @@ const logger = require('./logger/logger');
 const AIManager = require('./ai/aiManager');
 const TwitchAPI = require('./tokens/twitchAPI');
 const DbManager = require('./database/dbManager');
+const RedisManager = require('./redis/redisManager');
 const EmoteManager = require('./emotes/emoteManager');
 const TokenManager = require('./tokens/tokenManager');
 const CommandManager = require('./commands/commandManager');
@@ -61,9 +62,18 @@ class Bot {
 
             await this.cleanupOrphanedSessions();
 
+            logger.debug('Bot', 'Initializing Redis connection');
+            this.redisManager = new RedisManager();
+            const redisConnected = await this.redisManager.init(this.dbManager);
+            if (redisConnected) {
+                logger.info('Bot', 'Redis connected - caching and queue features enabled');
+            } else {
+                logger.warn('Bot', 'Redis unavailable - running in fallback mode (direct MySQL)');
+            }
+
             logger.debug('Bot', 'Initializing token manager');
             this.tokenManager = new TokenManager();
-            await this.tokenManager.init(this.dbManager);
+            await this.tokenManager.init(this.dbManager, this.redisManager);
 
             logger.debug('Bot', 'Initializing Twitch API');
             this.twitchAPI = new TwitchAPI(this.tokenManager);
@@ -72,7 +82,8 @@ class Bot {
             this.aiManager = new AIManager();
             await this.aiManager.init(
                 this.dbManager,
-                this.tokenManager.tokens.claudeApiKey
+                this.tokenManager.tokens.claudeApiKey,
+                this.redisManager
             );
 
             if (config.isDebugMode) {
@@ -157,12 +168,12 @@ class Bot {
 
             logger.debug('Bot', 'Initializing analytics manager');
             this.analyticsManager = new AnalyticsManager();
-            await this.analyticsManager.init(this.dbManager);
+            await this.analyticsManager.init(this.dbManager, this.redisManager);
             this.viewerManager = this.analyticsManager.viewerTracker;
 
             logger.debug('Bot', 'Initializing emote manager');
             this.emoteManager = new EmoteManager();
-            await this.emoteManager.init(this.dbManager);
+            await this.emoteManager.init(this.dbManager, this.redisManager);
 
             logger.debug('Bot', 'Initializing quote manager');
             this.quoteManager = new QuoteManager();
@@ -206,7 +217,7 @@ class Bot {
                 viewerManager: this.viewerManager,
                 songToggleService: this.songToggleService
             });
-            await this.commandManager.init(this.dbManager);
+            await this.commandManager.init(this.dbManager, this.redisManager);
 
             logger.debug('Bot', 'Initializing message sender');
             this.messageSender = new MessageSender(this.tokenManager);
@@ -226,7 +237,8 @@ class Bot {
                 this.viewerManager,
                 this.commandManager,
                 this.emoteManager,
-                this.aiManager
+                this.aiManager,
+                this.redisManager
             );
 
             logger.debug('Bot', 'Initializing redemption handlers');
@@ -784,6 +796,24 @@ class Bot {
                     await this.apiServer.stop();
                 } catch (error) {
                     logger.error('Bot', 'Error stopping API server', { error: error.message });
+                }
+            }
+
+            if (this.redisManager && this.redisManager.connected()) {
+                logger.info('Bot', 'Draining Redis queues before shutdown');
+                try {
+                    await this.redisManager.drainQueues(config.analyticsQueue.drainTimeoutMs);
+                    logger.info('Bot', 'Redis queues drained successfully');
+                } catch (error) {
+                    logger.error('Bot', 'Error draining Redis queues', { error: error.message });
+                }
+
+                logger.info('Bot', 'Closing Redis connection');
+                try {
+                    await this.redisManager.close();
+                    logger.info('Bot', 'Redis connection closed successfully');
+                } catch (error) {
+                    logger.error('Bot', 'Error closing Redis connection', { error: error.message });
                 }
             }
 

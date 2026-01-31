@@ -14,9 +14,25 @@ jest.mock('../../src/logger/logger', () => ({
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
 const logger = require('../../src/logger/logger');
 
+const createMockRedisManager = (connected = true) => {
+    const mockQueueManager = connected ? {
+        startConsumer: jest.fn().mockResolvedValue(undefined),
+        stopConsumer: jest.fn().mockResolvedValue(undefined),
+        push: jest.fn().mockResolvedValue(true),
+        pop: jest.fn().mockResolvedValue([])
+    } : null;
+
+    return {
+        connected: jest.fn().mockReturnValue(connected),
+        getCacheManager: jest.fn().mockReturnValue(null),
+        getQueueManager: jest.fn().mockReturnValue(mockQueueManager)
+    };
+};
+
 describe('AnalyticsManager', () => {
     let analyticsManager;
     let mockDbManager;
+    let mockRedisManager;
     let mockViewerTracker;
 
     beforeEach(() => {
@@ -25,6 +41,8 @@ describe('AnalyticsManager', () => {
         mockDbManager = {
             query: jest.fn().mockResolvedValue({ affectedRows: 1 })
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         mockViewerTracker = {
             trackInteraction: jest.fn().mockResolvedValue(true),
@@ -39,6 +57,7 @@ describe('AnalyticsManager', () => {
     describe('constructor', () => {
         it('should initialize with null values', () => {
             expect(analyticsManager.dbManager).toBeNull();
+            expect(analyticsManager.redisManager).toBeNull();
             expect(analyticsManager.currentStreamId).toBeNull();
             expect(analyticsManager.viewerTracker).toBeNull();
         });
@@ -50,17 +69,20 @@ describe('AnalyticsManager', () => {
 
             expect(analyticsManager.dbManager).toBe(mockDbManager);
             expect(analyticsManager.viewerTracker).toBe(mockViewerTracker);
-            expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager);
+            expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager, null);
             expect(logger.info).toHaveBeenCalledWith(
                 'AnalyticsManager',
-                'Analytics manager initialized successfully'
+                'Analytics manager initialized successfully',
+                expect.objectContaining({
+                    redisEnabled: false
+                })
             );
         });
 
         it('should create ViewerTracker with correct reference', async () => {
             await analyticsManager.init(mockDbManager);
 
-            expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager);
+            expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager, null);
         });
 
         it('should handle initialization error', async () => {
@@ -90,6 +112,52 @@ describe('AnalyticsManager', () => {
 
             expect(analyticsManager.dbManager).toBe(newMockDbManager);
             expect(ViewerTracker).toHaveBeenCalledTimes(2);
+        });
+
+        it('should pass redisManager to ViewerTracker', async () => {
+            await analyticsManager.init(mockDbManager, mockRedisManager);
+
+            expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager, mockRedisManager);
+        });
+
+        it('should start queue consumer when Redis available', async () => {
+            await analyticsManager.init(mockDbManager, mockRedisManager);
+
+            const queueManager = mockRedisManager.getQueueManager();
+            expect(queueManager.startConsumer).toHaveBeenCalled();
+            expect(logger.info).toHaveBeenCalledWith(
+                'AnalyticsManager',
+                'Analytics queue consumer started'
+            );
+        });
+
+        it('should not start consumer when Redis unavailable', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+
+            await analyticsManager.init(mockDbManager, disconnectedRedis);
+
+            expect(logger.info).not.toHaveBeenCalledWith(
+                'AnalyticsManager',
+                'Analytics queue consumer started'
+            );
+        });
+
+        it('should store redisManager reference', async () => {
+            await analyticsManager.init(mockDbManager, mockRedisManager);
+
+            expect(analyticsManager.redisManager).toBe(mockRedisManager);
+        });
+
+        it('should log redisEnabled status', async () => {
+            await analyticsManager.init(mockDbManager, mockRedisManager);
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'AnalyticsManager',
+                'Analytics manager initialized successfully',
+                expect.objectContaining({
+                    redisEnabled: true
+                })
+            );
         });
     });
 

@@ -1,13 +1,24 @@
 // src/messages/chatMessageHandler.js
 
+const config = require('../config/config');
 const logger = require('../logger/logger');
 
+const AI_ENABLED_CACHE_KEY = 'cache:settings:aiEnabled';
+
 class ChatMessageHandler {
-    constructor(viewerManager, commandManager, emoteManager, aiManager) {
+    constructor(viewerManager, commandManager, emoteManager, aiManager, redisManager = null) {
         this.viewerManager = viewerManager;
         this.commandManager = commandManager;
         this.emoteManager = emoteManager;
         this.aiManager = aiManager;
+        this.redisManager = redisManager;
+    }
+
+    getCacheManager() {
+        if (this.redisManager && this.redisManager.connected()) {
+            return this.redisManager.getCacheManager();
+        }
+        return null;
     }
 
     async handleChatMessage(payload, bot) {
@@ -165,14 +176,35 @@ class ChatMessageHandler {
 
     async isAIEnabled(bot) {
         try {
+            const cacheManager = this.getCacheManager();
+
+            if (cacheManager) {
+                const cached = await cacheManager.get(AI_ENABLED_CACHE_KEY);
+                if (cached !== null) {
+                    logger.debug('ChatMessageHandler', 'AI enabled status from cache', {
+                        aiEnabled: cached === 'true'
+                    });
+                    return cached === 'true';
+                }
+            }
+
             const sql = 'SELECT token_value FROM tokens WHERE token_key = ?';
             const result = await bot.analyticsManager.dbManager.query(sql, ['aiEnabled']);
 
-            if (result.length === 0) {
-                return true;
+            let aiEnabled = true;
+            if (result.length > 0) {
+                aiEnabled = result[0].token_value === 'true';
             }
 
-            return result[0].token_value === 'true';
+            if (cacheManager) {
+                await cacheManager.set(
+                    AI_ENABLED_CACHE_KEY,
+                    aiEnabled ? 'true' : 'false',
+                    config.cache.aiEnabledTTL
+                );
+            }
+
+            return aiEnabled;
         } catch (error) {
             logger.error('ChatMessageHandler', 'Error checking AI enabled status', {
                 error: error.message,

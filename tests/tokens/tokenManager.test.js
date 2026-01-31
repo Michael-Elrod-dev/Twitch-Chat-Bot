@@ -12,7 +12,10 @@ jest.mock('../../src/logger/logger', () => ({
 }));
 jest.mock('../../src/config/config', () => ({
     channelName: 'testchannel',
-    twitchAuthEndpoint: 'https://id.twitch.tv/oauth2'
+    twitchAuthEndpoint: 'https://id.twitch.tv/oauth2',
+    cache: {
+        tokensTTL: 1800
+    }
 }));
 
 const https = require('https');
@@ -20,9 +23,27 @@ const fetch = require('node-fetch');
 const logger = require('../../src/logger/logger');
 const { EventEmitter } = require('events');
 
+const createMockRedisManager = (connected = true) => ({
+    connected: jest.fn().mockReturnValue(connected),
+    getCacheManager: jest.fn().mockReturnValue(connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        del: jest.fn().mockResolvedValue(true),
+        hget: jest.fn().mockResolvedValue(null),
+        hset: jest.fn().mockResolvedValue(true),
+        hdel: jest.fn().mockResolvedValue(true),
+        hgetall: jest.fn().mockResolvedValue(null),
+        hmset: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null),
+    getQueueManager: jest.fn().mockReturnValue(null)
+});
+
 describe('TokenManager', () => {
     let tokenManager;
     let mockDbManager;
+    let mockRedisManager;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -31,12 +52,15 @@ describe('TokenManager', () => {
             query: jest.fn()
         };
 
+        mockRedisManager = createMockRedisManager(true);
+
         tokenManager = new TokenManager();
     });
 
     describe('constructor', () => {
         it('should initialize with empty tokens', () => {
             expect(tokenManager.dbManager).toBeNull();
+            expect(tokenManager.redisManager).toBeNull();
             expect(tokenManager.tokens).toEqual({});
             expect(tokenManager.isInitialized).toBe(false);
             expect(logger.debug).toHaveBeenCalledWith('TokenManager', 'TokenManager instance created');
@@ -692,6 +716,132 @@ describe('TokenManager', () => {
                 'TokenManager',
                 'Retrieving broadcaster token'
             );
+        });
+    });
+
+    describe('Redis caching', () => {
+        it('should cache tokens in Redis on load', async () => {
+            const mockTokenRows = [
+                { token_key: 'botAccessToken', token_value: 'bot-token-123' },
+                { token_key: 'clientId', token_value: 'client-789' }
+            ];
+            mockDbManager.query.mockResolvedValue(mockTokenRows);
+
+            tokenManager.dbManager = mockDbManager;
+            tokenManager.redisManager = mockRedisManager;
+            await tokenManager.loadTokensFromDatabase();
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.set).toHaveBeenCalledWith(
+                'cache:token:botAccessToken',
+                'bot-token-123',
+                1800
+            );
+            expect(cacheManager.set).toHaveBeenCalledWith(
+                'cache:token:clientId',
+                'client-789',
+                1800
+            );
+        });
+
+        it('should update Redis cache on updateToken', async () => {
+            tokenManager.dbManager = mockDbManager;
+            tokenManager.redisManager = mockRedisManager;
+
+            await tokenManager.updateToken('botAccessToken', 'new-bot-token');
+
+            const cacheManager = mockRedisManager.getCacheManager();
+            expect(cacheManager.set).toHaveBeenCalledWith(
+                'cache:token:botAccessToken',
+                'new-bot-token',
+                1800
+            );
+        });
+
+        it('should fall back to in-memory when Redis unavailable', async () => {
+            const disconnectedRedis = createMockRedisManager(false);
+            const mockTokenRows = [
+                { token_key: 'botAccessToken', token_value: 'bot-token-123' }
+            ];
+            mockDbManager.query.mockResolvedValue(mockTokenRows);
+
+            tokenManager.dbManager = mockDbManager;
+            tokenManager.redisManager = disconnectedRedis;
+            await tokenManager.loadTokensFromDatabase();
+
+            expect(tokenManager.tokens.botAccessToken).toBe('bot-token-123');
+            expect(disconnectedRedis.getCacheManager()).toBeNull();
+        });
+
+        it('should work without Redis (null redisManager)', async () => {
+            const mockTokenRows = [
+                { token_key: 'botAccessToken', token_value: 'bot-token-123' }
+            ];
+            mockDbManager.query.mockResolvedValue(mockTokenRows);
+
+            tokenManager.dbManager = mockDbManager;
+            tokenManager.redisManager = null;
+            await tokenManager.loadTokensFromDatabase();
+
+            expect(tokenManager.tokens.botAccessToken).toBe('bot-token-123');
+        });
+
+        it('should log redisEnabled status on load', async () => {
+            const mockTokenRows = [
+                { token_key: 'botAccessToken', token_value: 'bot-token-123' }
+            ];
+            mockDbManager.query.mockResolvedValue(mockTokenRows);
+
+            tokenManager.dbManager = mockDbManager;
+            tokenManager.redisManager = mockRedisManager;
+            await tokenManager.loadTokensFromDatabase();
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'TokenManager',
+                'Loaded tokens from database',
+                expect.objectContaining({
+                    redisEnabled: true
+                })
+            );
+        });
+
+        it('should init with redisManager parameter', async () => {
+            mockDbManager.query.mockResolvedValue([
+                { token_key: 'botAccessToken', token_value: 'bot-token' },
+                { token_key: 'botRefreshToken', token_value: 'bot-refresh' },
+                { token_key: 'broadcasterRefreshToken', token_value: 'broadcaster-refresh' },
+                { token_key: 'clientId', token_value: 'client-id' },
+                { token_key: 'clientSecret', token_value: 'client-secret' }
+            ]);
+
+            const mockResponse = new EventEmitter();
+            const mockRequest = {
+                on: jest.fn(),
+                write: jest.fn(),
+                end: jest.fn()
+            };
+
+            https.request.mockImplementation((options, callback) => {
+                setTimeout(() => {
+                    callback(mockResponse);
+                    mockResponse.emit('data', JSON.stringify({
+                        access_token: 'new-token',
+                        refresh_token: 'new-refresh'
+                    }));
+                    mockResponse.emit('end');
+                }, 0);
+                mockResponse.statusCode = 200;
+                return mockRequest;
+            });
+
+            fetch.mockResolvedValue({
+                ok: true,
+                json: jest.fn().mockResolvedValue({ user_id: 'user-123', expires_in: 3600 })
+            });
+
+            await tokenManager.init(mockDbManager, mockRedisManager);
+
+            expect(tokenManager.redisManager).toBe(mockRedisManager);
         });
     });
 });

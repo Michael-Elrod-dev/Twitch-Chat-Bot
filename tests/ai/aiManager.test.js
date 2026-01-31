@@ -39,9 +39,20 @@ const ClaudeModel = require('../../src/ai/models/claudeModel');
 const ContextBuilder = require('../../src/ai/contextBuilder');
 const PromptBuilder = require('../../src/ai/promptBuilder');
 
+const createMockRedisManager = (connected = true) => ({
+    connected: jest.fn().mockReturnValue(connected),
+    getCacheManager: jest.fn().mockReturnValue(connected ? {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(true),
+        incr: jest.fn().mockResolvedValue(1)
+    } : null),
+    getQueueManager: jest.fn().mockReturnValue(null)
+});
+
 describe('AIManager', () => {
     let aiManager;
     let mockDbManager;
+    let mockRedisManager;
     let mockRateLimiter;
     let mockClaudeModel;
     let mockContextBuilder;
@@ -51,6 +62,8 @@ describe('AIManager', () => {
         mockDbManager = {
             query: jest.fn()
         };
+
+        mockRedisManager = createMockRedisManager(true);
 
         mockRateLimiter = {
             checkRateLimit: jest.fn(),
@@ -108,7 +121,47 @@ describe('AIManager', () => {
         it('should create RateLimiter with dbManager', async () => {
             await aiManager.init(mockDbManager, 'test-api-key');
 
-            expect(RateLimiter).toHaveBeenCalledWith(mockDbManager);
+            expect(RateLimiter).toHaveBeenCalledWith(mockDbManager, null);
+        });
+
+        it('should pass redisManager to RateLimiter', async () => {
+            await aiManager.init(mockDbManager, 'test-api-key', mockRedisManager);
+
+            expect(RateLimiter).toHaveBeenCalledWith(mockDbManager, mockRedisManager);
+        });
+
+        it('should store redisManager reference', async () => {
+            await aiManager.init(mockDbManager, 'test-api-key', mockRedisManager);
+
+            expect(aiManager.redisManager).toBe(mockRedisManager);
+        });
+
+        it('should log redisEnabled status', async () => {
+            const logger = require('../../src/logger/logger');
+
+            await aiManager.init(mockDbManager, 'test-api-key', mockRedisManager);
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'AIManager',
+                'AIManager initialized successfully',
+                expect.objectContaining({
+                    redisEnabled: true
+                })
+            );
+        });
+
+        it('should log redisEnabled as false when no Redis', async () => {
+            const logger = require('../../src/logger/logger');
+
+            await aiManager.init(mockDbManager, 'test-api-key', null);
+
+            expect(logger.info).toHaveBeenCalledWith(
+                'AIManager',
+                'AIManager initialized successfully',
+                expect.objectContaining({
+                    redisEnabled: false
+                })
+            );
         });
     });
 
