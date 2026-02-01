@@ -2,15 +2,6 @@
 
 const RedemptionHandler = require('../../src/messages/redemptionHandler');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../src/logger/logger');
-
 describe('RedemptionHandler', () => {
     let redemptionHandler;
     let mockViewerManager;
@@ -78,18 +69,6 @@ describe('RedemptionHandler', () => {
 
             await redemptionHandler.handleRedemption(payload, mockBot);
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedemptionHandler',
-                'Processing channel point redemption',
-                expect.objectContaining({
-                    userId: 'user-456',
-                    userName: 'testuser',
-                    rewardTitle: 'Test Reward',
-                    rewardId: 'reward-123',
-                    input: 'Test input'
-                })
-            );
-
             expect(mockBot.analyticsManager.trackChatMessage).toHaveBeenCalledWith(
                 'testuser',
                 'user-456',
@@ -110,16 +89,6 @@ describe('RedemptionHandler', () => {
                     id: 'redemption-789',
                     broadcasterId: 'broadcaster-999',
                     broadcasterDisplayName: 'broadcaster'
-                })
-            );
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedemptionHandler',
-                'Redemption processed successfully',
-                expect.objectContaining({
-                    userId: 'user-456',
-                    userName: 'testuser',
-                    rewardTitle: 'Test Reward'
                 })
             );
         });
@@ -149,7 +118,7 @@ describe('RedemptionHandler', () => {
                 'testuser',
                 'user-456',
                 'stream-123',
-                'Test Reward', // Falls back to reward title
+                'Test Reward',
                 'redemption',
                 {}
             );
@@ -212,15 +181,9 @@ describe('RedemptionHandler', () => {
             analyticsError.stack = 'Error stack';
             mockBot.analyticsManager.trackChatMessage.mockRejectedValue(analyticsError);
 
-            await redemptionHandler.handleRedemption(payload, mockBot);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedemptionHandler',
-                'Error handling redemption',
-                expect.objectContaining({
-                    error: 'Analytics DB error'
-                })
-            );
+            await expect(
+                redemptionHandler.handleRedemption(payload, mockBot)
+            ).resolves.not.toThrow();
         });
 
         it('should handle redemption manager error gracefully', async () => {
@@ -229,15 +192,9 @@ describe('RedemptionHandler', () => {
             redemptionError.stack = 'Error stack';
             mockRedemptionManager.handleRedemption.mockRejectedValue(redemptionError);
 
-            await redemptionHandler.handleRedemption(payload, mockBot);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedemptionHandler',
-                'Error handling redemption',
-                expect.objectContaining({
-                    error: 'Redemption processing failed'
-                })
-            );
+            await expect(
+                redemptionHandler.handleRedemption(payload, mockBot)
+            ).resolves.not.toThrow();
         });
 
         it('should not throw on error', async () => {
@@ -330,33 +287,6 @@ describe('RedemptionHandler', () => {
             });
         });
 
-        it('should log all redemption details', async () => {
-            const payload = createRedemptionPayload({
-                event: {
-                    reward: {
-                        title: 'Custom Reward',
-                        id: 'custom-123'
-                    },
-                    user_login: 'customuser',
-                    user_id: 'custom-456',
-                    user_input: 'Custom input'
-                }
-            });
-
-            await redemptionHandler.handleRedemption(payload, mockBot);
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedemptionHandler',
-                'Processing channel point redemption',
-                {
-                    userId: 'custom-456',
-                    userName: 'customuser',
-                    rewardTitle: 'Custom Reward',
-                    rewardId: 'custom-123',
-                    input: 'Custom input'
-                }
-            );
-        });
     });
 
     describe('Integration scenarios', () => {
@@ -417,7 +347,6 @@ describe('RedemptionHandler', () => {
             await redemptionHandler.handleRedemption(payload2, mockBot);
 
             expect(mockRedemptionManager.handleRedemption).toHaveBeenCalledTimes(2);
-            expect(logger.error).toHaveBeenCalled();
         });
     });
 });

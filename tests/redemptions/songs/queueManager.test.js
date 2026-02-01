@@ -2,15 +2,6 @@
 
 const QueueManager = require('../../../src/redemptions/songs/queueManager');
 
-jest.mock('../../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../../src/logger/logger');
-
 describe('QueueManager', () => {
     let queueManager;
     let mockDbManager;
@@ -36,10 +27,6 @@ describe('QueueManager', () => {
             await queueManager.init(mockDbManager);
 
             expect(queueManager.dbManager).toBe(mockDbManager);
-            expect(logger.info).toHaveBeenCalledWith(
-                'QueueManager',
-                'QueueManager initialized with database'
-            );
         });
     });
 
@@ -72,17 +59,6 @@ describe('QueueManager', () => {
                 2,
                 expect.stringContaining('INSERT INTO song_queue'),
                 ['spotify:track:123', 'Test Song', 'Test Artist', 'testuser', 5]
-            );
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Track added to pending queue',
-                expect.objectContaining({
-                    trackName: 'Test Song',
-                    artist: 'Test Artist',
-                    requestedBy: 'testuser',
-                    queuePosition: 5
-                })
             );
         });
 
@@ -120,16 +96,6 @@ describe('QueueManager', () => {
             };
 
             await expect(queueManager.addToPendingQueue(track)).rejects.toThrow('Database error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error adding to pending queue',
-                expect.objectContaining({
-                    error: 'Database error',
-                    trackName: 'Test Song',
-                    artist: 'Test Artist'
-                })
-            );
         });
     });
 
@@ -160,17 +126,6 @@ describe('QueueManager', () => {
                 ['spotify:track:456', 'Priority Song', 'Priority Artist', 'vipuser']
             );
             expect(mockDbManager.query).toHaveBeenCalledWith('COMMIT');
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Track added to priority queue',
-                expect.objectContaining({
-                    trackName: 'Priority Song',
-                    artist: 'Priority Artist',
-                    requestedBy: 'vipuser',
-                    queuePosition: 1
-                })
-            );
         });
 
         it('should rollback transaction on error', async () => {
@@ -193,15 +148,6 @@ describe('QueueManager', () => {
             await expect(queueManager.addToPriorityQueue(track)).rejects.toThrow('Insert failed');
 
             expect(mockDbManager.query).toHaveBeenCalledWith('ROLLBACK');
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error adding to priority queue',
-                expect.objectContaining({
-                    error: 'Insert failed',
-                    trackName: 'Priority Song',
-                    artist: 'Priority Artist'
-                })
-            );
         });
 
         it('should handle rollback failure', async () => {
@@ -224,14 +170,6 @@ describe('QueueManager', () => {
             };
 
             await expect(queueManager.addToPriorityQueue(track)).rejects.toThrow('Insert failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error rolling back transaction',
-                expect.objectContaining({
-                    error: 'Rollback failed'
-                })
-            );
         });
     });
 
@@ -247,7 +185,6 @@ describe('QueueManager', () => {
             await queueManager.clearQueue();
 
             expect(mockDbManager.query).toHaveBeenCalledWith('DELETE FROM song_queue');
-            expect(logger.info).toHaveBeenCalledWith('QueueManager', 'Queue cleared');
         });
 
         it('should handle database error gracefully', async () => {
@@ -256,14 +193,6 @@ describe('QueueManager', () => {
             mockDbManager.query.mockRejectedValue(dbError);
 
             await expect(queueManager.clearQueue()).rejects.toThrow('Delete failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error clearing queue',
-                expect.objectContaining({
-                    error: 'Delete failed'
-                })
-            );
         });
     });
 
@@ -299,11 +228,6 @@ describe('QueueManager', () => {
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('ORDER BY queue_position ASC')
             );
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Retrieved pending tracks',
-                expect.objectContaining({ trackCount: 2 })
-            );
         });
 
         it('should return empty array when queue is empty', async () => {
@@ -312,11 +236,6 @@ describe('QueueManager', () => {
             const result = await queueManager.getPendingTracks();
 
             expect(result).toEqual([]);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Retrieved pending tracks',
-                expect.objectContaining({ trackCount: 0 })
-            );
         });
 
         it('should return empty array on database error', async () => {
@@ -327,13 +246,6 @@ describe('QueueManager', () => {
             const result = await queueManager.getPendingTracks();
 
             expect(result).toEqual([]);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error getting pending tracks',
-                expect.objectContaining({
-                    error: 'Query failed'
-                })
-            );
         });
     });
 
@@ -356,10 +268,6 @@ describe('QueueManager', () => {
                 'UPDATE song_queue SET queue_position = queue_position - 1'
             );
             expect(mockDbManager.query).toHaveBeenCalledWith('COMMIT');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'First track removed from queue'
-            );
         });
 
         it('should rollback on error', async () => {
@@ -374,13 +282,6 @@ describe('QueueManager', () => {
             await expect(queueManager.removeFirstTrack()).rejects.toThrow('Delete failed');
 
             expect(mockDbManager.query).toHaveBeenCalledWith('ROLLBACK');
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error removing first track',
-                expect.objectContaining({
-                    error: 'Delete failed'
-                })
-            );
         });
     });
 

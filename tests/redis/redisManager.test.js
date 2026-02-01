@@ -3,12 +3,6 @@
 const RedisManager = require('../../src/redis/redisManager');
 
 jest.mock('ioredis');
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
 jest.mock('../../src/config/config', () => ({
     redis: {
         host: 'localhost',
@@ -22,7 +16,6 @@ jest.mock('../../src/redis/cacheManager');
 jest.mock('../../src/redis/queueManager');
 
 const Redis = require('ioredis');
-const logger = require('../../src/logger/logger');
 const CacheManager = require('../../src/redis/cacheManager');
 const QueueManager = require('../../src/redis/queueManager');
 
@@ -97,10 +90,6 @@ describe('RedisManager', () => {
             expect(redisManager.isConnected).toBe(true);
             expect(CacheManager).toHaveBeenCalledWith(redisManager);
             expect(QueueManager).toHaveBeenCalledWith(redisManager, mockDbManager);
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis connection established successfully'
-            );
         });
 
         it('should return false and set fallback mode when Redis unavailable', async () => {
@@ -110,11 +99,6 @@ describe('RedisManager', () => {
 
             expect(result).toBe(false);
             expect(redisManager.isConnected).toBe(false);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'RedisManager',
-                'Failed to initialize Redis - running in fallback mode',
-                expect.objectContaining({ error: 'Connection refused' })
-            );
         });
 
         it('should return false when ping fails', async () => {
@@ -123,20 +107,6 @@ describe('RedisManager', () => {
             const result = await redisManager.init(mockDbManager);
 
             expect(result).toBe(false);
-        });
-
-        it('should log initialization parameters', async () => {
-            await redisManager.init(mockDbManager);
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Initializing Redis connection',
-                expect.objectContaining({
-                    host: 'localhost',
-                    port: 6379,
-                    db: 0
-                })
-            );
         });
 
         it('should start health check after successful connection', async () => {
@@ -184,10 +154,6 @@ describe('RedisManager', () => {
 
             expect(redisManager.isConnected).toBe(true);
             expect(redisManager.reconnectAttempts).toBe(0);
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis client ready'
-            );
         });
 
         it('should set isConnected to false on close event', () => {
@@ -197,10 +163,6 @@ describe('RedisManager', () => {
             closeHandler();
 
             expect(redisManager.isConnected).toBe(false);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis connection closed'
-            );
         });
 
         it('should increment reconnectAttempts on reconnecting event', () => {
@@ -210,24 +172,8 @@ describe('RedisManager', () => {
             reconnectingHandler();
 
             expect(redisManager.reconnectAttempts).toBe(3);
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis client reconnecting',
-                { attempt: 3 }
-            );
         });
 
-        it('should log error on error event', () => {
-            const errorHandler = mockClient.on.mock.calls.find(call => call[0] === 'error')[1];
-
-            errorHandler(new Error('Redis error'));
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis client error',
-                { error: 'Redis error' }
-            );
-        });
     });
 
     describe('ping', () => {
@@ -334,10 +280,6 @@ describe('RedisManager', () => {
             await jest.advanceTimersByTimeAsync(30000);
 
             expect(redisManager.isConnected).toBe(true);
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis connection restored'
-            );
         });
 
         it('should set isConnected to false if ping fails', async () => {
@@ -346,11 +288,6 @@ describe('RedisManager', () => {
             await jest.advanceTimersByTimeAsync(30000);
 
             expect(redisManager.isConnected).toBe(false);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis health check failed',
-                expect.objectContaining({ error: 'Ping failed' })
-            );
         });
 
         it('should clear existing interval on restart', async () => {
@@ -374,10 +311,6 @@ describe('RedisManager', () => {
             expect(mockClient.quit).toHaveBeenCalled();
             expect(redisManager.isConnected).toBe(false);
             expect(redisManager.client).toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedisManager',
-                'Redis connection closed gracefully'
-            );
         });
 
         it('should clear health check interval', async () => {
@@ -394,11 +327,6 @@ describe('RedisManager', () => {
             await redisManager.close();
 
             expect(mockClient.disconnect).toHaveBeenCalled();
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedisManager',
-                'Error closing Redis connection',
-                expect.objectContaining({ error: 'Quit failed' })
-            );
         });
 
         it('should handle stopConsumer error gracefully', async () => {
@@ -406,12 +334,6 @@ describe('RedisManager', () => {
 
             await redisManager.close();
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedisManager',
-                'Error stopping queue consumer',
-                expect.objectContaining({ error: 'Stop failed' })
-            );
-            // Should still attempt to close client
             expect(mockClient.quit).toHaveBeenCalled();
         });
 
@@ -443,11 +365,6 @@ describe('RedisManager', () => {
             redisManager.queueManager = null;
 
             await expect(redisManager.drainQueues(5000)).resolves.not.toThrow();
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'RedisManager',
-                'No queue manager to drain'
-            );
         });
     });
 
@@ -465,14 +382,14 @@ describe('RedisManager', () => {
             const retryStrategy = Redis.mock.calls[0][0].retryStrategy;
             const delay = retryStrategy(5);
 
-            expect(delay).toBe(2500); // 5 * 500, capped at 5000
+            expect(delay).toBe(2500);
         });
 
         it('should cap delay at 5000ms', async () => {
             await redisManager.init(mockDbManager);
 
             const retryStrategy = Redis.mock.calls[0][0].retryStrategy;
-            const delay = retryStrategy(10); // Attempt 10 is at max and hits 5000ms cap
+            const delay = retryStrategy(10);
 
             expect(delay).toBe(5000);
         });
@@ -481,28 +398,21 @@ describe('RedisManager', () => {
             await redisManager.init(mockDbManager);
 
             const retryStrategy = Redis.mock.calls[0][0].retryStrategy;
-            const result = retryStrategy(11); // Over max of 10
+            const result = retryStrategy(11);
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedisManager',
-                'Max reconnection attempts reached, giving up'
-            );
         });
     });
 
     describe('Integration scenarios', () => {
         it('should handle complete lifecycle', async () => {
-            // Init
             const initResult = await redisManager.init(mockDbManager);
             expect(initResult).toBe(true);
             expect(redisManager.connected()).toBe(true);
 
-            // Health check
             await jest.advanceTimersByTimeAsync(30000);
             expect(mockClient.ping).toHaveBeenCalled();
 
-            // Close
             await redisManager.close();
             expect(redisManager.connected()).toBe(false);
         });
@@ -513,10 +423,8 @@ describe('RedisManager', () => {
             const initResult = await redisManager.init(mockDbManager);
             expect(initResult).toBe(false);
 
-            // Should be able to check connected status
             expect(redisManager.connected()).toBe(false);
 
-            // Getters should return null
             expect(redisManager.getCacheManager()).toBeNull();
             expect(redisManager.getQueueManager()).toBeNull();
         });

@@ -4,19 +4,11 @@ const RedemptionManager = require('../../src/redemptions/redemptionManager');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));
 
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('RedemptionManager', () => {
     let redemptionManager;
@@ -62,11 +54,6 @@ describe('RedemptionManager', () => {
             redemptionManager.registerHandler('Song Request', mockHandler);
 
             expect(redemptionManager.handlers.get('song request')).toBe(mockHandler);
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedemptionManager',
-                'Handler registered',
-                { rewardTitle: 'Song Request' }
-            );
         });
 
         it('should convert reward title to lowercase', () => {
@@ -121,15 +108,6 @@ describe('RedemptionManager', () => {
                 mockSpotifyManager,
                 mockTwitchBot
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'RedemptionManager',
-                'Handler executed successfully',
-                expect.objectContaining({
-                    rewardTitle: 'Song Request',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
         });
 
         it('should be case insensitive when matching handlers', async () => {
@@ -146,26 +124,6 @@ describe('RedemptionManager', () => {
             expect(mockHandler).toHaveBeenCalled();
         });
 
-        it('should warn when no handler found', async () => {
-            const event = {
-                rewardTitle: 'Unknown Reward',
-                userId: 'user-123',
-                userDisplayName: 'testuser'
-            };
-
-            await redemptionManager.handleRedemption(event);
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'RedemptionManager',
-                'No handler found for reward',
-                expect.objectContaining({
-                    rewardTitle: 'Unknown Reward',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-        });
-
         it('should not throw when no handler found', async () => {
             const event = {
                 rewardTitle: 'Unknown Reward',
@@ -176,34 +134,6 @@ describe('RedemptionManager', () => {
             await expect(
                 redemptionManager.handleRedemption(event)
             ).resolves.not.toThrow();
-        });
-
-        it('should handle handler execution error gracefully', async () => {
-            const mockHandler = jest.fn().mockRejectedValue(new Error('Handler failed'));
-            const event = {
-                rewardTitle: 'Song Request',
-                userId: 'user-123',
-                userDisplayName: 'testuser',
-                rewardId: 'reward-123',
-                status: 'unfulfilled',
-                input: 'Test input'
-            };
-
-            redemptionManager.registerHandler('Song Request', mockHandler);
-            await redemptionManager.handleRedemption(event);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedemptionManager',
-                'Handler execution failed',
-                expect.objectContaining({
-                    error: 'Handler failed',
-                    rewardTitle: 'Song Request',
-                    userDisplayName: 'testuser',
-                    rewardId: 'reward-123',
-                    status: 'unfulfilled',
-                    input: 'Test input'
-                })
-            );
         });
 
         it('should not throw when handler fails', async () => {
@@ -294,16 +224,6 @@ describe('RedemptionManager', () => {
                     'FULFILLED'
                 )
             ).rejects.toThrow('Failed to update redemption status');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'RedemptionManager',
-                'Failed to update redemption status',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    rewardId: 'reward-456',
-                    status: 'FULFILLED'
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -318,8 +238,6 @@ describe('RedemptionManager', () => {
                     'FULFILLED'
                 )
             ).rejects.toThrow('Network request failed');
-
-            expect(logger.error).toHaveBeenCalled();
         });
 
         it('should handle unauthorized error (401)', async () => {

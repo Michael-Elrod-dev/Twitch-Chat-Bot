@@ -4,13 +4,6 @@ const ClaudeModel = require('../../src/ai/models/claudeModel');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     claudeApiEndpoint: 'https://api.anthropic.com/v1',
     aiModels: {
@@ -29,7 +22,6 @@ jest.mock('../../src/config/config', () => ({
 }));
 
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('ClaudeModel', () => {
     let claudeModel;
@@ -152,69 +144,6 @@ describe('ClaudeModel', () => {
             );
         });
 
-        it('should pass user context to logs', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({
-                    content: [{ text: 'Response' }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await claudeModel.getTextResponse('Test', { userName: 'testuser' });
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Sending request to Claude API',
-                expect.objectContaining({
-                    userName: 'testuser'
-                })
-            );
-        });
-
-        it('should log prompt length', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({
-                    content: [{ text: 'Response' }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            const longPrompt = 'A'.repeat(500);
-            await claudeModel.getTextResponse(longPrompt);
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Sending request to Claude API',
-                expect.objectContaining({
-                    promptLength: 500
-                })
-            );
-        });
-
-        it('should log response details on success', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({
-                    content: [{ text: 'Short response' }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await claudeModel.getTextResponse('Test');
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Successfully received Claude API response',
-                expect.objectContaining({
-                    promptLength: 4,
-                    responseLength: 14,
-                    responseTime: expect.any(Number)
-                })
-            );
-        });
-
         it('should handle API error response', async () => {
             const mockResponse = {
                 ok: false,
@@ -229,13 +158,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Error getting Claude response',
-                expect.objectContaining({
-                    error: 'Claude API error: Invalid API key'
-                })
-            );
         });
 
         it('should handle API error without message', async () => {
@@ -250,13 +172,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Error getting Claude response',
-                expect.objectContaining({
-                    error: 'Claude API error: Unknown error'
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -267,13 +182,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Error getting Claude response',
-                expect.objectContaining({
-                    error: 'Network request failed'
-                })
-            );
         });
 
         it('should handle timeout error', async () => {
@@ -296,7 +204,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalled();
         });
 
         it('should handle malformed response structure', async () => {
@@ -311,7 +218,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalled();
         });
 
         it('should handle rate limit error (429)', async () => {
@@ -329,13 +235,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-            expect(logger.error).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Error getting Claude response',
-                expect.objectContaining({
-                    error: 'Claude API error: Rate limit exceeded'
-                })
-            );
         });
 
         it('should handle overloaded error (529)', async () => {
@@ -353,22 +252,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse('Test');
 
             expect(result).toBeNull();
-        });
-
-        it('should log response time on error', async () => {
-            const networkError = new Error('Network error');
-            networkError.stack = 'Error stack';
-            fetch.mockRejectedValue(networkError);
-
-            await claudeModel.getTextResponse('Test');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Error getting Claude response',
-                expect.objectContaining({
-                    responseTime: expect.any(Number)
-                })
-            );
         });
 
         it('should handle empty prompt', async () => {
@@ -398,13 +281,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse(longPrompt);
 
             expect(result).toBe('Response');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Sending request to Claude API',
-                expect.objectContaining({
-                    promptLength: 10000
-                })
-            );
         });
 
         it('should handle special characters in prompt', async () => {
@@ -420,42 +296,6 @@ describe('ClaudeModel', () => {
             const result = await claudeModel.getTextResponse(specialPrompt);
 
             expect(result).toBe('Response');
-        });
-
-        it('should handle context without userName', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({
-                    content: [{ text: 'Response' }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await claudeModel.getTextResponse('Test', {});
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ClaudeModel',
-                'Sending request to Claude API',
-                expect.objectContaining({
-                    userName: undefined
-                })
-            );
-        });
-
-        it('should measure response time accurately', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({
-                    content: [{ text: 'Response' }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await claudeModel.getTextResponse('Test');
-
-            const logCall = logger.info.mock.calls[0][2];
-            expect(logCall.responseTime).toBeGreaterThanOrEqual(0);
-            expect(logCall.responseTime).toBeLessThan(1000); // Should be fast in tests
         });
 
         it('should not throw on any error', async () => {

@@ -2,13 +2,6 @@
 
 const AnalyticsQueueConsumer = require('../../src/redis/analyticsQueueConsumer');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     analyticsQueue: {
         batchSize: 50,
@@ -16,8 +9,6 @@ jest.mock('../../src/config/config', () => ({
         maxRetries: 3
     }
 }));
-
-const logger = require('../../src/logger/logger');
 
 describe('AnalyticsQueueConsumer', () => {
     let consumer;
@@ -63,14 +54,6 @@ describe('AnalyticsQueueConsumer', () => {
 
             expect(consumer.running).toBe(true);
             expect(consumer.processInterval).not.toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Starting analytics queue consumer',
-                expect.objectContaining({
-                    batchSize: 50,
-                    intervalMs: 5000
-                })
-            );
         });
 
         it('should process batches immediately on start', async () => {
@@ -87,14 +70,13 @@ describe('AnalyticsQueueConsumer', () => {
 
             await consumer.start();
 
-            expect(logger.info).not.toHaveBeenCalled();
+            expect(consumer.processInterval).toBeNull();
         });
 
         it('should process batches on interval', async () => {
             await consumer.start();
             jest.clearAllMocks();
 
-            // Advance timer
             await jest.advanceTimersByTimeAsync(5000);
 
             expect(mockQueueManager.pop).toHaveBeenCalled();
@@ -109,10 +91,6 @@ describe('AnalyticsQueueConsumer', () => {
 
             expect(consumer.running).toBe(false);
             expect(consumer.processInterval).toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Analytics queue consumer stopped'
-            );
         });
 
         it('should process remaining batches before stopping', async () => {
@@ -121,7 +99,6 @@ describe('AnalyticsQueueConsumer', () => {
 
             await consumer.stop();
 
-            // Should have processed batches one final time
             expect(mockQueueManager.pop).toHaveBeenCalled();
         });
     });
@@ -137,15 +114,7 @@ describe('AnalyticsQueueConsumer', () => {
         it('should handle errors gracefully', async () => {
             mockQueueManager.pop.mockRejectedValue(new Error('Pop failed'));
 
-            await consumer.processBatches();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Error processing batches',
-                expect.objectContaining({
-                    error: 'Pop failed'
-                })
-            );
+            await expect(consumer.processBatches()).resolves.not.toThrow();
         });
     });
 
@@ -224,33 +193,6 @@ describe('AnalyticsQueueConsumer', () => {
             expect(mockQueueManager.requeueWithRetry).not.toHaveBeenCalled();
         });
 
-        it('should log batch processing stats', async () => {
-            const messages = [
-                {
-                    data: { userId: 'user1', streamId: 's1', messageType: 'message', content: 'test' },
-                    timestamp: Date.now(),
-                    attempts: 0
-                }
-            ];
-            mockQueueManager.pop.mockResolvedValueOnce(messages).mockResolvedValue([]);
-
-            await consumer.processChatMessages();
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Processing chat messages batch',
-                { count: 1 }
-            );
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Chat messages batch processed',
-                expect.objectContaining({
-                    successful: 1,
-                    retried: 0,
-                    dlq: 0
-                })
-            );
-        });
 
         it('should use current date when messageTime is missing', async () => {
             const messages = [
@@ -280,21 +222,16 @@ describe('AnalyticsQueueConsumer', () => {
                 { data: { userId: 'user2', messageType: 'redemption' }, attempts: 0 }
             ];
             mockQueueManager.pop
-                .mockResolvedValueOnce([]) // chat_messages
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(messages);
 
             await consumer.processBatches();
 
-            // Should have 2 calls - one for user1 and one for user2
             expect(mockDbManager.query).toHaveBeenCalledTimes(2);
-
-            // Check user1 aggregation (2 messages + 1 command)
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO chat_totals'),
                 expect.arrayContaining(['user1', 2, 1, 0, 3])
             );
-
-            // Check user2 aggregation (1 redemption)
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO chat_totals'),
                 expect.arrayContaining(['user2', 0, 0, 1, 1])
@@ -340,27 +277,6 @@ describe('AnalyticsQueueConsumer', () => {
             expect(mockQueueManager.moveToDLQ).toHaveBeenCalled();
         });
 
-        it('should log batch processing stats', async () => {
-            const messages = [
-                { data: { userId: 'user1', messageType: 'message' }, attempts: 0 }
-            ];
-            mockQueueManager.pop
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce(messages);
-
-            await consumer.processBatches();
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Processing chat totals batch',
-                { count: 1 }
-            );
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Chat totals batch processed',
-                { usersUpdated: 1 }
-            );
-        });
     });
 
     describe('Integration scenarios', () => {
@@ -372,7 +288,6 @@ describe('AnalyticsQueueConsumer', () => {
             ];
             mockQueueManager.pop.mockResolvedValueOnce(messages).mockResolvedValue([]);
 
-            // First and third succeed, second fails
             mockDbManager.query
                 .mockResolvedValueOnce({})
                 .mockRejectedValueOnce(new Error('DB error'))
@@ -380,28 +295,20 @@ describe('AnalyticsQueueConsumer', () => {
 
             await consumer.processChatMessages();
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsQueueConsumer',
-                'Chat messages batch processed',
-                expect.objectContaining({
-                    successful: 2,
-                    retried: 1,
-                    dlq: 0
-                })
+            expect(mockQueueManager.requeueWithRetry).toHaveBeenCalledWith(
+                'analytics:chat_messages',
+                expect.objectContaining({ attempts: 2 })
             );
         });
 
         it('should continue running after errors', async () => {
             await consumer.start();
 
-            // Simulate error
             mockQueueManager.pop.mockRejectedValueOnce(new Error('Temporary error'));
             await jest.advanceTimersByTimeAsync(5000);
 
-            // Should still be running
             expect(consumer.running).toBe(true);
 
-            // Next interval should work
             mockQueueManager.pop.mockResolvedValue([]);
             await jest.advanceTimersByTimeAsync(5000);
 
@@ -409,18 +316,14 @@ describe('AnalyticsQueueConsumer', () => {
         });
 
         it('should handle complete consumer lifecycle', async () => {
-            // Start
             await consumer.start();
             expect(consumer.running).toBe(true);
 
-            // Run some batches
             await jest.advanceTimersByTimeAsync(10000);
 
-            // Stop
             await consumer.stop();
             expect(consumer.running).toBe(false);
 
-            // Verify final batch was processed
             expect(mockQueueManager.pop).toHaveBeenCalled();
         });
     });

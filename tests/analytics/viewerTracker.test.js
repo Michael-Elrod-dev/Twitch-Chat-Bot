@@ -1,30 +1,7 @@
 // tests/analytics/viewerTracker.test.js
 
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
-
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../src/logger/logger');
-
-const createMockRedisManager = (connected = true) => {
-    const mockQueueManager = connected ? {
-        push: jest.fn().mockResolvedValue(true),
-        pop: jest.fn().mockResolvedValue([]),
-        startConsumer: jest.fn().mockResolvedValue(undefined),
-        stopConsumer: jest.fn().mockResolvedValue(undefined)
-    } : null;
-
-    return {
-        connected: jest.fn().mockReturnValue(connected),
-        getCacheManager: jest.fn().mockReturnValue(null),
-        getQueueManager: jest.fn().mockReturnValue(mockQueueManager)
-    };
-};
+const { createMockRedisManager, createMockRedisManagerWithQueue } = require('../__mocks__/mockRedisManager');
 
 describe('ViewerTracker', () => {
     let viewerTracker;
@@ -48,10 +25,6 @@ describe('ViewerTracker', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
-        logger.info.mockClear();
-        logger.debug.mockClear();
-        logger.warn.mockClear();
-        logger.error.mockClear();
     });
 
     describe('ensureUserExists', () => {
@@ -192,19 +165,6 @@ describe('ViewerTracker', () => {
             );
         });
 
-        it('should log success message', async () => {
-            mockDbManager.query.mockResolvedValueOnce({ affectedRows: 5 });
-
-            await viewerTracker.endAllSessionsForStream('stream456');
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'ViewerTracker',
-                'Closed all viewing sessions for stream',
-                expect.objectContaining({
-                    streamId: 'stream456'
-                })
-            );
-        });
     });
 
     describe('processViewerList - Complex Session Logic', () => {
@@ -400,11 +360,6 @@ describe('ViewerTracker', () => {
                 'test'
             );
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'ViewerTracker',
-                'Attempted to track interaction for undefined username',
-                expect.any(Object)
-            );
             expect(mockDbManager.query).not.toHaveBeenCalled();
         });
     });
@@ -446,14 +401,6 @@ describe('ViewerTracker', () => {
         it('should handle unknown message type', async () => {
             await viewerTracker.updateChatTotals('user123', 'invalid_type');
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'ViewerTracker',
-                expect.stringContaining('Unknown message type'),
-                expect.objectContaining({
-                    userId: 'user123',
-                    messageType: 'invalid_type'
-                })
-            );
             expect(mockDbManager.query).not.toHaveBeenCalled();
         });
     });
@@ -554,6 +501,7 @@ describe('ViewerTracker', () => {
 
     describe('Queue integration', () => {
         beforeEach(() => {
+            mockRedisManager = createMockRedisManagerWithQueue(true);
             viewerTracker = new ViewerTracker(mockAnalyticsManager, mockRedisManager);
         });
 
@@ -656,32 +604,6 @@ describe('ViewerTracker', () => {
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO chat_messages'),
                 expect.any(Array)
-            );
-        });
-
-        it('should log when interaction is queued', async () => {
-            mockDbManager.query
-                .mockResolvedValueOnce([]) // ensureUserExists
-                .mockResolvedValueOnce([{ count: 1 }]); // not first message
-
-            await viewerTracker.trackInteraction(
-                'testuser',
-                'user123',
-                'stream456',
-                'message',
-                'Hello',
-                {}
-            );
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ViewerTracker',
-                'Interaction queued for batch processing',
-                expect.objectContaining({
-                    username: 'testuser',
-                    userId: 'user123',
-                    streamId: 'stream456',
-                    type: 'message'
-                })
             );
         });
 

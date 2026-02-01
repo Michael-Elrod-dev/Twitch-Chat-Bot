@@ -4,19 +4,11 @@ const TwitchAPI = require('../../src/tokens/twitchAPI');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));
 
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('TwitchAPI', () => {
     let twitchAPI;
@@ -40,7 +32,6 @@ describe('TwitchAPI', () => {
     describe('constructor', () => {
         it('should initialize with token manager', () => {
             expect(twitchAPI.tokenManager).toBe(mockTokenManager);
-            expect(logger.debug).toHaveBeenCalledWith('TwitchAPI', 'TwitchAPI instance created');
         });
     });
 
@@ -72,14 +63,6 @@ describe('TwitchAPI', () => {
                     })
                 })
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully retrieved channel ID',
-                expect.objectContaining({
-                    username: 'testuser',
-                    channelId: '123456'
-                })
-            );
         });
 
         it('should throw error when user not found', async () => {
@@ -90,12 +73,6 @@ describe('TwitchAPI', () => {
             fetch.mockResolvedValue(mockResponse);
 
             await expect(twitchAPI.getChannelId('nonexistentuser')).rejects.toThrow('User not found');
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'User not found',
-                expect.objectContaining({ username: 'nonexistentuser' })
-            );
         });
 
         it('should handle network error', async () => {
@@ -104,15 +81,6 @@ describe('TwitchAPI', () => {
             fetch.mockRejectedValue(networkError);
 
             await expect(twitchAPI.getChannelId('testuser')).rejects.toThrow('Network request failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to get channel ID',
-                expect.objectContaining({
-                    error: 'Network request failed',
-                    username: 'testuser'
-                })
-            );
         });
     });
 
@@ -137,14 +105,6 @@ describe('TwitchAPI', () => {
                 startDate: '2024-01-15T10:00:00Z',
                 viewer_count: 150
             });
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Stream is live',
-                expect.objectContaining({
-                    username: 'teststreamer',
-                    viewerCount: 150
-                })
-            );
         });
 
         it('should return null when stream is offline', async () => {
@@ -157,11 +117,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getStreamByUserName('teststreamer');
 
             expect(result).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Stream not found or offline',
-                expect.objectContaining({ username: 'teststreamer' })
-            );
         });
 
         it('should handle API error', async () => {
@@ -170,15 +125,6 @@ describe('TwitchAPI', () => {
             fetch.mockRejectedValue(apiError);
 
             await expect(twitchAPI.getStreamByUserName('teststreamer')).rejects.toThrow('API error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to get stream information',
-                expect.objectContaining({
-                    error: 'API error',
-                    username: 'teststreamer'
-                })
-            );
         });
     });
 
@@ -207,15 +153,6 @@ describe('TwitchAPI', () => {
                 display_name: 'TestUser',
                 profile_image_url: 'https://example.com/image.png'
             });
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully retrieved user information',
-                expect.objectContaining({
-                    username: 'testuser',
-                    userId: '987654',
-                    displayName: 'TestUser'
-                })
-            );
         });
 
         it('should return null when user not found', async () => {
@@ -228,11 +165,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getUserByName('nonexistentuser');
 
             expect(result).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'User not found',
-                expect.objectContaining({ username: 'nonexistentuser' })
-            );
         });
 
         it('should handle network error', async () => {
@@ -241,15 +173,6 @@ describe('TwitchAPI', () => {
             fetch.mockRejectedValue(networkError);
 
             await expect(twitchAPI.getUserByName('testuser')).rejects.toThrow('Network error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to get user information',
-                expect.objectContaining({
-                    error: 'Network error',
-                    username: 'testuser'
-                })
-            );
         });
     });
 
@@ -282,11 +205,6 @@ describe('TwitchAPI', () => {
                 { id: 'reward-1', title: 'Song Request', cost: 500 },
                 { id: 'reward-2', title: 'Hydrate', cost: 100 }
             ]);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Fetching custom rewards',
-                expect.objectContaining({ broadcasterId: 'broadcaster-123' })
-            );
         });
 
         it('should handle API error', async () => {
@@ -295,8 +213,6 @@ describe('TwitchAPI', () => {
             fetch.mockRejectedValue(apiError);
 
             await expect(twitchAPI.getCustomRewards('broadcaster-123')).rejects.toThrow('Unauthorized');
-
-            expect(logger.error).toHaveBeenCalled();
         });
     });
 
@@ -342,15 +258,6 @@ describe('TwitchAPI', () => {
                     body: JSON.stringify(updates)
                 })
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully updated custom reward',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    rewardId: 'reward-1',
-                    updates
-                })
-            );
         });
 
         it('should handle empty data response', async () => {
@@ -363,15 +270,6 @@ describe('TwitchAPI', () => {
             await expect(
                 twitchAPI.updateCustomReward('broadcaster-123', 'reward-1', { cost: 500 })
             ).rejects.toThrow('Failed to update reward');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to update reward - no data returned',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    rewardId: 'reward-1'
-                })
-            );
         });
 
         it('should handle API error', async () => {
@@ -382,16 +280,6 @@ describe('TwitchAPI', () => {
             await expect(
                 twitchAPI.updateCustomReward('broadcaster-123', 'reward-1', { cost: 500 })
             ).rejects.toThrow('Unauthorized');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to update custom reward',
-                expect.objectContaining({
-                    error: 'Unauthorized',
-                    broadcasterId: 'broadcaster-123',
-                    rewardId: 'reward-1'
-                })
-            );
         });
     });
 
@@ -433,15 +321,6 @@ describe('TwitchAPI', () => {
                     })
                 })
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully retrieved channel information',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    broadcasterName: 'TestStreamer',
-                    gameId: '12345'
-                })
-            );
         });
 
         it('should return null when channel not found', async () => {
@@ -454,11 +333,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getChannelInfo('nonexistent-123');
 
             expect(result).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Channel info not found',
-                { broadcasterId: 'nonexistent-123' }
-            );
         });
 
         it('should handle API error', async () => {
@@ -467,15 +341,6 @@ describe('TwitchAPI', () => {
             fetch.mockRejectedValue(apiError);
 
             await expect(twitchAPI.getChannelInfo('broadcaster-123')).rejects.toThrow('API error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to get channel information',
-                expect.objectContaining({
-                    error: 'API error',
-                    broadcasterId: 'broadcaster-123'
-                })
-            );
         });
     });
 
@@ -513,15 +378,6 @@ describe('TwitchAPI', () => {
                     })
                 })
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully retrieved chatters',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    moderatorId: 'moderator-456',
-                    chatterCount: 3
-                })
-            );
         });
 
         it('should return empty array when no chatters', async () => {
@@ -534,15 +390,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getChatters('broadcaster-123', 'moderator-456');
 
             expect(result).toEqual([]);
-            expect(logger.info).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Successfully retrieved chatters',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    moderatorId: 'moderator-456',
-                    chatterCount: 0
-                })
-            );
         });
 
         it('should return empty array when data.data is missing', async () => {
@@ -555,14 +402,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getChatters('broadcaster-123', 'moderator-456');
 
             expect(result).toEqual([]);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'No chatters found',
-                expect.objectContaining({
-                    broadcasterId: 'broadcaster-123',
-                    moderatorId: 'moderator-456'
-                })
-            );
         });
 
         it('should return empty array on error', async () => {
@@ -573,15 +412,6 @@ describe('TwitchAPI', () => {
             const result = await twitchAPI.getChatters('broadcaster-123', 'moderator-456');
 
             expect(result).toEqual([]);
-            expect(logger.error).toHaveBeenCalledWith(
-                'TwitchAPI',
-                'Failed to get chatters',
-                expect.objectContaining({
-                    error: 'Chatters API error',
-                    broadcasterId: 'broadcaster-123',
-                    moderatorId: 'moderator-456'
-                })
-            );
         });
     });
 

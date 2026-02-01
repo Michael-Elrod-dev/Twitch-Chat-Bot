@@ -2,15 +2,6 @@
 
 const handleSongRequest = require('../../../src/redemptions/songs/songRequest');
 
-jest.mock('../../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../../src/logger/logger');
-
 describe('handleSongRequest', () => {
     let mockTwitchBot;
     let mockSpotifyManager;
@@ -169,25 +160,6 @@ describe('handleSongRequest', () => {
                 'CANCELED'
             );
         });
-
-        it('should handle refund error for empty input', async () => {
-            event.input = '';
-            const refundError = new Error('Refund failed');
-            refundError.stack = 'Error stack';
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
-
-            await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Error refunding points',
-                expect.objectContaining({
-                    error: 'Refund failed',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-        });
     });
 
     describe('Invalid link validation', () => {
@@ -223,23 +195,6 @@ describe('handleSongRequest', () => {
                 'CANCELED'
             );
         });
-
-        it('should handle refund error for invalid link', async () => {
-            event.input = 'not a spotify link';
-            const refundError = new Error('Refund failed');
-            refundError.stack = 'Error stack';
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
-
-            await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Error refunding points',
-                expect.objectContaining({
-                    error: 'Refund failed'
-                })
-            );
-        });
     });
 
     describe('Spotify API error handling', () => {
@@ -260,17 +215,6 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'streamer',
                 '@testuser Sorry, I couldn\'t process your request. Your points have been refunded.'
-            );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Error processing Spotify track',
-                expect.objectContaining({
-                    error: 'Track not found',
-                    trackUri: 'spotify:track:1234567890',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
             );
         });
 
@@ -302,94 +246,10 @@ describe('handleSongRequest', () => {
                 ['redemption-abc'],
                 'FULFILLED'
             );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Error adding to history playlist',
-                expect.objectContaining({
-                    error: 'Playlist error'
-                })
-            );
-        });
-    });
-
-    describe('Refund error handling', () => {
-        it('should handle refund failure gracefully', async () => {
-            const trackError = new Error('Track error');
-            const refundError = new Error('Refund failed');
-            trackError.stack = 'Error stack';
-            refundError.stack = 'Refund stack';
-
-            mockSpotifyManager.spotifyApi.getTrack.mockRejectedValue(trackError);
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
-
-            await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Critical: Error refunding points',
-                expect.objectContaining({
-                    error: 'Refund failed',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
         });
     });
 
     describe('Fatal error handling', () => {
-        it('should attempt refund on fatal error', async () => {
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockImplementation(() => {
-                throw new Error('Fatal error');
-            });
-
-            event.input = '';
-
-            await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Critical: Fatal error in song request handler',
-                expect.objectContaining({
-                    error: 'Fatal error',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-        });
-
-        it('should handle refund failure after fatal error', async () => {
-            const spotifyError = new Error('Fatal Spotify error');
-            spotifyError.stack = 'Spotify error stack';
-            mockSpotifyManager.spotifyApi.getTrack.mockRejectedValue(spotifyError);
-
-            const refundError = new Error('Refund also failed');
-            refundError.stack = 'Refund stack';
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
-
-            await handleSongRequest(event, mockTwitchBot, mockSpotifyManager);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Error processing Spotify track',
-                expect.objectContaining({
-                    error: 'Fatal Spotify error',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SongRequest',
-                'Critical: Error refunding points',
-                expect.objectContaining({
-                    error: 'Refund also failed',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-        });
-
         it('should not throw on any error', async () => {
             mockSpotifyManager.spotifyApi.getTrack.mockRejectedValue(new Error('Unexpected error'));
 

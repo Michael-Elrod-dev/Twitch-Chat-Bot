@@ -10,6 +10,10 @@ module.exports = {
         '**/__tests__/**/*.js'
     ],
 
+    moduleNameMapper: {
+        '^@mocks/(.*)$': '<rootDir>/tests/__mocks__/$1'
+    },
+
     collectCoverageFrom: [
         'src/**/*.js',
         '!src/bot.js',
@@ -39,5 +43,8 @@ module.exports = {
 
     verbose: true,
 
-    testTimeout: 10000
+    testTimeout: 10000,
+
+    maxWorkers: 1,
+    forceExit: true
 };

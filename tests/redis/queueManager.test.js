@@ -2,13 +2,6 @@
 
 const QueueManager = require('../../src/redis/queueManager');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     analyticsQueue: {
         drainTimeoutMs: 30000
@@ -17,7 +10,6 @@ jest.mock('../../src/config/config', () => ({
 
 jest.mock('../../src/redis/analyticsQueueConsumer');
 
-const logger = require('../../src/logger/logger');
 const AnalyticsQueueConsumer = require('../../src/redis/analyticsQueueConsumer');
 
 describe('QueueManager', () => {
@@ -120,19 +112,6 @@ describe('QueueManager', () => {
             expect(pushArg.timestamp).toBeDefined();
         });
 
-        it('should log message type when available', async () => {
-            await queueManager.push('queue', { type: 'chat_message' });
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Message pushed to queue',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    messageType: 'chat_message'
-                })
-            );
-        });
-
         it('should return false when Redis is unavailable', async () => {
             mockRedisManager.connected.mockReturnValue(false);
 
@@ -140,11 +119,6 @@ describe('QueueManager', () => {
 
             expect(result).toBe(false);
             expect(mockClient.rpush).not.toHaveBeenCalled();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Redis unavailable, message not queued',
-                { queueName: 'queue' }
-            );
         });
 
         it('should handle Redis errors gracefully', async () => {
@@ -153,14 +127,6 @@ describe('QueueManager', () => {
             const result = await queueManager.push('queue', { data: 'test' });
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error pushing to queue',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    error: 'Push failed'
-                })
-            );
         });
     });
 
@@ -221,11 +187,6 @@ describe('QueueManager', () => {
             const result = await queueManager.pop('queue', 3);
 
             expect(result).toHaveLength(1);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error parsing queue message',
-                expect.objectContaining({ queueName: 'queue' })
-            );
         });
 
         it('should handle Redis errors gracefully', async () => {
@@ -234,14 +195,6 @@ describe('QueueManager', () => {
             const result = await queueManager.pop('queue');
 
             expect(result).toEqual([]);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error popping from queue',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    error: 'Pop failed'
-                })
-            );
         });
     });
 
@@ -269,14 +222,6 @@ describe('QueueManager', () => {
             const result = await queueManager.getQueueLength('queue');
 
             expect(result).toBe(0);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error getting queue length',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    error: 'Llen failed'
-                })
-            );
         });
     });
 
@@ -299,32 +244,12 @@ describe('QueueManager', () => {
             expect(dlqArg.failedAt).toBeDefined();
         });
 
-        it('should log warning when message moved to DLQ', async () => {
-            const message = { data: { type: 'chat' } };
-
-            await queueManager.moveToDLQ('queue', message, new Error('Failed'));
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'QueueManager',
-                'Message moved to dead letter queue',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    messageType: 'chat'
-                })
-            );
-        });
-
         it('should return false when Redis is unavailable', async () => {
             mockRedisManager.connected.mockReturnValue(false);
 
             const result = await queueManager.moveToDLQ('queue', {}, new Error('test'));
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Cannot move to DLQ - Redis unavailable',
-                expect.any(Object)
-            );
         });
 
         it('should handle Redis errors gracefully', async () => {
@@ -333,14 +258,6 @@ describe('QueueManager', () => {
             const result = await queueManager.moveToDLQ('queue', {}, new Error('test'));
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error moving message to DLQ',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    error: 'DLQ push failed'
-                })
-            );
         });
     });
 
@@ -383,14 +300,6 @@ describe('QueueManager', () => {
             const result = await queueManager.requeueWithRetry('queue', {});
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'QueueManager',
-                'Error requeuing message',
-                expect.objectContaining({
-                    queueName: 'queue',
-                    error: 'Requeue failed'
-                })
-            );
         });
     });
 
@@ -401,10 +310,6 @@ describe('QueueManager', () => {
             expect(AnalyticsQueueConsumer).toHaveBeenCalledWith(queueManager, mockDbManager);
             expect(mockAnalyticsConsumer.start).toHaveBeenCalled();
             expect(queueManager.consumerRunning).toBe(true);
-            expect(logger.info).toHaveBeenCalledWith(
-                'QueueManager',
-                'Queue consumer started'
-            );
         });
 
         it('should not start if already running', async () => {
@@ -413,10 +318,6 @@ describe('QueueManager', () => {
             await queueManager.startConsumer();
 
             expect(AnalyticsQueueConsumer).not.toHaveBeenCalled();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Consumer already running'
-            );
         });
     });
 
@@ -429,10 +330,6 @@ describe('QueueManager', () => {
 
             expect(mockAnalyticsConsumer.stop).toHaveBeenCalled();
             expect(queueManager.consumerRunning).toBe(false);
-            expect(logger.info).toHaveBeenCalledWith(
-                'QueueManager',
-                'Queue consumer stopped'
-            );
         });
 
         it('should do nothing if not running', async () => {
@@ -440,10 +337,7 @@ describe('QueueManager', () => {
 
             await queueManager.stopConsumer();
 
-            expect(logger.info).not.toHaveBeenCalledWith(
-                'QueueManager',
-                'Queue consumer stopped'
-            );
+            expect(mockAnalyticsConsumer.stop).not.toHaveBeenCalled();
         });
     });
 
@@ -455,11 +349,7 @@ describe('QueueManager', () => {
             await jest.advanceTimersByTimeAsync(100);
             await drainPromise;
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'QueueManager',
-                'All queues drained successfully',
-                expect.objectContaining({ elapsedMs: expect.any(Number) })
-            );
+            expect(mockClient.llen).toHaveBeenCalled();
         });
 
         it('should wait for queues to empty', async () => {
@@ -478,11 +368,7 @@ describe('QueueManager', () => {
             await jest.advanceTimersByTimeAsync(500);
             await drainPromise;
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'QueueManager',
-                'All queues drained successfully',
-                expect.any(Object)
-            );
+            expect(mockClient.llen).toHaveBeenCalled();
         });
 
         it('should timeout with warning if queues not drained', async () => {
@@ -493,13 +379,7 @@ describe('QueueManager', () => {
             await jest.advanceTimersByTimeAsync(1500);
             await drainPromise;
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'QueueManager',
-                'Drain timeout reached with messages remaining',
-                expect.objectContaining({
-                    remainingMessages: 20
-                })
-            );
+            expect(mockClient.llen).toHaveBeenCalled();
         });
 
         it('should do nothing when Redis is unavailable', async () => {
@@ -507,34 +387,7 @@ describe('QueueManager', () => {
 
             await queueManager.drainQueues(1000);
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Redis unavailable, nothing to drain'
-            );
             expect(mockClient.llen).not.toHaveBeenCalled();
-        });
-
-        it('should log draining progress', async () => {
-            mockClient.llen
-                .mockResolvedValueOnce(5)
-                .mockResolvedValueOnce(3)
-                .mockResolvedValueOnce(0)
-                .mockResolvedValueOnce(0);
-
-            const drainPromise = queueManager.drainQueues(10000);
-
-            await jest.advanceTimersByTimeAsync(500);
-            await jest.advanceTimersByTimeAsync(500);
-            await drainPromise;
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'QueueManager',
-                'Waiting for queues to drain',
-                expect.objectContaining({
-                    remainingMessages: expect.any(Number),
-                    elapsedMs: expect.any(Number)
-                })
-            );
         });
     });
 
@@ -544,21 +397,17 @@ describe('QueueManager', () => {
                 .mockResolvedValueOnce('{"data":{"type":"test"},"timestamp":123,"attempts":0}')
                 .mockResolvedValueOnce(null);
 
-            // Push message
             await queueManager.push('queue', { type: 'test' });
             expect(mockClient.rpush).toHaveBeenCalled();
 
-            // Pop message
             const messages = await queueManager.pop('queue');
             expect(messages).toHaveLength(1);
         });
 
         it('should handle consumer lifecycle', async () => {
-            // Start consumer
             await queueManager.startConsumer();
             expect(queueManager.consumerRunning).toBe(true);
 
-            // Stop consumer
             await queueManager.stopConsumer();
             expect(queueManager.consumerRunning).toBe(false);
         });

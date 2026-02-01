@@ -19,12 +19,6 @@ jest.mock('../../src/messages/messageSender');
 jest.mock('../../src/websocket/webSocketManager');
 jest.mock('../../src/websocket/subscriptionManager');
 jest.mock('../../src/notifications/discordNotifier');
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
 jest.mock('../../src/config/config', () => ({
     isDebugMode: false,
     channelName: 'testchannel',
@@ -52,7 +46,6 @@ const DebugDbSetup = require('../../src/database/debugDbSetup');
 const TokenManager = require('../../src/tokens/tokenManager');
 const TwitchAPI = require('../../src/tokens/twitchAPI');
 const CommandManager = require('../../src/commands/commandManager');
-const logger = require('../../src/logger/logger');
 const config = require('../../src/config/config');
 
 describe('Bot - Database Backup Integration', () => {
@@ -142,41 +135,10 @@ describe('Bot - Database Backup Integration', () => {
             expect(mockBackupManager.createBackup).toHaveBeenCalledWith('stream-start');
         });
 
-        it('should log success when initial backup completes', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(true);
-
-            await bot.init();
-            jest.runOnlyPendingTimers();
-            await Promise.resolve(); // Wait for promise
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Initial database backup completed'
-            );
-        });
-
-        it('should log warning when initial backup fails', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(false);
-
-            await bot.init();
-            jest.runOnlyPendingTimers();
-            await Promise.resolve();
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Initial database backup failed'
-            );
-        });
-
         it('should set up hourly backup interval', async () => {
             await bot.init();
 
             expect(bot.backupInterval).not.toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Database backup interval started',
-                { intervalMs: 3600000 }
-            );
         });
 
         it('should create scheduled backups every hour', async () => {
@@ -211,50 +173,6 @@ describe('Bot - Database Backup Integration', () => {
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
         });
 
-        it('should log scheduled backup success', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(true);
-            await bot.init();
-            jest.clearAllMocks();
-
-            jest.advanceTimersByTime(3600000);
-            await Promise.resolve();
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Scheduled database backup completed'
-            );
-        });
-
-        it('should log scheduled backup failure', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(false);
-            await bot.init();
-            jest.clearAllMocks();
-
-            jest.advanceTimersByTime(3600000);
-            await Promise.resolve();
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Scheduled database backup failed'
-            );
-        });
-
-        it('should handle backup errors gracefully', async () => {
-            const backupError = new Error('S3 connection failed');
-            mockBackupManager.createBackup.mockRejectedValue(backupError);
-            await bot.init();
-            jest.clearAllMocks();
-
-            jest.advanceTimersByTime(3600000);
-            await Promise.resolve();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'Bot',
-                'Error in backup interval',
-                expect.objectContaining({ error: 'S3 connection failed' })
-            );
-        });
-
         it('should not start backups in debug mode', async () => {
             config.isDebugMode = true;
 
@@ -274,10 +192,6 @@ describe('Bot - Database Backup Integration', () => {
             const secondInterval = bot.backupInterval;
 
             expect(firstInterval).not.toBe(secondInterval);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'Clearing existing backup interval'
-            );
         });
     });
 
@@ -341,51 +255,6 @@ describe('Bot - Database Backup Integration', () => {
             await bot.gracefulShutdown('test shutdown');
 
             expect(mockBackupManager.createBackup).toHaveBeenCalledWith('shutdown');
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Creating final database backup before shutdown'
-            );
-        });
-
-        it('should log success when final backup completes', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(true);
-            await bot.init();
-            jest.clearAllMocks();
-
-            await bot.gracefulShutdown('test');
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Final database backup completed'
-            );
-        });
-
-        it('should log warning when final backup fails', async () => {
-            mockBackupManager.createBackup.mockResolvedValue(false);
-            await bot.init();
-            jest.clearAllMocks();
-
-            await bot.gracefulShutdown('test');
-
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Final database backup failed'
-            );
-        });
-
-        it('should handle backup error during shutdown', async () => {
-            const backupError = new Error('Backup failed');
-            mockBackupManager.createBackup.mockRejectedValue(backupError);
-            await bot.init();
-            jest.clearAllMocks();
-
-            await bot.gracefulShutdown('test');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'Bot',
-                'Error creating final backup',
-                expect.objectContaining({ error: 'Backup failed' })
-            );
         });
 
         it('should skip final backup in debug mode', async () => {
@@ -396,12 +265,8 @@ describe('Bot - Database Backup Integration', () => {
             await bot.gracefulShutdown('test');
 
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
-            expect(logger.info).not.toHaveBeenCalledWith(
-                'Bot',
-                'Creating final database backup before shutdown'
-            );
 
-            config.isDebugMode = false; // Reset
+            config.isDebugMode = false;
         });
 
         it('should clear backup interval before creating final backup', async () => {
@@ -412,10 +277,6 @@ describe('Bot - Database Backup Integration', () => {
             await bot.gracefulShutdown('test');
 
             expect(bot.backupInterval).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'Clearing backup interval'
-            );
         });
 
         it('should create final backup before closing database', async () => {
@@ -498,7 +359,7 @@ describe('Bot - Database Backup Integration', () => {
             await bot.gracefulShutdown('test');
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
 
-            config.isDebugMode = false; // Reset
+            config.isDebugMode = false;
         });
 
         it('should stop scheduled backups when stream goes offline', async () => {

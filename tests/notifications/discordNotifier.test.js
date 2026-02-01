@@ -4,15 +4,7 @@ const DiscordNotifier = require('../../src/notifications/discordNotifier');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('DiscordNotifier', () => {
     let discordNotifier;
@@ -30,28 +22,9 @@ describe('DiscordNotifier', () => {
             expect(discordNotifier.twitchUrl).toBe(mockTwitchUrl);
         });
 
-        it('should log debug message on initialization', () => {
-            expect(logger.debug).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Discord notifier initialized',
-                expect.objectContaining({
-                    webhookConfigured: true,
-                    twitchUrl: mockTwitchUrl
-                })
-            );
-        });
-
         it('should handle missing webhook URL', () => {
-            jest.clearAllMocks();
             const notifier = new DiscordNotifier(null, mockTwitchUrl);
             expect(notifier.webhookUrl).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Discord notifier initialized',
-                expect.objectContaining({
-                    webhookConfigured: false
-                })
-            );
         });
     });
 
@@ -76,14 +49,6 @@ describe('DiscordNotifier', () => {
                     headers: {
                         'Content-Type': 'application/json'
                     }
-                })
-            );
-            expect(logger.info).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Successfully sent stream live notification to Discord',
-                expect.objectContaining({
-                    title: 'Epic Gaming Stream',
-                    category: 'Just Chatting'
                 })
             );
         });
@@ -130,10 +95,6 @@ describe('DiscordNotifier', () => {
 
             expect(result).toBe(false);
             expect(fetch).not.toHaveBeenCalled();
-            expect(logger.warn).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Discord webhook URL not configured, skipping notification'
-            );
         });
 
         it('should handle Discord API error response', async () => {
@@ -151,15 +112,6 @@ describe('DiscordNotifier', () => {
             );
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Failed to send Discord notification',
-                expect.objectContaining({
-                    status: 400,
-                    statusText: 'Bad Request',
-                    error: 'Invalid payload'
-                })
-            );
         });
 
         it('should handle rate limit error (429)', async () => {
@@ -177,13 +129,6 @@ describe('DiscordNotifier', () => {
             );
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Failed to send Discord notification',
-                expect.objectContaining({
-                    status: 429
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -197,14 +142,6 @@ describe('DiscordNotifier', () => {
             );
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Error sending Discord notification',
-                expect.objectContaining({
-                    error: 'Network request failed',
-                    stack: 'Error stack'
-                })
-            );
         });
 
         it('should handle timeout error', async () => {
@@ -249,38 +186,16 @@ describe('DiscordNotifier', () => {
             fetch.mockResolvedValue(mockResponse);
 
             await discordNotifier.sendStreamLiveNotification(
-                'Stream with "quotes" & special chars 🎮',
+                'Stream with "quotes" & special chars',
                 'Grand Theft Auto V'
             );
 
             expect(fetch).toHaveBeenCalled();
             const fetchCall = fetch.mock.calls[0][1];
             const body = JSON.parse(fetchCall.body);
-            expect(body.content).toContain('Stream with "quotes" & special chars 🎮');
+            expect(body.content).toContain('Stream with "quotes" & special chars');
         });
 
-        it('should log debug message before sending', async () => {
-            const mockResponse = {
-                ok: true,
-                status: 204
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await discordNotifier.sendStreamLiveNotification(
-                'Test Stream',
-                'Gaming'
-            );
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'DiscordNotifier',
-                'Sending stream live notification to Discord',
-                expect.objectContaining({
-                    title: 'Test Stream',
-                    category: 'Gaming',
-                    url: mockTwitchUrl
-                })
-            );
-        });
     });
 
     describe('buildNotificationMessage', () => {

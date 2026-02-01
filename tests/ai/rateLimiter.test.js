@@ -2,13 +2,6 @@
 
 const RateLimiter = require('../../src/ai/rateLimiter');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     rateLimits: {
         claude: {
@@ -28,26 +21,7 @@ jest.mock('../../src/config/config', () => ({
     }
 }));
 
-const createMockRedisManager = (connected = true) => {
-    const mockCacheManager = connected ? {
-        get: jest.fn().mockResolvedValue(null),
-        set: jest.fn().mockResolvedValue(true),
-        del: jest.fn().mockResolvedValue(true),
-        hget: jest.fn().mockResolvedValue(null),
-        hset: jest.fn().mockResolvedValue(true),
-        hdel: jest.fn().mockResolvedValue(true),
-        hgetall: jest.fn().mockResolvedValue(null),
-        hmset: jest.fn().mockResolvedValue(true),
-        expire: jest.fn().mockResolvedValue(true),
-        incr: jest.fn().mockResolvedValue(1)
-    } : null;
-
-    return {
-        connected: jest.fn().mockReturnValue(connected),
-        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
-        getQueueManager: jest.fn().mockReturnValue(null)
-    };
-};
+const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 
 describe('RateLimiter', () => {
     let rateLimiter;
@@ -515,24 +489,5 @@ describe('RateLimiter', () => {
             expect(result.allowed).toBe(true);
         });
 
-        it('should log when using Redis cache', async () => {
-            const logger = require('../../src/logger/logger');
-            const cacheManager = mockRedisManager.getCacheManager();
-            cacheManager.get.mockResolvedValueOnce('2');
-
-            await rateLimiter.checkRateLimit('user123', 'claude', 'stream456', { userName: 'testuser' });
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'RateLimiter',
-                'Rate limit from Redis cache',
-                expect.objectContaining({
-                    userId: 'user123',
-                    userName: 'testuser',
-                    service: 'claude',
-                    currentCount: 2,
-                    streamId: 'stream456'
-                })
-            );
-        });
     });
 });

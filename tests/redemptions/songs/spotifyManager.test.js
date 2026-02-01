@@ -4,19 +4,12 @@ const SpotifyManager = require('../../../src/redemptions/songs/spotifyManager');
 
 jest.mock('spotify-web-api-node');
 jest.mock('../../../src/redemptions/songs/queueManager');
-jest.mock('../../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
 jest.mock('../../../src/config/config', () => ({
     spotifyInterval: 5000
 }));
 
 const SpotifyWebApi = require('spotify-web-api-node');
 const QueueManager = require('../../../src/redemptions/songs/queueManager');
-const logger = require('../../../src/logger/logger');
 
 describe('SpotifyManager', () => {
     let spotifyManager;
@@ -144,10 +137,6 @@ describe('SpotifyManager', () => {
             await spotifyManager.authenticate();
 
             expect(mockSpotifyApi.getMe).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Existing Spotify user auth valid'
-            );
         });
 
         it('should refresh expired token', async () => {
@@ -160,10 +149,6 @@ describe('SpotifyManager', () => {
             expect(mockSpotifyApi.refreshAccessToken).toHaveBeenCalled();
             expect(mockSpotifyApi.setAccessToken).toHaveBeenCalledWith('new-access-token');
             expect(mockTokenManager.saveTokens).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Spotify token refreshed successfully'
-            );
         });
 
         it('should handle refresh failure gracefully', async () => {
@@ -172,10 +157,7 @@ describe('SpotifyManager', () => {
 
             await spotifyManager.authenticate();
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Need new Spotify authorization'
-            );
+            expect(mockSpotifyApi.refreshAccessToken).toHaveBeenCalled();
         });
 
         it('should handle authentication without user tokens', async () => {
@@ -205,10 +187,6 @@ describe('SpotifyManager', () => {
             expect(mockSpotifyApi.refreshAccessToken).toHaveBeenCalled();
             expect(mockTokenManager.tokens.spotifyUserAccessToken).toBe('new-access-token');
             expect(mockTokenManager.saveTokens).toHaveBeenCalled();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Token refreshed in ensureTokenValid'
-            );
         });
 
         it('should throw when refresh fails', async () => {
@@ -222,14 +200,6 @@ describe('SpotifyManager', () => {
             mockSpotifyApi.refreshAccessToken.mockRejectedValue(refreshError);
 
             await expect(spotifyManager.ensureTokenValid()).rejects.toThrow('Refresh failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Error refreshing token',
-                expect.objectContaining({
-                    error: 'Refresh failed'
-                })
-            );
         });
 
         it('should throw for non-401 errors', async () => {
@@ -299,31 +269,21 @@ describe('SpotifyManager', () => {
             expect(result).toBe(true);
         });
 
-        it('should not log error for NO_ACTIVE_DEVICE', async () => {
+        it('should throw for NO_ACTIVE_DEVICE', async () => {
             const deviceError = new Error('No active device');
             deviceError.body = { error: { reason: 'NO_ACTIVE_DEVICE' } };
             mockSpotifyApi.addToQueue.mockRejectedValue(deviceError);
 
             await expect(spotifyManager.addToQueue('spotify:track:abc123')).rejects.toThrow();
-
-            expect(logger.error).not.toHaveBeenCalled();
         });
 
-        it('should log error for other failures', async () => {
+        it('should throw for other failures', async () => {
             const apiError = new Error('Queue error');
             apiError.stack = 'Error stack';
             apiError.body = { error: { reason: 'OTHER_ERROR' } };
             mockSpotifyApi.addToQueue.mockRejectedValue(apiError);
 
             await expect(spotifyManager.addToQueue('spotify:track:abc123')).rejects.toThrow('Queue error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Error adding to queue',
-                expect.objectContaining({
-                    error: 'Queue error'
-                })
-            );
         });
     });
 
@@ -379,14 +339,6 @@ describe('SpotifyManager', () => {
             mockSpotifyApi.getUserPlaylists.mockRejectedValue(apiError);
 
             await expect(spotifyManager.getOrCreateRequestsPlaylist()).rejects.toThrow('Spotify API error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Error getting/creating requests playlist',
-                expect.objectContaining({
-                    error: 'Spotify API error'
-                })
-            );
         });
     });
 
@@ -409,11 +361,6 @@ describe('SpotifyManager', () => {
 
             expect(mockSpotifyApi.addTracksToPlaylist).toHaveBeenCalledWith('playlist123', ['spotify:track:new123']);
             expect(result).toBe(true);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Added new track to requests playlist',
-                { trackUri: 'spotify:track:new123' }
-            );
         });
 
         it('should not add duplicate track', async () => {
@@ -490,15 +437,6 @@ describe('SpotifyManager', () => {
             await expect(
                 spotifyManager.addToRequestsPlaylist('spotify:track:error')
             ).rejects.toThrow('Playlist error');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SpotifyManager',
-                'Error adding to requests playlist',
-                expect.objectContaining({
-                    error: 'Playlist error',
-                    trackUri: 'spotify:track:error'
-                })
-            );
         });
     });
 

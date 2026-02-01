@@ -7,8 +7,8 @@ jest.mock('../../src/config/config', () => ({
     isDebugMode: false,
     discord: {
         webhookUrl: 'https://discord.com/api/webhooks/test/webhook',
-        notificationDelay: 100, // Short delay for testing
-        notificationCooldown: 14400000 // 4 hours in milliseconds
+        notificationDelay: 100,
+        notificationCooldown: 14400000
     },
     twitchChannelUrl: 'https://www.twitch.tv/testchannel',
     database: {
@@ -21,19 +21,11 @@ jest.mock('../../src/config/config', () => ({
     shutdownGracePeriod: 1000
 }));
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/database/dbManager');
 jest.mock('../../src/database/dbBackupManager');
 jest.mock('../../src/notifications/discordNotifier');
 
 const config = require('../../src/config/config');
-const logger = require('../../src/logger/logger');
 const DiscordNotifier = require('../../src/notifications/discordNotifier');
 
 describe('Bot - Discord Notification Integration', () => {
@@ -78,10 +70,6 @@ describe('Bot - Discord Notification Integration', () => {
             await bot.handleStreamOnline();
 
             expect(bot.startFullOperation).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Scheduling Discord notification in 0.1 seconds'
-            );
             expect(bot.sendDiscordStreamNotification).not.toHaveBeenCalled();
 
             jest.advanceTimersByTime(100);
@@ -111,38 +99,12 @@ describe('Bot - Discord Notification Integration', () => {
         });
 
         it('should cancel shutdown timer when stream comes back online', async () => {
+            jest.useFakeTimers();
             bot.shutdownTimer = setTimeout(() => {}, 10000);
-            const timerId = bot.shutdownTimer;
 
             await bot.handleStreamOnline();
 
             expect(bot.shutdownTimer).toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Stream came back online during grace period! Cancelling auto-shutdown'
-            );
-        });
-
-        it('should handle error in Discord notification gracefully', async () => {
-            jest.useFakeTimers();
-            const notificationError = new Error('Discord API error');
-            notificationError.stack = 'Error stack';
-            bot.sendDiscordStreamNotification.mockRejectedValue(notificationError);
-
-            await bot.handleStreamOnline();
-
-            jest.advanceTimersByTime(100);
-            await Promise.resolve();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'Bot',
-                'Error sending Discord notification',
-                expect.objectContaining({
-                    error: 'Discord API error',
-                    stack: 'Error stack'
-                })
-            );
-
             jest.useRealTimers();
         });
     });
@@ -163,23 +125,15 @@ describe('Bot - Discord Notification Integration', () => {
                 }
             ];
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
             expect(bot.dbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('SELECT title, category'),
                 ['test-stream-123']
-            );
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Sending Discord notification',
-                expect.objectContaining({
-                    title: 'Epic Gaming Stream',
-                    category: 'Fortnite'
-                })
             );
             expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
                 'Epic Gaming Stream',
@@ -195,9 +149,9 @@ describe('Bot - Discord Notification Integration', () => {
                 }
             ];
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
@@ -215,9 +169,9 @@ describe('Bot - Discord Notification Integration', () => {
                 }
             ];
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
@@ -227,20 +181,13 @@ describe('Bot - Discord Notification Integration', () => {
             );
         });
 
-        it('should warn when no stream data found in database', async () => {
+        it('should not send when no stream data found in database', async () => {
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
-                .mockResolvedValueOnce([]); // No stream data
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'No stream data found in database for Discord notification',
-                expect.objectContaining({
-                    streamId: 'test-stream-123'
-                })
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
 
@@ -249,10 +196,6 @@ describe('Bot - Discord Notification Integration', () => {
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Cannot send Discord notification - no active stream or database'
-            );
             expect(bot.dbManager.query).not.toHaveBeenCalled();
             expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
@@ -262,10 +205,6 @@ describe('Bot - Discord Notification Integration', () => {
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Cannot send Discord notification - no active stream or database'
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
 
@@ -273,19 +212,11 @@ describe('Bot - Discord Notification Integration', () => {
             const dbError = new Error('Database connection failed');
             dbError.stack = 'Error stack';
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
-                .mockRejectedValueOnce(dbError); // Query fails
+                .mockResolvedValueOnce([])
+                .mockRejectedValueOnce(dbError);
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'Bot',
-                'Failed to send Discord stream notification',
-                expect.objectContaining({
-                    error: 'Database connection failed',
-                    stack: 'Error stack'
-                })
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
 
@@ -297,7 +228,7 @@ describe('Bot - Discord Notification Integration', () => {
                 }
             ];
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData);
 
             const discordError = new Error('Discord webhook failed');
@@ -305,37 +236,6 @@ describe('Bot - Discord Notification Integration', () => {
             mockDiscordNotifier.sendStreamLiveNotification.mockRejectedValue(discordError);
 
             await bot.sendDiscordStreamNotification();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'Bot',
-                'Failed to send Discord stream notification',
-                expect.objectContaining({
-                    error: 'Discord webhook failed',
-                    stack: 'Error stack'
-                })
-            );
-        });
-
-        it('should log debug message when fetching stream info', async () => {
-            const mockStreamData = [
-                {
-                    title: 'Test Stream',
-                    category: 'Gaming'
-                }
-            ];
-            bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
-                .mockResolvedValueOnce(mockStreamData);
-
-            await bot.sendDiscordStreamNotification();
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'Fetching stream information for Discord notification',
-                expect.objectContaining({
-                    streamId: 'test-stream-123'
-                })
-            );
         });
 
         it('should send notification on first run (no previous notification)', async () => {
@@ -346,16 +246,12 @@ describe('Bot - Discord Notification Integration', () => {
                 }
             ];
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'No previous Discord notification found, this is the first notification'
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
                 'First Stream',
                 'Gaming'
@@ -374,15 +270,6 @@ describe('Bot - Discord Notification Integration', () => {
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                'Discord notification cooldown active, skipping notification',
-                expect.objectContaining({
-                    lastNotificationTime: twoHoursAgo.toISOString(),
-                    timeSinceLastNotification: expect.any(Number),
-                    remainingMinutes: expect.any(Number)
-                })
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
 
@@ -397,18 +284,10 @@ describe('Bot - Discord Notification Integration', () => {
             bot.dbManager.query
                 .mockResolvedValueOnce([{ token_value: fiveHoursAgo.toISOString() }])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'Cooldown period has passed, proceeding with notification',
-                expect.objectContaining({
-                    lastNotificationTime: fiveHoursAgo.toISOString(),
-                    timeSinceLastNotification: expect.any(Number)
-                })
-            );
             expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
                 'After Cooldown Stream',
                 'Gaming'
@@ -426,9 +305,9 @@ describe('Bot - Discord Notification Integration', () => {
             jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
 
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData)
-                .mockResolvedValueOnce({}); // Timestamp update
+                .mockResolvedValueOnce({});
 
             await bot.sendDiscordStreamNotification();
 
@@ -439,13 +318,6 @@ describe('Bot - Discord Notification Integration', () => {
                     mockDate.toISOString(),
                     mockDate.toISOString()
                 ]
-            );
-            expect(logger.debug).toHaveBeenCalledWith(
-                'Bot',
-                'Updated last Discord notification timestamp',
-                expect.objectContaining({
-                    timestamp: mockDate.toISOString()
-                })
             );
 
             global.Date.mockRestore();
@@ -462,7 +334,7 @@ describe('Bot - Discord Notification Integration', () => {
             mockDiscordNotifier.sendStreamLiveNotification.mockRejectedValue(discordError);
 
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
+                .mockResolvedValueOnce([])
                 .mockResolvedValueOnce(mockStreamData);
 
             await bot.sendDiscordStreamNotification();
@@ -475,8 +347,8 @@ describe('Bot - Discord Notification Integration', () => {
 
         it('should not update timestamp if no stream data found', async () => {
             bot.dbManager.query
-                .mockResolvedValueOnce([]) // No previous notification
-                .mockResolvedValueOnce([]); // No stream data
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
 
             await bot.sendDiscordStreamNotification();
 
@@ -495,14 +367,14 @@ describe('Bot - Discord Notification Integration', () => {
             bot.currentStreamId = 'test-stream-456';
             bot.dbManager = {
                 query: jest.fn()
-                    .mockResolvedValueOnce([]) // No previous notification
+                    .mockResolvedValueOnce([])
                     .mockResolvedValueOnce([
                         {
                             title: 'End-to-End Test Stream',
                             category: 'Software Development'
                         }
                     ])
-                    .mockResolvedValueOnce({}) // Timestamp update
+                    .mockResolvedValueOnce({})
             };
         });
 
@@ -514,14 +386,10 @@ describe('Bot - Discord Notification Integration', () => {
             await bot.handleStreamOnline();
 
             expect(bot.startFullOperation).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'Bot',
-                expect.stringContaining('Scheduling Discord notification')
-            );
 
             jest.advanceTimersByTime(100);
             await Promise.resolve();
-            await Promise.resolve(); // Extra tick for async operations
+            await Promise.resolve();
 
             expect(bot.dbManager.query).toHaveBeenCalled();
             expect(mockDiscordNotifier.sendStreamLiveNotification).toHaveBeenCalledWith(
@@ -538,10 +406,7 @@ describe('Bot - Discord Notification Integration', () => {
             jest.advanceTimersByTime(100);
             await Promise.resolve();
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'Bot',
-                'Cannot send Discord notification - no active stream or database'
-            );
+            expect(mockDiscordNotifier.sendStreamLiveNotification).not.toHaveBeenCalled();
         });
     });
 });

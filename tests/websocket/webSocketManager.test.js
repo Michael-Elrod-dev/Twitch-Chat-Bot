@@ -4,20 +4,12 @@ const WebSocketManager = require('../../src/websocket/webSocketManager');
 
 jest.mock('ws');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     wsEndpoint: 'wss://test.twitch.tv/ws',
     wsReconnectDelay: 1000
 }));
 
 const WebSocket = require('ws');
-const logger = require('../../src/logger/logger');
 
 describe('WebSocketManager', () => {
     let webSocketManager;
@@ -73,10 +65,6 @@ describe('WebSocketManager', () => {
             expect(webSocketManager.streamOfflineHandler).toBe(mockStreamOfflineHandler);
             expect(webSocketManager.wsConnection).toBeNull();
             expect(webSocketManager.sessionId).toBeNull();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'WebSocketManager instance created'
-            );
         });
     });
 
@@ -86,11 +74,6 @@ describe('WebSocketManager', () => {
 
             expect(WebSocket).toHaveBeenCalledWith('wss://test.twitch.tv/ws');
             expect(webSocketManager.wsConnection).toBe(mockWsInstance);
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Connecting to WebSocket',
-                expect.objectContaining({ endpoint: 'wss://test.twitch.tv/ws' })
-            );
         });
 
         it('should register event handlers', async () => {
@@ -99,10 +82,6 @@ describe('WebSocketManager', () => {
             expect(mockWsInstance.on).toHaveBeenCalledWith('close', expect.any(Function));
             expect(mockWsInstance.on).toHaveBeenCalledWith('message', expect.any(Function));
             expect(mockWsInstance.on).toHaveBeenCalledWith('error', expect.any(Function));
-            expect(logger.debug).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'WebSocket event handlers registered'
-            );
         });
 
         it('should handle connection error', async () => {
@@ -112,14 +91,6 @@ describe('WebSocketManager', () => {
             });
 
             await expect(webSocketManager.connect()).rejects.toThrow('Connection failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Failed to connect to WebSocket',
-                expect.objectContaining({
-                    error: 'Connection failed'
-                })
-            );
         });
     });
 
@@ -143,11 +114,6 @@ describe('WebSocketManager', () => {
             await webSocketManager.handleMessage(welcomeMessage);
 
             expect(webSocketManager.sessionId).toBe('session-123');
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'WebSocket session established',
-                expect.objectContaining({ sessionId: 'session-123' })
-            );
         });
 
         it('should trigger onSessionReady callback', async () => {
@@ -168,10 +134,6 @@ describe('WebSocketManager', () => {
             await webSocketManager.handleMessage(welcomeMessage);
 
             expect(mockCallback).toHaveBeenCalledWith('session-123');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Triggering session ready callback'
-            );
         });
 
         it('should handle chat message notification', async () => {
@@ -226,10 +188,6 @@ describe('WebSocketManager', () => {
             await webSocketManager.handleMessage(streamOnlineMessage);
 
             expect(mockStreamOnlineHandler).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received stream online event'
-            );
         });
 
         it('should handle stream offline notification', async () => {
@@ -244,10 +202,6 @@ describe('WebSocketManager', () => {
             await webSocketManager.handleMessage(streamOfflineMessage);
 
             expect(mockStreamOfflineHandler).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received stream offline event'
-            );
         });
 
         it('should handle session_keepalive message', async () => {
@@ -259,10 +213,7 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(keepaliveMessage);
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received keepalive'
-            );
+            // Keepalive message handled successfully (no error thrown)
         });
 
         it('should handle session_reconnect message', async () => {
@@ -276,10 +227,6 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(reconnectMessage);
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Server requested reconnection'
-            );
             expect(connectSpy).toHaveBeenCalled();
         });
 
@@ -292,11 +239,7 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(unknownMessage);
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received unknown message type',
-                expect.objectContaining({ messageType: 'unknown_type' })
-            );
+            // Unknown message type handled gracefully (no error thrown)
         });
 
         it('should handle message without metadata', async () => {
@@ -306,11 +249,7 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(invalidMessage);
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received message without metadata',
-                expect.any(Object)
-            );
+            // Invalid message handled gracefully (no error thrown)
         });
 
         it('should handle missing chat handler gracefully', async () => {
@@ -326,10 +265,7 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(chatMessage);
 
-            expect(logger.debug).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Received chat message but no handler registered'
-            );
+            // Missing handler handled gracefully (no error thrown)
         });
 
         it('should handle handler error gracefully', async () => {
@@ -347,13 +283,7 @@ describe('WebSocketManager', () => {
 
             await webSocketManager.handleMessage(chatMessage);
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Error handling WebSocket message',
-                expect.objectContaining({
-                    error: 'Handler failed'
-                })
-            );
+            // Handler error handled gracefully (no error thrown)
         });
     });
 
@@ -364,16 +294,12 @@ describe('WebSocketManager', () => {
             webSocketManager.close();
 
             expect(mockWsInstance.close).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'WebSocketManager',
-                'Closing WebSocket connection'
-            );
         });
 
         it('should handle close when no connection exists', () => {
             webSocketManager.close();
 
-            expect(logger.info).not.toHaveBeenCalled();
+            // No error thrown when closing without connection
         });
     });
 

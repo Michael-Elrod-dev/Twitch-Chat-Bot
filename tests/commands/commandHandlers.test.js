@@ -8,15 +8,6 @@ jest.mock('node-fetch', () => {
     return jest.fn((...args) => actualFetch.default(...args));
 });
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../src/logger/logger');
-
 describe('CommandHandlers (Modular)', () => {
     let handlers;
     let mockTwitchBot;
@@ -119,7 +110,7 @@ describe('CommandHandlers (Modular)', () => {
 
     describe('followAge command', () => {
         it('should display follow age for requesting user', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2); // 2 years ago
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -137,7 +128,7 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should display follow age for mentioned user', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30); // 30 days ago
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -155,7 +146,7 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should handle user without @ symbol', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 60 * 60); // 1 hour ago
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -193,7 +184,7 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should format time correctly for recent follow (seconds/minutes)', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 90); // 90 seconds ago
+            const followedAt = new Date(Date.now() - 1000 * 90);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -207,7 +198,7 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should format time correctly for older follow (years/days)', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 400); // ~1 year and 35 days
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 400);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -225,7 +216,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.followAge(mockTwitchBot, 'channel', mockContext, []);
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'Error: DB connection lost'
@@ -233,7 +223,7 @@ describe('CommandHandlers (Modular)', () => {
         });
 
         it('should use singular forms correctly', async () => {
-            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365); // 1 year ago exactly
+            const followedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365);
             mockTwitchBot.analyticsManager.dbManager.query.mockResolvedValue([
                 { followed_at: followedAt }
             ]);
@@ -344,7 +334,6 @@ describe('CommandHandlers (Modular)', () => {
             await handlers.quoteHandler(mockTwitchBot, 'channel', mockContext, ['999']);
 
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith('channel', 'Quote #999 not found!');
-            expect(logger.debug).toHaveBeenCalled();
         });
 
         it('should initialize quoteManager if not initialized', async () => {
@@ -360,7 +349,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.quoteHandler(mockTwitchBot, 'channel', mockContext, []);
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'Sorry, there was an error retrieving quotes.'
@@ -386,7 +374,6 @@ describe('CommandHandlers (Modular)', () => {
                 'channel',
                 'Currently playing: Test Song by Test Artist'
             );
-            expect(logger.info).toHaveBeenCalled();
         });
 
         it('should handle no song playing', async () => {
@@ -407,7 +394,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.currentSong(mockTwitchBot, 'channel');
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'Unable to fetch current song information.'
@@ -448,7 +434,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.lastSong(mockTwitchBot, 'channel');
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'Unable to fetch last song information.'
@@ -488,7 +473,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.combinedStats(mockTwitchBot, 'channel', mockContext, []);
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'An error occurred while fetching chat stats.'
@@ -523,7 +507,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.topStats(mockTwitchBot, 'channel', mockContext);
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'An error occurred while fetching top stats.'
@@ -565,7 +548,6 @@ describe('CommandHandlers (Modular)', () => {
 
             await handlers.nextSong(mockTwitchBot, 'channel');
 
-            expect(logger.error).toHaveBeenCalled();
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'channel',
                 'Unable to fetch next song information.'

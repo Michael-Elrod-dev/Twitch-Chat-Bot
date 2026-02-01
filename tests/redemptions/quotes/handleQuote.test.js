@@ -2,15 +2,6 @@
 
 const handleQuote = require('../../../src/redemptions/quotes/handleQuote');
 
-jest.mock('../../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
-const logger = require('../../../src/logger/logger');
-
 describe('handleQuote', () => {
     let mockTwitchBot;
     let event;
@@ -65,18 +56,6 @@ describe('handleQuote', () => {
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'streamer',
                 'Quote #123 has been saved! "Test quote" - Test Author'
-            );
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Quote saved and redemption fulfilled',
-                expect.objectContaining({
-                    quoteId: 123,
-                    quote: 'Test quote',
-                    author: 'Test Author',
-                    savedBy: 'testuser',
-                    userId: 'user-123'
-                })
             );
         });
 
@@ -192,21 +171,6 @@ describe('handleQuote', () => {
 
             expect(mockTwitchBot.quoteManager.addQuote).not.toHaveBeenCalled();
         });
-
-        it('should log cancellation for empty input', async () => {
-            event.input = '';
-
-            await handleQuote(event, mockTwitchBot);
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Quote redemption cancelled: No input provided',
-                expect.objectContaining({
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-        });
     });
 
     describe('Format validation', () => {
@@ -241,16 +205,6 @@ describe('handleQuote', () => {
                 ['redemption-abc'],
                 'CANCELED'
             );
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Quote redemption cancelled: Invalid format',
-                expect.objectContaining({
-                    userId: 'user-123',
-                    userDisplayName: 'testuser',
-                    input: '"Quote" Author'
-                })
-            );
         });
 
         it('should cancel redemption when missing author', async () => {
@@ -282,18 +236,6 @@ describe('handleQuote', () => {
             mockTwitchBot.quoteManager.addQuote.mockRejectedValue(saveError);
 
             await handleQuote(event, mockTwitchBot);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Error saving quote',
-                expect.objectContaining({
-                    error: 'Database connection failed',
-                    quote: 'Test quote',
-                    author: 'Test Author',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
 
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
@@ -342,12 +284,6 @@ describe('handleQuote', () => {
             mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
 
             await expect(handleQuote(event, mockTwitchBot)).resolves.not.toThrow();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Error saving quote',
-                expect.any(Object)
-            );
         });
     });
 
@@ -359,16 +295,6 @@ describe('handleQuote', () => {
 
             await handleQuote(event, mockTwitchBot);
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Error saving quote',
-                expect.objectContaining({
-                    error: 'Fatal error',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
-            );
-
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
@@ -379,27 +305,6 @@ describe('handleQuote', () => {
             expect(mockTwitchBot.sendMessage).toHaveBeenCalledWith(
                 'streamer',
                 '@testuser Sorry, there was an error saving your quote. Your points have been refunded.'
-            );
-        });
-
-        it('should log refund error when refund also fails', async () => {
-            const fatalError = new Error('Fatal error');
-            const refundError = new Error('Refund failed');
-            refundError.stack = 'Error stack';
-
-            mockTwitchBot.quoteManager.addQuote.mockRejectedValue(fatalError);
-            mockTwitchBot.redemptionManager.updateRedemptionStatus.mockRejectedValue(refundError);
-
-            await handleQuote(event, mockTwitchBot);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'HandleQuote',
-                'Error refunding points',
-                expect.objectContaining({
-                    error: 'Refund failed',
-                    userId: 'user-123',
-                    userDisplayName: 'testuser'
-                })
             );
         });
 

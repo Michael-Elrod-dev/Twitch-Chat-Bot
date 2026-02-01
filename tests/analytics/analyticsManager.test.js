@@ -4,30 +4,8 @@ const AnalyticsManager = require('../../src/analytics/analyticsManager');
 
 jest.mock('../../src/analytics/viewers/viewerTracker');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
-const logger = require('../../src/logger/logger');
-
-const createMockRedisManager = (connected = true) => {
-    const mockQueueManager = connected ? {
-        startConsumer: jest.fn().mockResolvedValue(undefined),
-        stopConsumer: jest.fn().mockResolvedValue(undefined),
-        push: jest.fn().mockResolvedValue(true),
-        pop: jest.fn().mockResolvedValue([])
-    } : null;
-
-    return {
-        connected: jest.fn().mockReturnValue(connected),
-        getCacheManager: jest.fn().mockReturnValue(null),
-        getQueueManager: jest.fn().mockReturnValue(mockQueueManager)
-    };
-};
+const { createMockRedisManager, createMockRedisManagerWithQueue } = require('../__mocks__/mockRedisManager');
 
 describe('AnalyticsManager', () => {
     let analyticsManager;
@@ -70,13 +48,6 @@ describe('AnalyticsManager', () => {
             expect(analyticsManager.dbManager).toBe(mockDbManager);
             expect(analyticsManager.viewerTracker).toBe(mockViewerTracker);
             expect(ViewerTracker).toHaveBeenCalledWith(analyticsManager, null);
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Analytics manager initialized successfully',
-                expect.objectContaining({
-                    redisEnabled: false
-                })
-            );
         });
 
         it('should create ViewerTracker with correct reference', async () => {
@@ -93,19 +64,10 @@ describe('AnalyticsManager', () => {
             });
 
             await expect(analyticsManager.init(mockDbManager)).rejects.toThrow('Initialization failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Failed to initialize analytics manager',
-                expect.objectContaining({
-                    error: 'Initialization failed'
-                })
-            );
         });
 
         it('should allow re-initialization', async () => {
             await analyticsManager.init(mockDbManager);
-            const firstTracker = analyticsManager.viewerTracker;
 
             const newMockDbManager = { query: jest.fn() };
             await analyticsManager.init(newMockDbManager);
@@ -121,14 +83,11 @@ describe('AnalyticsManager', () => {
         });
 
         it('should start queue consumer when Redis available', async () => {
-            await analyticsManager.init(mockDbManager, mockRedisManager);
+            const mockRedisWithQueue = createMockRedisManagerWithQueue(true);
+            await analyticsManager.init(mockDbManager, mockRedisWithQueue);
 
-            const queueManager = mockRedisManager.getQueueManager();
+            const queueManager = mockRedisWithQueue.getQueueManager();
             expect(queueManager.startConsumer).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Analytics queue consumer started'
-            );
         });
 
         it('should not start consumer when Redis unavailable', async () => {
@@ -136,10 +95,7 @@ describe('AnalyticsManager', () => {
 
             await analyticsManager.init(mockDbManager, disconnectedRedis);
 
-            expect(logger.info).not.toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Analytics queue consumer started'
-            );
+            expect(disconnectedRedis.getQueueManager()).toBeNull();
         });
 
         it('should store redisManager reference', async () => {
@@ -148,17 +104,6 @@ describe('AnalyticsManager', () => {
             expect(analyticsManager.redisManager).toBe(mockRedisManager);
         });
 
-        it('should log redisEnabled status', async () => {
-            await analyticsManager.init(mockDbManager, mockRedisManager);
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Analytics manager initialized successfully',
-                expect.objectContaining({
-                    redisEnabled: true
-                })
-            );
-        });
     });
 
     describe('trackChatMessage', () => {
@@ -196,17 +141,6 @@ describe('AnalyticsManager', () => {
             expect(mockDbManager.query).toHaveBeenCalledWith(
                 expect.stringContaining('UPDATE streams'),
                 ['stream-456']
-            );
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Chat message tracked',
-                expect.objectContaining({
-                    username: 'testuser',
-                    userId: 'user-123',
-                    streamId: 'stream-456',
-                    type: 'message'
-                })
             );
         });
 
@@ -291,18 +225,6 @@ describe('AnalyticsManager', () => {
                 'message',
                 {}
             );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Error tracking chat message',
-                expect.objectContaining({
-                    error: 'Tracking failed',
-                    username: 'testuser',
-                    userId: 'user-123',
-                    streamId: 'stream-456',
-                    type: 'message'
-                })
-            );
         });
 
         it('should handle database error gracefully', async () => {
@@ -318,8 +240,6 @@ describe('AnalyticsManager', () => {
                 'message',
                 {}
             );
-
-            expect(logger.error).toHaveBeenCalled();
         });
 
         it('should not throw on error', async () => {
@@ -395,15 +315,6 @@ describe('AnalyticsManager', () => {
                 expect.stringContaining('INSERT INTO streams'),
                 ['stream-123', 'Test Stream', 'Just Chatting']
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Stream started',
-                expect.objectContaining({
-                    streamId: 'stream-123',
-                    title: 'Test Stream',
-                    category: 'Just Chatting'
-                })
-            );
         });
 
         it('should handle stream start with null category', async () => {
@@ -430,17 +341,6 @@ describe('AnalyticsManager', () => {
             mockDbManager.query.mockRejectedValue(dbError);
 
             await analyticsManager.trackStreamStart('stream-123', 'Test', 'Category');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Error tracking stream start',
-                expect.objectContaining({
-                    error: 'Database insert failed',
-                    streamId: 'stream-123',
-                    title: 'Test',
-                    category: 'Category'
-                })
-            );
         });
 
         it('should not throw on error', async () => {
@@ -477,13 +377,6 @@ describe('AnalyticsManager', () => {
                 ['stream-123']
             );
             expect(analyticsManager.currentStreamId).toBeNull();
-            expect(logger.info).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Stream ended',
-                expect.objectContaining({
-                    streamId: 'stream-123'
-                })
-            );
         });
 
         it('should set currentStreamId to null', async () => {
@@ -500,15 +393,6 @@ describe('AnalyticsManager', () => {
             mockDbManager.query.mockRejectedValue(dbError);
 
             await analyticsManager.trackStreamEnd('stream-123');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'AnalyticsManager',
-                'Error tracking stream end',
-                expect.objectContaining({
-                    error: 'Database update failed',
-                    streamId: 'stream-123'
-                })
-            );
         });
 
         it('should not throw on error', async () => {

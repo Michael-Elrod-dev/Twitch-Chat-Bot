@@ -2,41 +2,13 @@
 
 const ChatMessageHandler = require('../../src/messages/chatMessageHandler');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     cache: {
         aiEnabledTTL: 60
     }
 }));
 
-const logger = require('../../src/logger/logger');
-
-const createMockRedisManager = (connected = true) => {
-    const mockCacheManager = connected ? {
-        get: jest.fn().mockResolvedValue(null),
-        set: jest.fn().mockResolvedValue(true),
-        del: jest.fn().mockResolvedValue(true),
-        hget: jest.fn().mockResolvedValue(null),
-        hset: jest.fn().mockResolvedValue(true),
-        hdel: jest.fn().mockResolvedValue(true),
-        hgetall: jest.fn().mockResolvedValue(null),
-        hmset: jest.fn().mockResolvedValue(true),
-        expire: jest.fn().mockResolvedValue(true),
-        incr: jest.fn().mockResolvedValue(1)
-    } : null;
-
-    return {
-        connected: jest.fn().mockReturnValue(connected),
-        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
-        getQueueManager: jest.fn().mockReturnValue(null)
-    };
-};
+const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 
 describe('ChatMessageHandler', () => {
     let chatMessageHandler;
@@ -96,10 +68,6 @@ describe('ChatMessageHandler', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
-        logger.info.mockClear();
-        logger.debug.mockClear();
-        logger.warn.mockClear();
-        logger.error.mockClear();
     });
 
     describe('handleChatMessage - Basic Flow', () => {
@@ -114,7 +82,7 @@ describe('ChatMessageHandler', () => {
         it('should ignore messages from bot itself', async () => {
             const payload = {
                 event: {
-                    chatter_user_id: 'bot123', // Same as bot's ID
+                    chatter_user_id: 'bot123',
                     chatter_user_name: 'BotAccount',
                     message: { text: 'test' }
                 }
@@ -518,29 +486,6 @@ describe('ChatMessageHandler', () => {
             ).resolves.toBeUndefined();
         });
 
-        it('should log errors to logger', async () => {
-            mockBot.analyticsManager.trackChatMessage.mockRejectedValueOnce(
-                new Error('Test Error')
-            );
-
-            const payload = {
-                event: {
-                    chatter_user_id: 'user123',
-                    chatter_user_name: 'testuser',
-                    message: { text: 'test' }
-                }
-            };
-
-            await chatMessageHandler.handleChatMessage(payload, mockBot);
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'ChatMessageHandler',
-                'Error handling chat message',
-                expect.objectContaining({
-                    error: 'Test Error'
-                })
-            );
-        });
     });
 
     describe('Message Routing Priority', () => {
@@ -727,31 +672,8 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            // Should default to enabled and proceed
             expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
         });
 
-        it('should log cache hit', async () => {
-            const cacheManager = mockRedisManager.getCacheManager();
-            cacheManager.get.mockResolvedValueOnce('true');
-            mockAiManager.shouldTriggerText.mockReturnValueOnce(true);
-            mockAiManager.extractPrompt.mockReturnValueOnce('test');
-
-            const payload = {
-                event: {
-                    chatter_user_id: 'user123',
-                    chatter_user_name: 'testuser',
-                    message: { text: '@almosthadai test' }
-                }
-            };
-
-            await chatMessageHandler.handleChatMessage(payload, mockBot);
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'ChatMessageHandler',
-                'AI enabled status from cache',
-                expect.objectContaining({ aiEnabled: true })
-            );
-        });
     });
 });

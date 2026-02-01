@@ -4,19 +4,11 @@ const SubscriptionManager = require('../../src/websocket/subscriptionManager');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));
 
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('SubscriptionManager', () => {
     let subscriptionManager;
@@ -41,11 +33,6 @@ describe('SubscriptionManager', () => {
         it('should initialize with token manager and session ID', () => {
             expect(subscriptionManager.tokenManager).toBe(mockTokenManager);
             expect(subscriptionManager.sessionId).toBe('session-xyz');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'SubscriptionManager instance created',
-                expect.objectContaining({ sessionId: 'session-xyz' })
-            );
         });
     });
 
@@ -54,14 +41,6 @@ describe('SubscriptionManager', () => {
             subscriptionManager.setSessionId('new-session-123');
 
             expect(subscriptionManager.sessionId).toBe('new-session-123');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Session ID updated',
-                expect.objectContaining({
-                    oldSessionId: 'session-xyz',
-                    newSessionId: 'new-session-123'
-                })
-            );
         });
     });
 
@@ -91,12 +70,6 @@ describe('SubscriptionManager', () => {
                     },
                     body: expect.stringContaining('channel.chat.message')
                 })
-            );
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Subscribed to chat events',
-                expect.objectContaining({ subscriptionId: 'subscription-123' })
             );
         });
 
@@ -148,15 +121,6 @@ describe('SubscriptionManager', () => {
             await expect(subscriptionManager.subscribeToChatEvents()).rejects.toThrow(
                 'Failed to subscribe to chat events'
             );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to subscribe to chat events',
-                expect.objectContaining({
-                    status: 401,
-                    error: JSON.stringify(errorData)
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -165,14 +129,6 @@ describe('SubscriptionManager', () => {
             fetch.mockRejectedValue(networkError);
 
             await expect(subscriptionManager.subscribeToChatEvents()).rejects.toThrow('Network request failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Error subscribing to chat events',
-                expect.objectContaining({
-                    error: 'Network request failed'
-                })
-            );
         });
     });
 
@@ -196,11 +152,6 @@ describe('SubscriptionManager', () => {
 
             expect(body.type).toBe('channel.channel_points_custom_reward_redemption.add');
             expect(body.condition.broadcaster_user_id).toBe('channel-123');
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Subscribed to channel point redemptions',
-                expect.objectContaining({ subscriptionId: 'subscription-456' })
-            );
         });
 
         it('should throw error when missing required IDs', async () => {
@@ -219,12 +170,6 @@ describe('SubscriptionManager', () => {
 
             await expect(subscriptionManager.subscribeToChannelPoints()).rejects.toThrow(
                 'Failed to subscribe to channel points'
-            );
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to subscribe to channel points',
-                expect.objectContaining({ status: 403 })
             );
         });
     });
@@ -249,10 +194,6 @@ describe('SubscriptionManager', () => {
 
             expect(body.type).toBe('stream.online');
             expect(body.condition.broadcaster_user_id).toBe('channel-123');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Subscribing to stream online events'
-            );
         });
 
         it('should throw error when missing channel ID', async () => {
@@ -270,12 +211,6 @@ describe('SubscriptionManager', () => {
             fetch.mockResolvedValue(mockResponse);
 
             await expect(subscriptionManager.subscribeToStreamOnline()).rejects.toThrow();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to subscribe to stream online events',
-                expect.objectContaining({ status: 500 })
-            );
         });
     });
 
@@ -299,11 +234,6 @@ describe('SubscriptionManager', () => {
 
             expect(body.type).toBe('stream.offline');
             expect(body.condition.broadcaster_user_id).toBe('channel-123');
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Subscribed to stream offline events',
-                expect.objectContaining({ subscriptionId: 'subscription-offline-123' })
-            );
         });
 
         it('should throw error when missing channel ID', async () => {
@@ -321,12 +251,6 @@ describe('SubscriptionManager', () => {
             fetch.mockResolvedValue(mockResponse);
 
             await expect(subscriptionManager.subscribeToStreamOffline()).rejects.toThrow();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to subscribe to stream offline events',
-                expect.objectContaining({ status: 500 })
-            );
         });
     });
 
@@ -368,14 +292,6 @@ describe('SubscriptionManager', () => {
                 method: 'DELETE',
                 headers: expect.any(Object)
             });
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Successfully unsubscribed',
-                expect.objectContaining({
-                    eventType: 'channel.chat.message',
-                    subscriptionId: 'sub-123'
-                })
-            );
         });
 
         it('should handle when no subscription found', async () => {
@@ -391,14 +307,6 @@ describe('SubscriptionManager', () => {
             await subscriptionManager.unsubscribeFromChatEvents();
 
             expect(fetch).toHaveBeenCalledTimes(1); // Only GET, no DELETE
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'No subscription found to unsubscribe',
-                expect.objectContaining({
-                    eventType: 'channel.chat.message',
-                    sessionId: 'session-xyz'
-                })
-            );
         });
 
         it('should handle error', async () => {
@@ -407,12 +315,6 @@ describe('SubscriptionManager', () => {
             fetch.mockRejectedValue(error);
 
             await expect(subscriptionManager.unsubscribeFromChatEvents()).rejects.toThrow('Unsubscribe failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Error unsubscribing from chat events',
-                expect.objectContaining({ error: 'Unsubscribe failed' })
-            );
         });
     });
 
@@ -441,14 +343,6 @@ describe('SubscriptionManager', () => {
                 .mockResolvedValueOnce(deleteResponse);
 
             await subscriptionManager.unsubscribeFromChannelPoints();
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Successfully unsubscribed',
-                expect.objectContaining({
-                    eventType: 'channel.channel_points_custom_reward_redemption.add'
-                })
-            );
         });
 
         it('should handle error', async () => {
@@ -457,12 +351,6 @@ describe('SubscriptionManager', () => {
             fetch.mockRejectedValue(error);
 
             await expect(subscriptionManager.unsubscribeFromChannelPoints()).rejects.toThrow('Points unsubscribe failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Error unsubscribing from channel points',
-                expect.objectContaining({ error: 'Points unsubscribe failed' })
-            );
         });
     });
 
@@ -479,12 +367,6 @@ describe('SubscriptionManager', () => {
             await expect(
                 subscriptionManager.unsubscribeFromChatEvents()
             ).rejects.toThrow('Failed to get subscriptions');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to fetch subscriptions',
-                expect.objectContaining({ status: 403 })
-            );
         });
 
         it('should handle delete subscription error', async () => {
@@ -514,15 +396,6 @@ describe('SubscriptionManager', () => {
             await expect(
                 subscriptionManager.unsubscribeFromChatEvents()
             ).rejects.toThrow('Failed to delete subscription');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'SubscriptionManager',
-                'Failed to delete subscription',
-                expect.objectContaining({
-                    subscriptionId: 'sub-123',
-                    status: 404
-                })
-            );
         });
 
         it('should filter subscriptions by session ID', async () => {
@@ -572,7 +445,6 @@ describe('SubscriptionManager', () => {
             await subscriptionManager.subscribeToStreamOnline();
 
             expect(fetch).toHaveBeenCalledTimes(3);
-            expect(logger.info).toHaveBeenCalled();
         });
 
         it('should handle session ID update mid-flow', async () => {

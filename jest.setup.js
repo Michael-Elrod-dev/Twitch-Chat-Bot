@@ -10,3 +10,11 @@ global.console = {
     info: jest.fn(),
     debug: jest.fn(),
 };
+
+jest.mock('./src/logger/logger', () => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    setLogLevel: jest.fn()
+}));

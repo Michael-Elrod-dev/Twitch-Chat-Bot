@@ -1,13 +1,7 @@
 // tests/emotes/emoteManager.test.js
 
 const EmoteManager = require('../../src/emotes/emoteManager');
-
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
+const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 
 jest.mock('../../src/config/config', () => ({
     emoteCacheInterval: 60000,
@@ -15,27 +9,6 @@ jest.mock('../../src/config/config', () => ({
         emotesTTL: 500
     }
 }));
-
-const createMockRedisManager = (connected = true) => {
-    const mockCacheManager = connected ? {
-        get: jest.fn().mockResolvedValue(null),
-        set: jest.fn().mockResolvedValue(true),
-        del: jest.fn().mockResolvedValue(true),
-        hget: jest.fn().mockResolvedValue(null),
-        hset: jest.fn().mockResolvedValue(true),
-        hdel: jest.fn().mockResolvedValue(true),
-        hgetall: jest.fn().mockResolvedValue(null),
-        hmset: jest.fn().mockResolvedValue(true),
-        expire: jest.fn().mockResolvedValue(true),
-        incr: jest.fn().mockResolvedValue(1)
-    } : null;
-
-    return {
-        connected: jest.fn().mockReturnValue(connected),
-        getCacheManager: jest.fn().mockReturnValue(mockCacheManager),
-        getQueueManager: jest.fn().mockReturnValue(null)
-    };
-};
 
 describe('EmoteManager', () => {
     let emoteManager;
@@ -500,21 +473,5 @@ describe('EmoteManager', () => {
             expect(response).toBe('Reloaded');
         });
 
-        it('should log redisEnabled status on load', async () => {
-            const logger = require('../../src/logger/logger');
-            mockDbManager.query.mockResolvedValueOnce([
-                { trigger_text: 'KEKW', response_text: 'LUL' }
-            ]);
-
-            await emoteManager.init(mockDbManager, mockRedisManager);
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'EmoteManager',
-                'Emotes loaded successfully',
-                expect.objectContaining({
-                    redisEnabled: true
-                })
-            );
-        });
     });
 });

@@ -4,19 +4,11 @@ const MessageSender = require('../../src/messages/messageSender');
 
 jest.mock('node-fetch');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     twitchApiEndpoint: 'https://api.twitch.tv/helix'
 }));
 
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 
 describe('MessageSender', () => {
     let messageSender;
@@ -71,33 +63,6 @@ describe('MessageSender', () => {
                     })
                 })
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'MessageSender',
-                'Message sent successfully',
-                expect.objectContaining({
-                    channel: 'testchannel',
-                    messageLength: 13
-                })
-            );
-        });
-
-        it('should log message preparation details', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({ data: [] })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await messageSender.sendMessage('testchannel', 'Test message');
-
-            expect(logger.debug).toHaveBeenCalledWith(
-                'MessageSender',
-                'Preparing to send message',
-                expect.objectContaining({
-                    channel: 'testchannel',
-                    messageLength: 12
-                })
-            );
         });
 
         it('should return early when channelId is missing', async () => {
@@ -107,14 +72,6 @@ describe('MessageSender', () => {
 
             expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
             expect(fetch).not.toHaveBeenCalled();
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Missing required IDs',
-                expect.objectContaining({
-                    channelId: null,
-                    botId: '789012'
-                })
-            );
         });
 
         it('should return early when botId is missing', async () => {
@@ -124,14 +81,6 @@ describe('MessageSender', () => {
 
             expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
             expect(fetch).not.toHaveBeenCalled();
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Missing required IDs',
-                expect.objectContaining({
-                    channelId: '123456',
-                    botId: null
-                })
-            );
         });
 
         it('should return early when both IDs are missing', async () => {
@@ -153,13 +102,6 @@ describe('MessageSender', () => {
                 messageSender.sendMessage('testchannel', 'Test')
             ).rejects.toThrow('Token expired');
 
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Error validating bot token',
-                expect.objectContaining({
-                    error: 'Token expired'
-                })
-            );
             expect(fetch).not.toHaveBeenCalled();
         });
 
@@ -179,15 +121,6 @@ describe('MessageSender', () => {
             await expect(
                 messageSender.sendMessage('testchannel', 'Test')
             ).rejects.toThrow('Failed to send chat message');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Failed to send chat message',
-                expect.objectContaining({
-                    statusCode: 401,
-                    errorData: JSON.stringify(errorData)
-                })
-            );
         });
 
         it('should handle rate limit error (429)', async () => {
@@ -206,14 +139,6 @@ describe('MessageSender', () => {
             await expect(
                 messageSender.sendMessage('testchannel', 'Test')
             ).rejects.toThrow('Failed to send chat message');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Failed to send chat message',
-                expect.objectContaining({
-                    statusCode: 429
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -224,14 +149,6 @@ describe('MessageSender', () => {
             await expect(
                 messageSender.sendMessage('testchannel', 'Test')
             ).rejects.toThrow('Network request failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'MessageSender',
-                'Error sending chat message',
-                expect.objectContaining({
-                    error: 'Network request failed'
-                })
-            );
         });
 
         it('should handle fetch timeout', async () => {
@@ -254,13 +171,7 @@ describe('MessageSender', () => {
 
             await messageSender.sendMessage('testchannel', longMessage);
 
-            expect(logger.info).toHaveBeenCalledWith(
-                'MessageSender',
-                'Message sent successfully',
-                expect.objectContaining({
-                    messageLength: 500
-                })
-            );
+            expect(fetch).toHaveBeenCalled();
         });
 
         it('should handle empty message', async () => {

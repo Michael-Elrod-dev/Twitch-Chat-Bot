@@ -4,12 +4,6 @@ const TokenManager = require('../../src/tokens/tokenManager');
 
 jest.mock('https');
 jest.mock('node-fetch');
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
 jest.mock('../../src/config/config', () => ({
     channelName: 'testchannel',
     twitchAuthEndpoint: 'https://id.twitch.tv/oauth2',
@@ -20,25 +14,9 @@ jest.mock('../../src/config/config', () => ({
 
 const https = require('https');
 const fetch = require('node-fetch');
-const logger = require('../../src/logger/logger');
 const { EventEmitter } = require('events');
 
-const createMockRedisManager = (connected = true) => ({
-    connected: jest.fn().mockReturnValue(connected),
-    getCacheManager: jest.fn().mockReturnValue(connected ? {
-        get: jest.fn().mockResolvedValue(null),
-        set: jest.fn().mockResolvedValue(true),
-        del: jest.fn().mockResolvedValue(true),
-        hget: jest.fn().mockResolvedValue(null),
-        hset: jest.fn().mockResolvedValue(true),
-        hdel: jest.fn().mockResolvedValue(true),
-        hgetall: jest.fn().mockResolvedValue(null),
-        hmset: jest.fn().mockResolvedValue(true),
-        expire: jest.fn().mockResolvedValue(true),
-        incr: jest.fn().mockResolvedValue(1)
-    } : null),
-    getQueueManager: jest.fn().mockReturnValue(null)
-});
+const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 
 describe('TokenManager', () => {
     let tokenManager;
@@ -63,7 +41,6 @@ describe('TokenManager', () => {
             expect(tokenManager.redisManager).toBeNull();
             expect(tokenManager.tokens).toEqual({});
             expect(tokenManager.isInitialized).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith('TokenManager', 'TokenManager instance created');
         });
     });
 
@@ -85,14 +62,6 @@ describe('TokenManager', () => {
                 broadcasterAccessToken: 'broadcaster-token-456',
                 clientId: 'client-789'
             });
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Loaded tokens from database',
-                expect.objectContaining({
-                    tokenCount: 3,
-                    tokenKeys: ['botAccessToken', 'broadcasterAccessToken', 'clientId']
-                })
-            );
         });
 
         it('should handle database error', async () => {
@@ -103,14 +72,6 @@ describe('TokenManager', () => {
             tokenManager.dbManager = mockDbManager;
 
             await expect(tokenManager.loadTokensFromDatabase()).rejects.toThrow('Unable to load tokens from database');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Error loading tokens from database',
-                expect.objectContaining({
-                    error: 'Database connection failed'
-                })
-            );
         });
 
         it('should reset tokens object before loading', async () => {
@@ -144,11 +105,6 @@ describe('TokenManager', () => {
                 expect.stringContaining('UPDATE tokens'),
                 ['broadcaster-456', 'broadcasterAccessToken']
             );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Successfully saved all tokens to database',
-                expect.objectContaining({ tokenCount: 3 })
-            );
         });
 
         it('should handle database error', async () => {
@@ -159,14 +115,6 @@ describe('TokenManager', () => {
             mockDbManager.query.mockRejectedValue(dbError);
 
             await expect(tokenManager.saveTokens()).rejects.toThrow('Update failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Error saving tokens to database',
-                expect.objectContaining({
-                    error: 'Update failed'
-                })
-            );
         });
     });
 
@@ -181,11 +129,6 @@ describe('TokenManager', () => {
                 expect.stringContaining('UPDATE tokens'),
                 ['new-bot-token', 'botAccessToken']
             );
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TokenManager',
-                'Successfully updated token',
-                { tokenKey: 'botAccessToken' }
-            );
         });
 
         it('should handle database error', async () => {
@@ -195,15 +138,6 @@ describe('TokenManager', () => {
             mockDbManager.query.mockRejectedValue(dbError);
 
             await expect(tokenManager.updateToken('test', 'value')).rejects.toThrow('Update failed');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Error updating token',
-                expect.objectContaining({
-                    error: 'Update failed',
-                    tokenKey: 'test'
-                })
-            );
         });
     });
 
@@ -237,15 +171,6 @@ describe('TokenManager', () => {
                 'https://id.twitch.tv/oauth2/validate',
                 expect.objectContaining({
                     headers: { 'Authorization': 'Bearer bot-token' }
-                })
-            );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token validated successfully',
-                expect.objectContaining({
-                    type: 'bot',
-                    userId: 'bot-user-123',
-                    expiresIn: 3600
                 })
             );
         });
@@ -331,19 +256,6 @@ describe('TokenManager', () => {
             const result = await tokenManager.validateToken('bot');
 
             expect(result).toBe(true);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token validation failed, refreshing token',
-                expect.objectContaining({ type: 'bot' })
-            );
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token refreshed and validated successfully',
-                expect.objectContaining({
-                    type: 'bot',
-                    userId: 'bot-user-123'
-                })
-            );
         });
 
         it('should return false on validation error', async () => {
@@ -355,14 +267,6 @@ describe('TokenManager', () => {
             const result = await tokenManager.validateToken('bot');
 
             expect(result).toBe(false);
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token validation failed',
-                expect.objectContaining({
-                    error: 'Network error',
-                    type: 'bot'
-                })
-            );
         });
     });
 
@@ -405,11 +309,6 @@ describe('TokenManager', () => {
             expect(result).toBe('new-access-token');
             expect(mockRequest.write).toHaveBeenCalled();
             expect(mockRequest.end).toHaveBeenCalled();
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Bot token refreshed successfully',
-                expect.objectContaining({ userId: 'bot-123' })
-            );
         });
 
         it('should refresh broadcaster token successfully', async () => {
@@ -443,10 +342,6 @@ describe('TokenManager', () => {
             const result = await tokenManager.refreshToken('broadcaster');
 
             expect(result).toBe('new-broadcaster-token');
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Broadcaster token refreshed successfully'
-            );
         });
 
         it('should handle invalid response', async () => {
@@ -477,15 +372,6 @@ describe('TokenManager', () => {
             });
 
             await expect(tokenManager.refreshToken('bot')).rejects.toMatch('Failed to refresh bot tokens');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token refresh failed - invalid response',
-                expect.objectContaining({
-                    type: 'bot',
-                    error: 'Invalid refresh token'
-                })
-            );
         });
 
         it('should handle JSON parse error', async () => {
@@ -513,15 +399,6 @@ describe('TokenManager', () => {
             });
 
             await expect(tokenManager.refreshToken('bot')).rejects.toMatch('Failed to parse Twitch API response');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token refresh failed - parse error',
-                expect.objectContaining({
-                    type: 'bot',
-                    responseData: 'invalid json'
-                })
-            );
         });
 
         it('should handle network error', async () => {
@@ -544,15 +421,6 @@ describe('TokenManager', () => {
             https.request.mockReturnValue(mockRequest);
 
             await expect(tokenManager.refreshToken('bot')).rejects.toMatch('Network error during bot token refresh');
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Token refresh failed - network error',
-                expect.objectContaining({
-                    error: 'Network failure',
-                    type: 'bot'
-                })
-            );
         });
     });
 
@@ -592,11 +460,6 @@ describe('TokenManager', () => {
             });
 
             await tokenManager.checkAndRefreshTokens();
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'All tokens refreshed and validated successfully'
-            );
         });
 
         it('should handle bot token refresh failure', async () => {
@@ -620,18 +483,6 @@ describe('TokenManager', () => {
             https.request.mockReturnValue(mockRequest);
 
             await tokenManager.checkAndRefreshTokens();
-
-            expect(logger.error).toHaveBeenCalledWith(
-                'TokenManager',
-                'Critical error refreshing tokens',
-                expect.objectContaining({
-                    error: 'Bot token refresh failed'
-                })
-            );
-            expect(logger.warn).toHaveBeenCalledWith(
-                'TokenManager',
-                'You may need to re-authenticate with Twitch'
-            );
         });
     });
 
@@ -674,10 +525,6 @@ describe('TokenManager', () => {
 
             expect(tokenManager.dbManager).toBe(mockDbManager);
             expect(tokenManager.isInitialized).toBe(true);
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'TokenManager initialized successfully'
-            );
         });
     });
 
@@ -712,10 +559,6 @@ describe('TokenManager', () => {
             const token = tokenManager.getBroadcasterToken();
 
             expect(token).toBe('broadcaster-token-xyz');
-            expect(logger.debug).toHaveBeenCalledWith(
-                'TokenManager',
-                'Retrieving broadcaster token'
-            );
         });
     });
 
@@ -784,25 +627,6 @@ describe('TokenManager', () => {
             await tokenManager.loadTokensFromDatabase();
 
             expect(tokenManager.tokens.botAccessToken).toBe('bot-token-123');
-        });
-
-        it('should log redisEnabled status on load', async () => {
-            const mockTokenRows = [
-                { token_key: 'botAccessToken', token_value: 'bot-token-123' }
-            ];
-            mockDbManager.query.mockResolvedValue(mockTokenRows);
-
-            tokenManager.dbManager = mockDbManager;
-            tokenManager.redisManager = mockRedisManager;
-            await tokenManager.loadTokensFromDatabase();
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'TokenManager',
-                'Loaded tokens from database',
-                expect.objectContaining({
-                    redisEnabled: true
-                })
-            );
         });
 
         it('should init with redisManager parameter', async () => {

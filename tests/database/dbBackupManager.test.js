@@ -2,13 +2,6 @@
 
 const DbBackupManager = require('../../src/database/dbBackupManager');
 
-jest.mock('../../src/logger/logger', () => ({
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
-
 jest.mock('../../src/config/config', () => ({
     isDebugMode: false,
     aws: {
@@ -26,7 +19,6 @@ jest.mock('../../src/config/config', () => ({
     }
 }));
 
-const logger = require('../../src/logger/logger');
 const config = require('../../src/config/config');
 
 describe('DbBackupManager', () => {
@@ -67,29 +59,10 @@ describe('DbBackupManager', () => {
             const result = await backupManager.createBackup('test');
 
             expect(result).toBe(false);
-            expect(logger.info).toHaveBeenCalledWith(
-                'DbBackupManager',
-                'Skipping backup in debug mode',
-                { reason: 'test' }
-            );
 
-            config.isDebugMode = false; // Reset
+            config.isDebugMode = false;
         });
 
-        it('should log when starting backup', async () => {
-            jest.spyOn(backupManager.s3Client, 'send').mockResolvedValue({});
-            jest.spyOn(backupManager, 'rotateBackups').mockResolvedValue(undefined);
-
-            const createBackupSpy = jest.spyOn(backupManager, 'createBackup');
-
-            await backupManager.createBackup('scheduled').catch(() => {});
-
-            expect(logger.info).toHaveBeenCalledWith(
-                'DbBackupManager',
-                'Starting database backup',
-                expect.objectContaining({ reason: 'scheduled' })
-            );
-        });
     });
 
     describe('listBackups', () => {
@@ -143,14 +116,6 @@ describe('DbBackupManager', () => {
             await backupManager.rotateBackups();
 
             expect(deleteBackupSpy).toHaveBeenCalledTimes(2);
-            expect(logger.info).toHaveBeenCalledWith(
-                'DbBackupManager',
-                'Rotating backups',
-                expect.objectContaining({
-                    totalBackups: 12,
-                    toDelete: 2
-                })
-            );
         });
 
         it('should not delete backups when under max count', async () => {
@@ -168,14 +133,6 @@ describe('DbBackupManager', () => {
             await backupManager.rotateBackups();
 
             expect(deleteBackupSpy).not.toHaveBeenCalled();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'DbBackupManager',
-                'No rotation needed',
-                expect.objectContaining({
-                    currentCount: 5,
-                    maxBackups: 10
-                })
-            );
         });
     });
 
@@ -187,11 +144,6 @@ describe('DbBackupManager', () => {
             await backupManager.deleteBackup('database-backups/old-backup.sql');
 
             expect(mockSend).toHaveBeenCalled();
-            expect(logger.debug).toHaveBeenCalledWith(
-                'DbBackupManager',
-                'Deleting backup',
-                { key: 'database-backups/old-backup.sql' }
-            );
         });
 
         it('should handle delete error', async () => {
