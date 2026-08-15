@@ -1,5 +1,4 @@
 const request = require('supertest');
-const express = require('express');
 const ApiServer = require('../../src/api/apiServer');
 
 describe('API Server Integration', () => {

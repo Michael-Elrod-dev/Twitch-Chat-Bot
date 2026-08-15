@@ -2,8 +2,6 @@
  * P1-5: a command is never swallowed by the AI mention path.
  */
 
-const AIManager = require('../../src/ai/aiManager');
-
 describe('P1-5: commands beat the AI mention path', () => {
     const AIManager = require('../../src/ai/aiManager');
     let aiManager;

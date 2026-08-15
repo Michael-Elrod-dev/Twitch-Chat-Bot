@@ -131,7 +131,7 @@ describe('DbBackupManager', () => {
                 LastModified: new Date(2025, 0, 12 - i)
             }));
 
-            const mockSend = jest.spyOn(backupManager.s3Client, 'send')
+            jest.spyOn(backupManager.s3Client, 'send')
                 .mockResolvedValue({ Contents: mockBackups });
 
             const deleteBackupSpy = jest.spyOn(backupManager, 'deleteBackup')

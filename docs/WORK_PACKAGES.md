@@ -217,6 +217,24 @@ Verification protocol: the engineer has no live credentials. Each package's exit
 > Lead verification: 49 suites / 1220 tests green; rule explicitly enabled at `eslint.config.js:30` and the `{ cause }` fix confirmed at `tokenManager.js:105`; `baseline-browser-mapping` gone from package.json (remaining lockfile entries are legitimately transitive); `.gitattributes` in place with a correct explanatory comment; 124 entries fully staged, zero unstaged. The `preserve-caught-error` self-correction — discovering the WP-8 sighting came from the transient `@eslint/js@10`/`eslint@9` mismatch and refusing to report an inert fix as done — is the standout of the entire engagement and exactly the standard this process was built for. The `@eslint/js`-must-move-with-`eslint` caveat is recorded in DEPENDENCIES lore via this note.
 >
 > **Engagement closed.** Everything is staged for the owner's Phase 0 landing commit. Owner actions: review → commit → push (first CI run) → enable Actions if prompted → install Renovate app → merge its onboarding PR. Engineer stands down until the Phase 1 client-server design document is implementation-ready.
+>
+> **2026-08-15 later:** Owner committed and pushed; **first CI run green in 27s** (after the lead removed the orphaned `.git/hooks/pre-commit` script the old `pre-commit install` had left in local git state — unreachable from the repo, so no package could have caught it).
+
+---
+
+## WP-8.2 — First-CI-run warnings  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15]
+
+> Lead verification: 49 suites / 1222 tests green; eslint exit 0 with zero output; all four action call sites on v5; the `cleanupError` fix confirmed in source with both errors carried; `_next` + `argsIgnorePattern` confirmed; no scratch files. The spec's own miss (7 test warnings, not 6) was caught and covered — the "zero annotations" exit criterion did its job. Both Spotify catch-site decisions approved with their rationale (debug-level probe log; documented swallow backed by the WP-5 auth gate). The two unverifiable-locally items (v5 actions against the live runner; Renovate's `github-actions` manager) are correctly scoped as watch-items for the owner's next push and Renovate's first run. Final tally: the pipeline caught a seven-package-old registered bug on its first run, and the fix now carries the regression test that was always missing.
+
+CI's first live run passed but emitted 12 warnings. Clear them all — one is a real bug:
+
+1. **Action versions:** `actions/checkout@v4` and `actions/setup-node@v4` run on the deprecated Node 20 action runtime — bump both to their current major versions.
+2. **The real bug — `dbBackupManager.js:82`:** unused `cleanupError` is the baseline review's "failure-cleanup logs the wrong variable" finding (P1 register, agent-2 item 8) still alive: the catch logs the outer `error` instead of the cleanup's own failure. Fix the log to use `cleanupError` (both errors are worth logging — the original and the cleanup failure).
+3. **`apiServer.js:48` unused `next`:** Express identifies error middleware by its 4-arg signature, so the param must stay — rename to `_next` and add `argsIgnorePattern: '^_'` (and `caughtErrorsIgnorePattern: '^_'`) to the eslint config so intentional-unused is expressible.
+4. **`spotifyManager.js:197,233` unused `error`:** decide per site — if the failure is worth a debug log, log it; if genuinely ignorable, use optional catch binding (`catch {`) with a comment saying why it's safe to swallow.
+5. **The 6 test-file unused imports/vars:** delete them.
+
+Exit: CI run with **zero annotations**; suite green; standalone report noting which spotify sites got logs vs. suppression and why.
 
 Three small items, one package, standalone report:
 

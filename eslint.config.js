@@ -22,7 +22,12 @@ module.exports = [
             'linebreak-style': ['error', 'unix'],
             quotes: ['error', 'single'],
             semi: ['error', 'always'],
-            'no-unused-vars': 'warn',
+            // A leading underscore marks a binding that must exist but is not
+            // used - Express middleware arity, for instance.
+            'no-unused-vars': ['warn', {
+                argsIgnorePattern: '^_',
+                caughtErrorsIgnorePattern: '^_'
+            }],
             'no-console': 'off',
 
             // Enabled explicitly: it only joins eslint:recommended at @eslint/js v10,

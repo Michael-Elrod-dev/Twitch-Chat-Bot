@@ -265,7 +265,6 @@ describe('RedemptionManager', () => {
 
     describe('Integration scenarios', () => {
         it('should handle complete redemption flow', async () => {
-            const mockHandler = jest.fn().mockResolvedValue(true);
             const mockResponse = {
                 ok: true,
                 json: jest.fn().mockResolvedValue({ data: [] })

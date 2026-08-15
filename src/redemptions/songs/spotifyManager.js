@@ -194,7 +194,15 @@ class SpotifyManager {
                 logger.info('SpotifyManager', 'Existing Spotify user auth valid');
                 this.authValid = true;
                 return true;
-            } catch (error) {
+            } catch (probeError) {
+                // Usually just an expired token, which the refresh below handles -
+                // but the reason matters when auth is actually dying, so keep it at
+                // debug rather than discarding it.
+                logger.debug('SpotifyManager', 'Spotify probe failed, attempting refresh', {
+                    error: probeError.message,
+                    statusCode: probeError.statusCode
+                });
+
                 try {
                     const data = await this.spotifyApi.refreshAccessToken();
                     this.spotifyApi.setAccessToken(data.body['access_token']);
@@ -230,7 +238,11 @@ class SpotifyManager {
             }
 
             return state.body.is_playing ? 'PLAYING' : 'PAUSED';
-        } catch (error) {
+        } catch {
+            // Safe to swallow: 'CLOSED' is the correct answer to "can we see
+            // playback right now?" for every failure mode here, and this runs on a
+            // 3s poll from two loops - logging would flood on any sustained outage.
+            // Genuine auth death is surfaced separately by authenticate().
             return 'CLOSED';
         }
     }

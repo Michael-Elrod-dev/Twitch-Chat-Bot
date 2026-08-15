@@ -163,4 +163,46 @@ describe('DbBackupManager - dump verification', () => {
                 .toBeLessThan(upload.mock.invocationCallOrder[0]);
         });
     });
+
+    describe('failure-path logging', () => {
+        beforeEach(() => {
+            backupManager.tempBackupDir = tempDir;
+        });
+
+        it('should log the CLEANUP failure, not the backup failure twice', async () => {
+            const logger = require('../../src/logger/logger');
+            jest.spyOn(backupManager, 'verifyBackup')
+                .mockRejectedValue(new Error('Backup verification failed'));
+            jest.spyOn(realFs, 'unlink')
+                .mockRejectedValue(new Error('EBUSY: file is locked'));
+
+            await backupManager.createBackup('test');
+
+            // This logged the backup error a second time and dropped the cleanup
+            // failure entirely - so a locked temp file was invisible in the logs.
+            expect(logger.error).toHaveBeenCalledWith(
+                'DbBackupManager',
+                'Cleanup failed',
+                expect.objectContaining({
+                    error: 'EBUSY: file is locked',
+                    originalError: 'Backup verification failed'
+                })
+            );
+        });
+
+        it('should still report the backup failure separately', async () => {
+            const logger = require('../../src/logger/logger');
+            jest.spyOn(backupManager, 'verifyBackup')
+                .mockRejectedValue(new Error('Backup verification failed'));
+
+            const result = await backupManager.createBackup('test');
+
+            expect(result).toBe(false);
+            expect(logger.error).toHaveBeenCalledWith(
+                'DbBackupManager',
+                'Backup failed',
+                expect.objectContaining({ error: 'Backup verification failed' })
+            );
+        });
+    });
 });

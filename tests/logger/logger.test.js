@@ -1,8 +1,5 @@
 jest.unmock('../../src/logger/logger');
 
-const winston = require('winston');
-const path = require('path');
-const fs = require('fs');
 
 const mockConfig = {
     isDebugMode: false,

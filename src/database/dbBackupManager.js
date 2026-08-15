@@ -80,10 +80,14 @@ class DbBackupManager {
             try {
                 await fs.unlink(localPath);
             } catch (cleanupError) {
+                // Two distinct facts: why the backup failed, and why we then could
+                // not remove its partial file. This used to log the backup error
+                // twice and drop the cleanup failure entirely.
                 logger.error('DbBackupManager', 'Cleanup failed', {
                     reason,
-                    error: error.message,
-                    stack: error.stack
+                    error: cleanupError.message,
+                    stack: cleanupError.stack,
+                    originalError: error.message
                 });
             }
 

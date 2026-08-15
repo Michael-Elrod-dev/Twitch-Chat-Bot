@@ -45,7 +45,9 @@ class ApiServer {
             });
         });
 
-        this.app.use((err, req, res, next) => {
+        // Express identifies error middleware by arity, so the 4th parameter has
+        // to stay even though nothing calls it.
+        this.app.use((err, req, res, _next) => {
             logger.error('API', 'Unhandled error', {
                 error: err.message,
                 stack: err.stack,
