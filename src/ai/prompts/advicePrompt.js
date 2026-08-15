@@ -1,5 +1,3 @@
-// src/ai/prompts/advicePrompt.js
-
 module.exports = `This prompt specifically is in response to a user using the !advice command.
 
 Your task:

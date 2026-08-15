@@ -1,5 +1,3 @@
-// tests/bot/bot.discord.test.js
-
 const Bot = require('../../src/bot');
 
 jest.mock('../../src/config/config', () => ({

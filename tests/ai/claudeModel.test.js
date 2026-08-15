@@ -1,14 +1,16 @@
-// tests/ai/claudeModel.test.js
-
 const ClaudeModel = require('../../src/ai/models/claudeModel');
 
 jest.mock('node-fetch');
+
+// Reads the real pin instead of restating it: this file sat two model
+// generations behind config for months because it declared its own value.
+const realConfig = jest.requireActual('../../src/config/config');
 
 jest.mock('../../src/config/config', () => ({
     claudeApiEndpoint: 'https://api.anthropic.com/v1',
     aiModels: {
         claude: {
-            model: 'claude-3-5-sonnet-20241022',
+            model: jest.requireActual('../../src/config/config').aiModels.claude.model,
             apiVersion: '2023-06-01',
             maxTokens: 1024,
             temperature: 1.0
@@ -59,7 +61,7 @@ describe('ClaudeModel', () => {
                         'anthropic-version': '2023-06-01',
                         'content-type': 'application/json'
                     },
-                    body: expect.stringContaining('"model":"claude-3-5-sonnet-20241022"')
+                    body: expect.stringContaining(`"model":"${realConfig.aiModels.claude.model}"`)
                 })
             );
 

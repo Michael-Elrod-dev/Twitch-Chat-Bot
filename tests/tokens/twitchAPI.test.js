@@ -1,5 +1,3 @@
-// tests/tokens/twitchAPI.test.js
-
 const TwitchAPI = require('../../src/tokens/twitchAPI');
 
 jest.mock('node-fetch');
@@ -32,55 +30,6 @@ describe('TwitchAPI', () => {
     describe('constructor', () => {
         it('should initialize with token manager', () => {
             expect(twitchAPI.tokenManager).toBe(mockTokenManager);
-        });
-    });
-
-    describe('getChannelId', () => {
-        it('should fetch channel ID successfully', async () => {
-            const mockResponse = {
-                ok: true,
-                status: 200,
-                statusText: 'OK',
-                json: jest.fn().mockResolvedValue({
-                    data: [{
-                        id: '123456',
-                        login: 'testuser',
-                        display_name: 'TestUser'
-                    }]
-                })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            const result = await twitchAPI.getChannelId('testuser');
-
-            expect(result).toBe('123456');
-            expect(fetch).toHaveBeenCalledWith(
-                'https://api.twitch.tv/helix/users?login=testuser',
-                expect.objectContaining({
-                    headers: expect.objectContaining({
-                        'Client-Id': 'test-client-id-caps',
-                        'Authorization': 'Bearer test-access-token'
-                    })
-                })
-            );
-        });
-
-        it('should throw error when user not found', async () => {
-            const mockResponse = {
-                ok: true,
-                json: jest.fn().mockResolvedValue({ data: [] })
-            };
-            fetch.mockResolvedValue(mockResponse);
-
-            await expect(twitchAPI.getChannelId('nonexistentuser')).rejects.toThrow('User not found');
-        });
-
-        it('should handle network error', async () => {
-            const networkError = new Error('Network request failed');
-            networkError.stack = 'Error stack';
-            fetch.mockRejectedValue(networkError);
-
-            await expect(twitchAPI.getChannelId('testuser')).rejects.toThrow('Network request failed');
         });
     });
 

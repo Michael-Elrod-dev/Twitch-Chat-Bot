@@ -1,5 +1,3 @@
-// src/analytics/analyticsManager.js
-
 const ViewerTracker = require('./viewers/viewerTracker');
 const logger = require('../logger/logger');
 

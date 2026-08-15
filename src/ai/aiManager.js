@@ -1,11 +1,13 @@
-// src/ai/aiManager.js
-
 const config = require('../config/config');
 const RateLimiter = require('./rateLimiter');
 const PromptBuilder = require('./promptBuilder');
 const ContextBuilder = require('./contextBuilder');
 const ClaudeModel = require('./models/claudeModel');
 const logger = require('../logger/logger');
+
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 class AIManager {
     constructor() {
@@ -119,10 +121,14 @@ class AIManager {
 
 
     shouldTriggerText(message) {
+        // A command is a command even if it names the bot: "!stats almosthadai"
+        // used to be swallowed by the AI path and burn the user's rate limit.
+        if (message.trimStart().startsWith('!')) {
+            return false;
+        }
+
         const lowerMessage = message.toLowerCase();
-        return config.aiTriggers.text.some(trigger =>
-            lowerMessage.includes(trigger) || lowerMessage.startsWith(trigger)
-        );
+        return config.aiTriggers.text.some(trigger => lowerMessage.includes(trigger));
     }
 
 
@@ -130,8 +136,12 @@ class AIManager {
         let prompt = message;
 
         if (triggerType === 'text') {
-            prompt = prompt.replace(/@almosthadai/gi, '').trim();
-            prompt = prompt.replace(/almosthadai/gi, '').trim();
+            // Driven by config.aiTriggers rather than a second hardcoded copy of
+            // the bot name, so the trigger list has exactly one source of truth.
+            for (const trigger of config.aiTriggers.text) {
+                prompt = prompt.split(new RegExp(escapeRegExp(trigger), 'gi')).join(' ');
+            }
+            prompt = prompt.replace(/\s+/g, ' ').trim();
         }
 
         return prompt || null;

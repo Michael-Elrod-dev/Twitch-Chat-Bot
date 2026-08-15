@@ -1,5 +1,3 @@
-// tests/redis/queueManager.test.js
-
 const QueueManager = require('../../src/redis/queueManager');
 
 jest.mock('../../src/config/config', () => ({
@@ -148,13 +146,17 @@ describe('QueueManager', () => {
         });
 
         it('should pop multiple messages when count specified', async () => {
-            mockClient.lpop
-                .mockResolvedValueOnce('{"data":"msg1","timestamp":1,"attempts":0}')
-                .mockResolvedValueOnce('{"data":"msg2","timestamp":2,"attempts":0}')
-                .mockResolvedValueOnce('{"data":"msg3","timestamp":3,"attempts":0}')
-                .mockResolvedValueOnce(null);
+            // Redis 6.2+ returns the whole slice from a single counted LPOP.
+            mockClient.lpop.mockResolvedValueOnce([
+                '{"data":"msg1","timestamp":1,"attempts":0}',
+                '{"data":"msg2","timestamp":2,"attempts":0}',
+                '{"data":"msg3","timestamp":3,"attempts":0}'
+            ]);
 
             const result = await queueManager.pop('queue', 5);
+
+            expect(mockClient.lpop).toHaveBeenCalledTimes(1);
+            expect(mockClient.lpop).toHaveBeenCalledWith('queue:queue', 5);
 
             expect(result).toHaveLength(3);
             expect(result[0].data).toBe('msg1');
@@ -216,12 +218,13 @@ describe('QueueManager', () => {
             expect(result).toBe(0);
         });
 
-        it('should handle Redis errors gracefully', async () => {
+        it('should report an unreadable length as unknown, not drained', async () => {
             mockClient.llen.mockRejectedValue(new Error('Llen failed'));
 
             const result = await queueManager.getQueueLength('queue');
 
-            expect(result).toBe(0);
+            // 0 would be indistinguishable from a fully drained queue.
+            expect(result).toBeNull();
         });
     });
 

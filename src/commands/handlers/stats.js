@@ -1,5 +1,3 @@
-// src/commands/handlers/stats.js
-
 const logger = require('../../logger/logger');
 
 function statsHandlers() {

@@ -1,14 +1,17 @@
-// src/database/dbBackupManager.js
-
 const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const config = require('../config/config');
 const logger = require('../logger/logger');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+// A dump smaller than this cannot contain a real schema, let alone data.
+const MIN_BACKUP_BYTES = 1024;
+// mysqldump writes this only after a clean finish, so its absence means truncation.
+const DUMP_COMPLETE_MARKER = '-- Dump completed';
 
 
 class DbBackupManager {
@@ -42,16 +45,15 @@ class DbBackupManager {
 
             await fs.mkdir(this.tempBackupDir, { recursive: true });
 
-            const dumpCommand = this.buildMysqldumpCommand(localPath);
+            const { args, env } = this.buildMysqldumpInvocation(localPath);
 
             logger.debug('DbBackupManager', 'Executing mysqldump');
-            await execAsync(dumpCommand);
+            await execFileAsync('mysqldump', args, { env });
 
-            const stats = await fs.stat(localPath);
-            logger.debug('DbBackupManager', 'Backup file created', {
-                size: stats.size,
-                path: localPath
-            });
+            // Nothing is uploaded and nothing is rotated unless the dump verifies.
+            // A silently-empty dump used to upload happily and then rotate away the
+            // last known-good backup.
+            await this.verifyBackup(localPath);
 
             await this.uploadToS3(localPath, s3Key);
 
@@ -89,9 +91,59 @@ class DbBackupManager {
         }
     }
 
-    buildMysqldumpCommand(outputPath) {
+    /**
+     * execFile (no shell) with the password in MYSQL_PWD and --result-file instead
+     * of shell redirection. Removes the injection/exposure surface of interpolating
+     * the password into a command line, and avoids PowerShell writing UTF-16.
+     */
+    buildMysqldumpInvocation(outputPath) {
         const dbConfig = config.database;
-        return `mysqldump -h ${dbConfig.host} -P ${dbConfig.port} -u ${dbConfig.user} -p${dbConfig.password} ${dbConfig.database} > "${outputPath}"`;
+
+        return {
+            args: [
+                '-h', String(dbConfig.host),
+                '-P', String(dbConfig.port),
+                '-u', String(dbConfig.user),
+                `--result-file=${outputPath}`,
+                String(dbConfig.database)
+            ],
+            env: { ...process.env, MYSQL_PWD: dbConfig.password }
+        };
+    }
+
+    async verifyBackup(localPath) {
+        const stats = await fs.stat(localPath);
+
+        if (stats.size < MIN_BACKUP_BYTES) {
+            throw new Error(
+                `Backup verification failed: file is ${stats.size} bytes, below the ${MIN_BACKUP_BYTES} byte floor`
+            );
+        }
+
+        const tail = await this.readTail(localPath);
+        if (!tail.includes(DUMP_COMPLETE_MARKER)) {
+            throw new Error('Backup verification failed: dump is missing its completion marker');
+        }
+
+        logger.info('DbBackupManager', 'Backup verified', {
+            size: stats.size,
+            path: localPath
+        });
+
+        return true;
+    }
+
+    async readTail(localPath, bytes = 4096) {
+        const handle = await fs.open(localPath, 'r');
+        try {
+            const { size } = await handle.stat();
+            const length = Math.min(bytes, size);
+            const buffer = Buffer.alloc(length);
+            await handle.read(buffer, 0, length, size - length);
+            return buffer.toString('utf8');
+        } finally {
+            await handle.close();
+        }
     }
 
     async uploadToS3(localPath, s3Key) {

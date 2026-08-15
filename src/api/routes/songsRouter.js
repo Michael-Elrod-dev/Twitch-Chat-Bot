@@ -1,5 +1,3 @@
-// src/api/routes/songsRouter.js
-
 const express = require('express');
 const logger = require('../../logger/logger');
 

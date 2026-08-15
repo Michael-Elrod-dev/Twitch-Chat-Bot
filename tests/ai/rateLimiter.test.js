@@ -1,5 +1,3 @@
-// tests/ai/rateLimiter.test.js
-
 const RateLimiter = require('../../src/ai/rateLimiter');
 
 jest.mock('../../src/config/config', () => ({

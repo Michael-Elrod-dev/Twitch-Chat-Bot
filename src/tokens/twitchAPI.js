@@ -1,5 +1,3 @@
-// src/tokens/twitchAPI.js
-
 const fetch = require('node-fetch');
 const config = require('../config/config');
 const logger = require('../logger/logger');
@@ -8,45 +6,6 @@ class TwitchAPI {
     constructor(tokenManager) {
         this.tokenManager = tokenManager;
         logger.debug('TwitchAPI', 'TwitchAPI instance created');
-    }
-
-    async getChannelId(username) {
-        try {
-            logger.debug('TwitchAPI', 'Fetching channel ID', { username });
-
-            const response = await fetch(`${config.twitchApiEndpoint}/users?login=${username}`, {
-                headers: {
-                    'Authorization': `Bearer ${this.tokenManager.tokens.AccessToken}`,
-                    'Client-Id': this.tokenManager.tokens.ClientID
-                }
-            });
-
-            logger.debug('TwitchAPI', 'Received response for channel ID', {
-                username,
-                status: response.status,
-                statusText: response.statusText
-            });
-
-            const data = await response.json();
-            if (data.data && data.data[0]) {
-                const channelId = data.data[0].id;
-                logger.info('TwitchAPI', 'Successfully retrieved channel ID', {
-                    username,
-                    channelId
-                });
-                return channelId;
-            }
-
-            logger.warn('TwitchAPI', 'User not found', { username });
-            throw new Error('User not found');
-        } catch (error) {
-            logger.error('TwitchAPI', 'Failed to get channel ID', {
-                error: error.message,
-                stack: error.stack,
-                username
-            });
-            throw error;
-        }
     }
 
     async getStreamByUserName(username) {

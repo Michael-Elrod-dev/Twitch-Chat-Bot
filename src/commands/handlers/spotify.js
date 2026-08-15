@@ -1,5 +1,3 @@
-// src/commands/handlers/spotify.js
-
 const logger = require('../../logger/logger');
 
 function spotifyHandlers(dependencies) {
@@ -114,7 +112,6 @@ function spotifyHandlers(dependencies) {
         },
 
         async skipSong(twitchBot, channel, context) {
-            if (!context.mod && !context.badges?.broadcaster) return;
             try {
                 await spotifyManager.ensureTokenValid();
                 const state = await spotifyManager.getPlaybackState();
@@ -151,7 +148,6 @@ function spotifyHandlers(dependencies) {
 
         async toggleSongs(twitchBot, channel, context, args) {
             try {
-                if (!context.mod && !context.badges?.broadcaster) return;
 
                 if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
                     await twitchBot.sendMessage(channel, 'Usage: !songs <on|off>');
@@ -181,5 +177,10 @@ function spotifyHandlers(dependencies) {
         }
     };
 }
+
+spotifyHandlers.levels = {
+    skipSong: 'mod',
+    toggleSongs: 'mod'
+};
 
 module.exports = spotifyHandlers;

@@ -1,5 +1,3 @@
-// tests/redis/redisManager.test.js
-
 const RedisManager = require('../../src/redis/redisManager');
 
 jest.mock('ioredis');

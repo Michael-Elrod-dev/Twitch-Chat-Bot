@@ -1,5 +1,3 @@
-// tests/websocket/subscriptionManager.test.js
-
 const SubscriptionManager = require('../../src/websocket/subscriptionManager');
 
 jest.mock('node-fetch');

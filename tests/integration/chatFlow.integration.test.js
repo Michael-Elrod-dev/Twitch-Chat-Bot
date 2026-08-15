@@ -1,5 +1,3 @@
-// tests/integration/chatFlow.integration.test.js
-
 const ChatMessageHandler = require('../../src/messages/chatMessageHandler');
 const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 

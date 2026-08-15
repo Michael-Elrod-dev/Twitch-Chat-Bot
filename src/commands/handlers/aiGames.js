@@ -1,5 +1,3 @@
-// src/commands/handlers/aiGames.js
-
 const logger = require('../../logger/logger');
 
 function aiGameHandlers() {

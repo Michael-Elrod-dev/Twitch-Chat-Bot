@@ -1,13 +1,12 @@
-// src/commands/handlers/ai.js
-
 const logger = require('../../logger/logger');
 
-function aiHandlers() {
+const AI_ENABLED_CACHE_KEY = 'cache:settings:aiEnabled';
+
+function aiHandlers(dependencies = {}) {
     return {
         async toggleAI(twitchBot, channel, context, args) {
             try {
-                if (!context.mod && !context.badges?.broadcaster) return;
-
+    
                 if (!args[0] || (args[0].toLowerCase() !== 'on' && args[0].toLowerCase() !== 'off')) {
                     await twitchBot.sendMessage(channel, 'Usage: !ai <on|off>');
                     return;
@@ -32,6 +31,13 @@ function aiHandlers() {
                 `;
                 await twitchBot.analyticsManager.dbManager.query(updateStateSql, [enable.toString(), enable.toString()]);
 
+                // Without this the toggle took up to the cache TTL to take effect.
+                const redisManager = dependencies.redisManager || twitchBot.redisManager;
+                if (redisManager && redisManager.connected()) {
+                    await redisManager.getCacheManager().del(AI_ENABLED_CACHE_KEY);
+                    logger.debug('AIHandlers', 'Invalidated AI enabled cache');
+                }
+
                 await twitchBot.sendMessage(channel, `AI responses have been turned ${enable ? 'on' : 'off'}`);
                 logger.info('AIHandlers', 'AI responses toggled', {
                     channel,
@@ -45,5 +51,9 @@ function aiHandlers() {
         }
     };
 }
+
+aiHandlers.levels = {
+    toggleAI: 'mod'
+};
 
 module.exports = aiHandlers;

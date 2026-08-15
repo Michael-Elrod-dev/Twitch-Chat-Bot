@@ -1,5 +1,3 @@
-// src/redemptions/quotes/quoteManager.js
-
 const logger = require('../../logger/logger');
 
 class QuoteManager {

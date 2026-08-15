@@ -1,6 +1,3 @@
-// tests/bot/bot.backup.test.js
-
-
 const Bot = require('../../src/bot');
 
 jest.mock('../../src/database/dbBackupManager');
@@ -46,6 +43,7 @@ const DebugDbSetup = require('../../src/database/debugDbSetup');
 const TokenManager = require('../../src/tokens/tokenManager');
 const TwitchAPI = require('../../src/tokens/twitchAPI');
 const CommandManager = require('../../src/commands/commandManager');
+const AnalyticsManager = require('../../src/analytics/analyticsManager');
 const config = require('../../src/config/config');
 
 describe('Bot - Database Backup Integration', () => {
@@ -101,10 +99,27 @@ describe('Bot - Database Backup Integration', () => {
         };
         TwitchAPI.mockImplementation(() => mockTwitchAPI);
 
+        // The automock leaves `viewerTracker` undefined, which makes
+        // handleStreamOffline throw before it clears its intervals - leaking a real
+        // 60s viewer-tracking interval and hanging Jest. Model the real shape instead.
+        AnalyticsManager.mockImplementation(() => ({
+            init: jest.fn().mockResolvedValue(undefined),
+            trackStreamStart: jest.fn().mockResolvedValue(undefined),
+            trackStreamEnd: jest.fn().mockResolvedValue(undefined),
+            trackChatMessage: jest.fn().mockResolvedValue(undefined),
+            viewerTracker: {
+                endAllSessionsForStream: jest.fn().mockResolvedValue(undefined),
+                processViewerList: jest.fn().mockResolvedValue(undefined)
+            }
+        }));
+
         bot = new Bot();
     });
 
     afterEach(() => {
+        clearInterval(bot.viewerTrackingInterval);
+        clearInterval(bot.backupInterval);
+        clearTimeout(bot.shutdownTimer);
         jest.useRealTimers();
     });
 
@@ -121,7 +136,8 @@ describe('Bot - Database Backup Integration', () => {
 
     describe('startDatabaseBackups', () => {
         beforeEach(async () => {
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
@@ -196,22 +212,17 @@ describe('Bot - Database Backup Integration', () => {
     });
 
     describe('handleStreamOffline - backup interval cleanup', () => {
+        // Stays on the file-wide fake timers: under real timers bot.init() and the
+        // offline transition create genuine long-lived intervals/timeouts that
+        // outlive the test and keep the Jest process alive.
         beforeEach(async () => {
-            jest.useRealTimers();
-
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
             });
             await bot.init();
-        });
-
-        afterEach(() => {
-            if (bot.backupInterval) {
-                clearInterval(bot.backupInterval);
-            }
-            jest.useFakeTimers();
         });
 
         it('should clear backup interval when stream goes offline', async () => {
@@ -224,6 +235,11 @@ describe('Bot - Database Backup Integration', () => {
 
         it('should not create backups after interval is cleared', async () => {
             await bot.handleStreamOffline();
+
+            // Scoped to the hourly backup interval - cancel the auto-shutdown timer
+            // the offline transition arms, whose expiry would take a final backup.
+            clearTimeout(bot.shutdownTimer);
+            bot.shutdownTimer = null;
             jest.clearAllMocks();
 
             jest.advanceTimersByTime(3600000);
@@ -235,7 +251,8 @@ describe('Bot - Database Backup Integration', () => {
 
     describe('gracefulShutdown - final backup', () => {
         beforeEach(async () => {
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
@@ -324,7 +341,8 @@ describe('Bot - Database Backup Integration', () => {
         });
 
         it('should handle complete lifecycle: start -> backup -> shutdown', async () => {
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
@@ -347,7 +365,8 @@ describe('Bot - Database Backup Integration', () => {
         it('should not create backups in debug mode throughout lifecycle', async () => {
             config.isDebugMode = true;
 
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             await bot.init();
 
             expect(mockBackupManager.createBackup).not.toHaveBeenCalled();
@@ -363,7 +382,8 @@ describe('Bot - Database Backup Integration', () => {
         });
 
         it('should stop scheduled backups when stream goes offline', async () => {
-            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ id: 'stream-123' });
+            // The real wrapper returns {startDate, viewer_count} - it has never had an id.
+            mockTwitchAPI.getStreamByUserName.mockResolvedValue({ startDate: '2026-01-01T00:00:00Z', viewer_count: 12 });
             mockTwitchAPI.getChannelInfo.mockResolvedValue({
                 title: 'Test Stream',
                 game_name: 'Testing'
@@ -372,6 +392,12 @@ describe('Bot - Database Backup Integration', () => {
             jest.clearAllMocks();
 
             await bot.handleStreamOffline();
+
+            // The offline transition also arms the auto-shutdown timer, whose expiry
+            // legitimately takes a final backup. Cancel it so this test stays scoped
+            // to the hourly scheduled backup.
+            clearTimeout(bot.shutdownTimer);
+            bot.shutdownTimer = null;
 
             jest.advanceTimersByTime(3600000);
             await Promise.resolve();

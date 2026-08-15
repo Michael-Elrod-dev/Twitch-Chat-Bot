@@ -1,5 +1,3 @@
-// src/bot.js
-
 const config = require('./config/config');
 const logger = require('./logger/logger');
 const AIManager = require('./ai/aiManager');
@@ -34,6 +32,7 @@ class Bot {
         this.currentStreamId = null;
         this.channelName = config.channelName;
         this.shutdownTimer = null;
+        this.shutdownWarningTimers = [];
         this.tokenRefreshInterval = null;
         this.backupInterval = null;
         this.backupManager = new DbBackupManager();
@@ -73,7 +72,7 @@ class Bot {
 
             logger.debug('Bot', 'Initializing token manager');
             this.tokenManager = new TokenManager();
-            await this.tokenManager.init(this.dbManager, this.redisManager);
+            await this.tokenManager.init(this.dbManager);
 
             logger.debug('Bot', 'Initializing Twitch API');
             this.twitchAPI = new TwitchAPI(this.tokenManager);
@@ -112,22 +111,16 @@ class Bot {
     async startMinimalOperation() {
         logger.info('Bot', 'Starting minimal operation mode');
 
-        this.webSocketManager = new WebSocketManager(
-            this.tokenManager,
-            null,
-            null,
-            this.handleStreamOffline.bind(this),
-            this.handleStreamOnline.bind(this),
-            this.handleFollow.bind(this)
-        );
+        this.webSocketManager = new WebSocketManager({
+            tokenManager: this.tokenManager,
+            onChatMessage: null,
+            onRedemption: null,
+            onStreamOnline: this.handleStreamOnline.bind(this),
+            onStreamOffline: this.handleStreamOffline.bind(this),
+            onFollow: this.handleFollow.bind(this)
+        });
 
-        this.webSocketManager.onSessionReady = async (sessionId) => {
-            logger.debug('Bot', 'WebSocket session ready in minimal mode', { sessionId });
-            this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
-            await this.subscriptionManager.subscribeToStreamOnline();
-            await this.subscriptionManager.subscribeToStreamOffline();
-            await this.subscriptionManager.subscribeToChannelFollow();
-        };
+        this.attachSessionCallbacks();
 
         await this.webSocketManager.connect();
 
@@ -142,6 +135,54 @@ class Bot {
         }, config.tokenRefreshInterval);
 
         logger.info('Bot', 'Minimal operation mode active - waiting for stream to go live');
+    }
+
+    attachSessionCallbacks() {
+        // A brand-new session has no subscriptions - build them for the current mode.
+        this.webSocketManager.onSessionReady = (sessionId) => this.resubscribeAll(sessionId);
+
+        // A reconnect_url session inherits the old session's subscriptions, so only
+        // the id needs to move across - resubscribing would duplicate them.
+        this.webSocketManager.onSessionMoved = (sessionId) => {
+            logger.info('Bot', 'EventSub session moved, subscriptions carried over', { sessionId });
+            this.getSubscriptionManager(sessionId);
+        };
+    }
+
+    /**
+     * One long-lived SubscriptionManager. Replacing it would orphan the session id
+     * that unsubscribe calls match against, so the id is updated in place.
+     */
+    getSubscriptionManager(sessionId) {
+        if (!this.subscriptionManager) {
+            this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
+        } else {
+            this.subscriptionManager.setSessionId(sessionId);
+        }
+        return this.subscriptionManager;
+    }
+
+    async resubscribeAll(sessionId) {
+        logger.info('Bot', 'Establishing EventSub subscriptions', {
+            sessionId,
+            mode: this.isStreaming ? 'full' : 'minimal'
+        });
+
+        const subscriptionManager = this.getSubscriptionManager(sessionId);
+
+        await subscriptionManager.subscribeToStreamOnline();
+        await subscriptionManager.subscribeToStreamOffline();
+        await subscriptionManager.subscribeToChannelFollow();
+
+        if (this.isStreaming) {
+            await subscriptionManager.subscribeToChatEvents();
+            await subscriptionManager.subscribeToChannelPoints();
+        }
+
+        logger.info('Bot', 'EventSub subscriptions established', {
+            sessionId,
+            mode: this.isStreaming ? 'full' : 'minimal'
+        });
     }
 
     async startFullOperation() {
@@ -162,9 +203,8 @@ class Bot {
 
             if (this.shutdownTimer) {
                 logger.info('Bot', 'Stream came back online! Cancelling auto-shutdown timer');
-                clearTimeout(this.shutdownTimer);
-                this.shutdownTimer = null;
             }
+            this.clearShutdownTimer();
 
             logger.debug('Bot', 'Initializing analytics manager');
             this.analyticsManager = new AnalyticsManager();
@@ -202,13 +242,28 @@ class Bot {
                 streamCategory
             );
 
+            // Reused across stream cycles: the instance carries Spotify OAuth state,
+            // the cached requests-playlist id, and the last/previous track that
+            // !lastsong reads. Rebuilding would discard all of it and reintroduce the
+            // risk of an orphaned instance still polling. start() is idempotent.
             logger.debug('Bot', 'Initializing Spotify manager');
-            this.spotifyManager = new SpotifyManager(this.tokenManager);
+            if (!this.spotifyManager) {
+                this.spotifyManager = new SpotifyManager(this.tokenManager);
+            }
             await this.spotifyManager.init(this.dbManager);
-            await this.spotifyManager.authenticate();
+            const spotifyAuthenticated = await this.spotifyManager.authenticate();
+
+            if (spotifyAuthenticated) {
+                this.spotifyManager.start();
+            } else {
+                // Song redemptions still refund gracefully; only the pollers stop.
+                logger.warn('Bot', 'Spotify authorization invalid - song monitors disabled for this stream');
+            }
 
             logger.debug('Bot', 'Initializing song toggle service');
-            this.songToggleService = new SongToggleService(this.twitchAPI);
+            if (!this.songToggleService) {
+                this.songToggleService = new SongToggleService(this.twitchAPI);
+            }
 
             logger.debug('Bot', 'Initializing command manager');
             this.commandManager = CommandManager.createWithDependencies({
@@ -220,11 +275,19 @@ class Bot {
             await this.commandManager.init(this.dbManager, this.redisManager);
 
             logger.debug('Bot', 'Initializing message sender');
-            this.messageSender = new MessageSender(this.tokenManager);
+            if (!this.messageSender) {
+                this.messageSender = new MessageSender(this.tokenManager);
+            }
 
             if (config.apiEnabled) {
+                // Built once and left listening across stream cycles. It is a
+                // loopback control surface for the Stream Deck, so rebuilding it
+                // every cycle bought nothing and collided on its own port; it is
+                // stopped only on graceful shutdown.
                 logger.debug('Bot', 'Initializing API server');
-                this.apiServer = new ApiServer(config, this.songToggleService, this.messageSender);
+                if (!this.apiServer) {
+                    this.apiServer = new ApiServer(config, this.songToggleService, this.messageSender);
+                }
                 try {
                     await this.apiServer.start();
                 } catch (error) {
@@ -253,10 +316,14 @@ class Bot {
 
             if (this.webSocketManager) {
                 logger.debug('Bot', 'Reusing existing WebSocket connection');
-                this.webSocketManager.chatHandler = this.handleChatMessage.bind(this);
-                this.webSocketManager.redemptionHandler = this.handleRedemption.bind(this);
-                this.webSocketManager.followHandler = this.handleFollow.bind(this);
+                this.webSocketManager.onChatMessage = this.handleChatMessage.bind(this);
+                this.webSocketManager.onRedemption = this.handleRedemption.bind(this);
+                this.webSocketManager.onFollow = this.handleFollow.bind(this);
 
+                // Deliberately not resubscribeAll(): the session is already live with
+                // its lifecycle subscriptions intact, so this is an incremental ADD of
+                // the two streaming-only subscriptions, not a rebuild. resubscribeAll
+                // is for a fresh session id, where everything must be recreated.
                 if (this.subscriptionManager) {
                     await this.subscriptionManager.subscribeToChatEvents();
                     await this.subscriptionManager.subscribeToChannelPoints();
@@ -264,27 +331,16 @@ class Bot {
             } else {
                 logger.info('Bot', 'Creating new WebSocket connection');
 
-                this.webSocketManager = new WebSocketManager(
-                    this.tokenManager,
-                    this.handleChatMessage.bind(this),
-                    this.handleRedemption.bind(this),
-                    this.handleStreamOffline.bind(this),
-                    this.handleStreamOnline.bind(this),
-                    this.handleFollow.bind(this)
-                );
+                this.webSocketManager = new WebSocketManager({
+                    tokenManager: this.tokenManager,
+                    onChatMessage: this.handleChatMessage.bind(this),
+                    onRedemption: this.handleRedemption.bind(this),
+                    onStreamOnline: this.handleStreamOnline.bind(this),
+                    onStreamOffline: this.handleStreamOffline.bind(this),
+                    onFollow: this.handleFollow.bind(this)
+                });
 
-                this.webSocketManager.onSessionReady = async (sessionId) => {
-                    logger.debug('Bot', 'WebSocket session ready in full mode', { sessionId });
-                    if (!this.subscriptionManager) {
-                        this.subscriptionManager = new SubscriptionManager(this.tokenManager, sessionId);
-                    }
-                    this.subscriptionManager.setSessionId(sessionId);
-                    await this.subscriptionManager.subscribeToChatEvents();
-                    await this.subscriptionManager.subscribeToChannelPoints();
-                    await this.subscriptionManager.subscribeToStreamOnline();
-                    await this.subscriptionManager.subscribeToStreamOffline();
-                    await this.subscriptionManager.subscribeToChannelFollow();
-                };
+                this.attachSessionCallbacks();
 
                 await this.webSocketManager.connect();
             }
@@ -307,10 +363,48 @@ class Bot {
             }
 
         } catch (error) {
-            logger.error('Bot', 'Error during full operation startup', { error: error.message, stack: error.stack });
-            this.isStreaming = false;
+            logger.error('Bot', 'Error during full operation startup - rolling back', {
+                error: error.message,
+                stack: error.stack
+            });
+            await this.rollbackFailedStartup();
             throw error;
         }
+    }
+
+    /**
+     * Undoes a partially-completed startup so the bot lands back in a clean minimal
+     * wait rather than half-started limbo. There is no internal retry: the grace
+     * timer runs and the next stream.online event is the retry.
+     */
+    async rollbackFailedStartup() {
+        await this.runTeardownStep('stop Spotify monitors', async () => {
+            if (this.spotifyManager) {
+                this.spotifyManager.stop();
+            }
+        });
+
+        this.stopViewerTracking();
+        this.stopDatabaseBackups();
+
+        this.isStreaming = false;
+        this.currentStreamId = null;
+
+        if (this.webSocketManager) {
+            this.webSocketManager.onChatMessage = null;
+            this.webSocketManager.onRedemption = null;
+        }
+
+        await this.runTeardownStep('unsubscribe from streaming-only events', async () => {
+            if (this.subscriptionManager) {
+                await this.subscriptionManager.unsubscribeFromChatEvents();
+                await this.subscriptionManager.unsubscribeFromChannelPoints();
+            }
+        });
+
+        this.startShutdownTimer();
+
+        logger.info('Bot', 'Rolled back failed startup - waiting in minimal mode for the next stream');
     }
 
     startViewerTracking() {
@@ -441,9 +535,8 @@ class Bot {
 
         if (this.shutdownTimer) {
             logger.info('Bot', 'Stream came back online during grace period! Cancelling auto-shutdown');
-            clearTimeout(this.shutdownTimer);
-            this.shutdownTimer = null;
         }
+        this.clearShutdownTimer();
 
         await this.startFullOperation();
 
@@ -545,70 +638,102 @@ class Bot {
         }
     }
 
-    async handleStreamOffline() {
-        logger.info('Bot', 'Stream went offline. Stopping full bot functionality');
-
+    /**
+     * Runs one teardown step in isolation. A step that throws is logged and the
+     * teardown continues - previously any failure abandoned the rest, leaving the
+     * bot half torn down with its intervals still running and no shutdown timer.
+     */
+    async runTeardownStep(description, step) {
         try {
-            if (this.isStreaming && this.messageSender) {
-                try {
-                    await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
-                    logger.debug('Bot', 'Sent offline message to chat');
-                } catch (messageError) {
-                    logger.error('Bot', 'Failed to send offline message to chat', { error: messageError.message });
-                }
-            }
-
-            if (this.currentStreamId && this.analyticsManager) {
-                logger.debug('Bot', 'Ending stream session', { streamId: this.currentStreamId });
-                await this.viewerManager.endAllSessionsForStream(this.currentStreamId);
-                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
-                this.currentStreamId = null;
-            }
-
-            if (this.viewerTrackingInterval) {
-                logger.debug('Bot', 'Stopping viewer tracking');
-                clearInterval(this.viewerTrackingInterval);
-                this.viewerTrackingInterval = null;
-            }
-
-            if (this.backupInterval) {
-                logger.debug('Bot', 'Stopping database backup interval');
-                clearInterval(this.backupInterval);
-                this.backupInterval = null;
-            }
-
-            this.isStreaming = false;
-
-            if (this.webSocketManager) {
-                logger.debug('Bot', 'Removing chat and redemption handlers from WebSocket');
-                this.webSocketManager.chatHandler = null;
-                this.webSocketManager.redemptionHandler = null;
-            }
-
-            if (this.subscriptionManager) {
-                try {
-                    logger.debug('Bot', 'Unsubscribing from chat and channel point events');
-                    await this.subscriptionManager.unsubscribeFromChatEvents();
-                    await this.subscriptionManager.unsubscribeFromChannelPoints();
-                } catch (unsubError) {
-                    logger.error('Bot', 'Error unsubscribing from events', { error: unsubError.message });
-                }
-            }
-
-            logger.info('Bot', 'Bot successfully transitioned to minimal mode. Waiting for next stream');
-
-            this.startShutdownTimer();
-
+            await step();
         } catch (error) {
-            logger.error('Bot', 'Error during stream offline transition', { error: error.message, stack: error.stack });
-            this.isStreaming = false;
+            logger.error('Bot', `Teardown step failed: ${description}`, {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 
-    startShutdownTimer() {
+    stopViewerTracking() {
+        if (this.viewerTrackingInterval) {
+            logger.debug('Bot', 'Stopping viewer tracking');
+            clearInterval(this.viewerTrackingInterval);
+            this.viewerTrackingInterval = null;
+        }
+    }
+
+    stopDatabaseBackups() {
+        if (this.backupInterval) {
+            logger.debug('Bot', 'Stopping database backup interval');
+            clearInterval(this.backupInterval);
+            this.backupInterval = null;
+        }
+    }
+
+    async handleStreamOffline() {
+        logger.info('Bot', 'Stream went offline. Stopping full bot functionality');
+
+        await this.runTeardownStep('send offline message to chat', async () => {
+            if (this.isStreaming && this.messageSender) {
+                await this.sendMessage(this.channelName, '🤖 Bot going offline. See you next stream!');
+                logger.debug('Bot', 'Sent offline message to chat');
+            }
+        });
+
+        await this.runTeardownStep('end stream session', async () => {
+            if (this.currentStreamId && this.analyticsManager && this.viewerManager) {
+                logger.debug('Bot', 'Ending stream session', { streamId: this.currentStreamId });
+                await this.viewerManager.endAllSessionsForStream(this.currentStreamId);
+                await this.analyticsManager.trackStreamEnd(this.currentStreamId);
+            }
+        });
+        this.currentStreamId = null;
+
+        await this.runTeardownStep('stop Spotify monitors', async () => {
+            if (this.spotifyManager) {
+                this.spotifyManager.stop();
+            }
+        });
+
+        this.stopViewerTracking();
+        this.stopDatabaseBackups();
+
+        this.isStreaming = false;
+
+        if (this.webSocketManager) {
+            logger.debug('Bot', 'Removing chat and redemption handlers from WebSocket');
+            this.webSocketManager.onChatMessage = null;
+            this.webSocketManager.onRedemption = null;
+        }
+
+        await this.runTeardownStep('unsubscribe from chat and channel point events', async () => {
+            if (this.subscriptionManager) {
+                logger.debug('Bot', 'Unsubscribing from chat and channel point events');
+                await this.subscriptionManager.unsubscribeFromChatEvents();
+                await this.subscriptionManager.unsubscribeFromChannelPoints();
+            }
+        });
+
+        logger.info('Bot', 'Bot successfully transitioned to minimal mode. Waiting for next stream');
+
+        this.startShutdownTimer();
+    }
+
+    /** Clears the auto-shutdown timer and every warning timer that goes with it. */
+    clearShutdownTimer() {
         if (this.shutdownTimer) {
             clearTimeout(this.shutdownTimer);
+            this.shutdownTimer = null;
         }
+
+        for (const timer of this.shutdownWarningTimers) {
+            clearTimeout(timer);
+        }
+        this.shutdownWarningTimers = [];
+    }
+
+    startShutdownTimer() {
+        this.clearShutdownTimer();
 
         const gracePeriodMs = config.shutdownGracePeriod;
         const gracePeriodMinutes = gracePeriodMs / 60000;
@@ -624,15 +749,13 @@ class Bot {
             { time: gracePeriodMs - 1 * 60000, message: '1 minute until auto-shutdown' }
         ];
 
-        warnings.forEach(({ time, message }) => {
-            if (time > 0) {
-                setTimeout(() => {
-                    if (!this.isStreaming && !this.isShuttingDown) {
-                        logger.warn('Bot', message);
-                    }
-                }, time);
-            }
-        });
+        this.shutdownWarningTimers = warnings
+            .filter(({ time }) => time > 0)
+            .map(({ time, message }) => setTimeout(() => {
+                if (!this.isStreaming && !this.isShuttingDown) {
+                    logger.warn('Bot', message);
+                }
+            }, time));
 
         this.shutdownTimer = setTimeout(async () => {
             if (!this.isStreaming && !this.isShuttingDown) {
@@ -741,10 +864,12 @@ class Bot {
         logger.info('Bot', '=== Initiating graceful shutdown ===', { reason });
 
         try {
-            if (this.shutdownTimer) {
-                logger.debug('Bot', 'Clearing shutdown timer');
-                clearTimeout(this.shutdownTimer);
-                this.shutdownTimer = null;
+            logger.debug('Bot', 'Clearing shutdown timers');
+            this.clearShutdownTimer();
+
+            if (this.spotifyManager) {
+                logger.debug('Bot', 'Stopping Spotify monitors');
+                this.spotifyManager.stop();
             }
 
             if (this.currentStreamId && this.viewerManager && this.analyticsManager) {
@@ -758,11 +883,7 @@ class Bot {
                 }
             }
 
-            if (this.viewerTrackingInterval) {
-                logger.debug('Bot', 'Clearing viewer tracking interval');
-                clearInterval(this.viewerTrackingInterval);
-                this.viewerTrackingInterval = null;
-            }
+            this.stopViewerTracking();
 
             if (this.tokenRefreshInterval) {
                 logger.debug('Bot', 'Clearing token refresh interval');
@@ -770,25 +891,7 @@ class Bot {
                 this.tokenRefreshInterval = null;
             }
 
-            if (this.backupInterval) {
-                logger.debug('Bot', 'Clearing backup interval');
-                clearInterval(this.backupInterval);
-                this.backupInterval = null;
-            }
-
-            if (this.backupManager && !config.isDebugMode) {
-                logger.info('Bot', 'Creating final database backup before shutdown');
-                try {
-                    const success = await this.backupManager.createBackup('shutdown');
-                    if (success) {
-                        logger.info('Bot', 'Final database backup completed');
-                    } else {
-                        logger.warn('Bot', 'Final database backup failed');
-                    }
-                } catch (error) {
-                    logger.error('Bot', 'Error creating final backup', { error: error.message });
-                }
-            }
+            this.stopDatabaseBackups();
 
             if (this.apiServer) {
                 logger.info('Bot', 'Stopping API server');
@@ -802,8 +905,16 @@ class Bot {
             if (this.redisManager && this.redisManager.connected()) {
                 logger.info('Bot', 'Draining Redis queues before shutdown');
                 try {
-                    await this.redisManager.drainQueues(config.analyticsQueue.drainTimeoutMs);
-                    logger.info('Bot', 'Redis queues drained successfully');
+                    const drainResult = await this.redisManager.drainQueues(config.analyticsQueue.drainTimeoutMs);
+
+                    if (drainResult && drainResult.drained) {
+                        logger.info('Bot', 'Redis queues drained successfully');
+                    } else {
+                        logger.warn('Bot', 'Redis queues did NOT fully drain - the final backup may miss recent analytics', {
+                            remaining: drainResult?.remaining,
+                            lengthsUnknown: drainResult?.unknown
+                        });
+                    }
                 } catch (error) {
                     logger.error('Bot', 'Error draining Redis queues', { error: error.message });
                 }
@@ -823,6 +934,22 @@ class Bot {
                     this.webSocketManager.close();
                 } catch (error) {
                     logger.error('Bot', 'Error closing WebSocket', { error: error.message });
+                }
+            }
+
+            // Taken AFTER the drain so the final backup contains the analytics the
+            // consumer just flushed, rather than everything up to 30s earlier.
+            if (this.backupManager && !config.isDebugMode) {
+                logger.info('Bot', 'Creating final database backup before shutdown');
+                try {
+                    const success = await this.backupManager.createBackup('shutdown');
+                    if (success) {
+                        logger.info('Bot', 'Final database backup completed');
+                    } else {
+                        logger.warn('Bot', 'Final database backup failed');
+                    }
+                } catch (error) {
+                    logger.error('Bot', 'Error creating final backup', { error: error.message });
                 }
             }
 

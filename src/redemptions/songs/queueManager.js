@@ -1,5 +1,3 @@
-// src/redemptions/songs/queueManager.js
-
 const logger = require('../../logger/logger');
 
 class QueueManager {
@@ -14,21 +12,28 @@ class QueueManager {
 
     async addToPendingQueue(track) {
         try {
-            const positionSql = 'SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position FROM song_queue';
-            const positionResult = await this.dbManager.query(positionSql);
-            const nextPosition = positionResult[0].next_position;
+            // Read-then-insert has to be one atomic unit: two concurrent requests
+            // both read the same MAX and landed on the same queue_position.
+            const nextPosition = await this.dbManager.withTransaction(async (tx) => {
+                const positionSql = 'SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position FROM song_queue FOR UPDATE';
+                const positionResult = await tx.query(positionSql);
+                const position = positionResult[0].next_position;
 
-            const sql = `
-                INSERT INTO song_queue (track_uri, track_name, artist_name, requested_by, queue_position, added_at)
-                VALUES (?, ?, ?, ?, ?, NOW())
-            `;
-            await this.dbManager.query(sql, [
-                track.uri,
-                track.name,
-                track.artist,
-                track.requestedBy,
-                nextPosition
-            ]);
+                const sql = `
+                    INSERT INTO song_queue (track_uri, track_name, artist_name, requested_by, queue_position, added_at)
+                    VALUES (?, ?, ?, ?, ?, NOW())
+                `;
+                await tx.query(sql, [
+                    track.uri,
+                    track.name,
+                    track.artist,
+                    track.requestedBy,
+                    position
+                ]);
+
+                return position;
+            });
+
             logger.debug('QueueManager', 'Track added to pending queue', {
                 trackName: track.name,
                 artist: track.artist,
@@ -48,23 +53,22 @@ class QueueManager {
 
     async addToPriorityQueue(track) {
         try {
-            await this.dbManager.query('START TRANSACTION');
+            await this.dbManager.withTransaction(async (tx) => {
+                const incrementSql = 'UPDATE song_queue SET queue_position = queue_position + 1';
+                await tx.query(incrementSql);
 
-            const incrementSql = 'UPDATE song_queue SET queue_position = queue_position + 1';
-            await this.dbManager.query(incrementSql);
+                const insertSql = `
+                    INSERT INTO song_queue (track_uri, track_name, artist_name, requested_by, queue_position, added_at)
+                    VALUES (?, ?, ?, ?, 1, NOW())
+                `;
+                await tx.query(insertSql, [
+                    track.uri,
+                    track.name,
+                    track.artist,
+                    track.requestedBy
+                ]);
+            });
 
-            const insertSql = `
-                INSERT INTO song_queue (track_uri, track_name, artist_name, requested_by, queue_position, added_at)
-                VALUES (?, ?, ?, ?, 1, NOW())
-            `;
-            await this.dbManager.query(insertSql, [
-                track.uri,
-                track.name,
-                track.artist,
-                track.requestedBy
-            ]);
-
-            await this.dbManager.query('COMMIT');
             logger.debug('QueueManager', 'Track added to priority queue', {
                 trackName: track.name,
                 artist: track.artist,
@@ -72,14 +76,6 @@ class QueueManager {
                 queuePosition: 1
             });
         } catch (error) {
-            try {
-                await this.dbManager.query('ROLLBACK');
-            } catch (rollbackError) {
-                logger.error('QueueManager', 'Error rolling back transaction', {
-                    error: rollbackError.message,
-                    stack: rollbackError.stack
-                });
-            }
             logger.error('QueueManager', 'Error adding to priority queue', {
                 error: error.message,
                 stack: error.stack,
@@ -128,18 +124,16 @@ class QueueManager {
 
     async removeFirstTrack() {
         try {
-            await this.dbManager.query('START TRANSACTION');
+            await this.dbManager.withTransaction(async (tx) => {
+                const deleteSql = 'DELETE FROM song_queue WHERE queue_position = 1';
+                await tx.query(deleteSql);
 
-            const deleteSql = 'DELETE FROM song_queue WHERE queue_position = 1';
-            await this.dbManager.query(deleteSql);
+                const updateSql = 'UPDATE song_queue SET queue_position = queue_position - 1';
+                await tx.query(updateSql);
+            });
 
-            const updateSql = 'UPDATE song_queue SET queue_position = queue_position - 1';
-            await this.dbManager.query(updateSql);
-
-            await this.dbManager.query('COMMIT');
             logger.debug('QueueManager', 'First track removed from queue');
         } catch (error) {
-            await this.dbManager.query('ROLLBACK');
             logger.error('QueueManager', 'Error removing first track', {
                 error: error.message,
                 stack: error.stack

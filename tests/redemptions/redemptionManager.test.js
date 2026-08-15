@@ -1,5 +1,3 @@
-// tests/redemptions/redemptionManager.test.js
-
 const RedemptionManager = require('../../src/redemptions/redemptionManager');
 
 jest.mock('node-fetch');
@@ -166,10 +164,12 @@ describe('RedemptionManager', () => {
             await redemptionManager.updateRedemptionStatus(
                 'broadcaster-123',
                 'reward-456',
-                ['redemption-789'],
+                'redemption-789',
                 'FULFILLED'
             );
 
+            // Asserting the built URL is what pins the single-id contract: with an
+            // array argument, an accidental [0] index would have looked identical.
             expect(fetch).toHaveBeenCalledWith(
                 'https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?broadcaster_id=broadcaster-123&reward_id=reward-456&id=redemption-789',
                 expect.objectContaining({
@@ -194,7 +194,7 @@ describe('RedemptionManager', () => {
             await redemptionManager.updateRedemptionStatus(
                 'broadcaster-123',
                 'reward-456',
-                ['redemption-789'],
+                'redemption-789',
                 'CANCELED'
             );
 
@@ -220,7 +220,7 @@ describe('RedemptionManager', () => {
                 redemptionManager.updateRedemptionStatus(
                     'broadcaster-123',
                     'reward-456',
-                    ['redemption-789'],
+                    'redemption-789',
                     'FULFILLED'
                 )
             ).rejects.toThrow('Failed to update redemption status');
@@ -234,7 +234,7 @@ describe('RedemptionManager', () => {
                 redemptionManager.updateRedemptionStatus(
                     'broadcaster-123',
                     'reward-456',
-                    ['redemption-789'],
+                    'redemption-789',
                     'FULFILLED'
                 )
             ).rejects.toThrow('Network request failed');
@@ -256,7 +256,7 @@ describe('RedemptionManager', () => {
                 redemptionManager.updateRedemptionStatus(
                     'broadcaster-123',
                     'reward-456',
-                    ['redemption-789'],
+                    'redemption-789',
                     'FULFILLED'
                 )
             ).rejects.toThrow();

@@ -1,5 +1,3 @@
-// src/config/config.js
-
 require('dotenv').config();
 
 class Config {
@@ -13,7 +11,8 @@ class Config {
             port: parseInt(process.env.DB_PORT),
             user: process.env.DB_USER,
             password: process.env.DB_PASSWORD,
-            database: this.isDebugMode ? process.env.DB_NAME + '_debug' : process.env.DB_NAME
+            database: this.isDebugMode ? process.env.DB_NAME + '_debug' : process.env.DB_NAME,
+            connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 10
         };
 
         this.aws = {
@@ -26,7 +25,9 @@ class Config {
         this.logging = {
             level: 'info',
             maxSize: '20m',
-            maxFiles: 10
+            maxFiles: 10,
+            // Relative to the repo root, deliberately outside src/.
+            directory: process.env.LOG_DIR || 'logs'
         };
 
 
@@ -56,6 +57,9 @@ class Config {
         this.apiKey = this.api.key;
 
         this.tokenRefreshInterval = 300000;
+        // How close to expiry a Twitch token must be before it is actually rotated.
+        // tokenRefreshInterval above is only how often we CHECK.
+        this.tokenRefreshSafetyMargin = 900000;
         this.viewerTrackingInterval = 60000;
         this.spotifyInterval = 3000;
         this.emoteCacheInterval = 300000;
@@ -65,7 +69,7 @@ class Config {
 
         this.aiModels = {
             claude: {
-                model: 'claude-sonnet-4-5-20250929',
+                model: 'claude-sonnet-5',
                 maxTokens: 200,
                 temperature: 0.7,
                 maxCharacters: 400,
@@ -104,9 +108,8 @@ class Config {
         };
 
         this.cache = {
-            commandsTTL: 500,
-            emotesTTL: 500,
-            tokensTTL: 1800,
+            commandsTTL: 300,
+            emotesTTL: 300,
             aiEnabledTTL: 60,
             rateLimitTTL: null
         };

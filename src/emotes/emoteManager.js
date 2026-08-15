@@ -1,5 +1,3 @@
-// src/emotes/emoteManager.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 
@@ -77,8 +75,11 @@ class EmoteManager {
                     return cached;
                 }
 
-                const allCached = await cacheManager.hgetall(CACHE_KEY);
-                if (!allCached || Object.keys(allCached).length === 0) {
+                // A miss is the common case - every ordinary chat message hits it.
+                // EXISTS is O(1); pulling the whole hash back just to ask whether it
+                // was populated made each non-matching message pay for the entire set.
+                const populated = await cacheManager.exists(CACHE_KEY);
+                if (!populated) {
                     logger.debug('EmoteManager', 'Redis cache empty, reloading emotes');
                     await this.loadEmotes();
                     return this.emoteCache.get(normalizedTrigger) || null;

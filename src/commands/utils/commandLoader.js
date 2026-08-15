@@ -1,17 +1,21 @@
-// src/commands/utils/commandLoader.js
-
 const fs = require('fs');
 const path = require('path');
 const logger = require('../../logger/logger');
 
+/**
+ * @returns {{handlers: Object, levels: Object}} handler functions plus the
+ * permission level each one declares. Modules opt in via `module.levels`;
+ * anything undeclared is 'everyone'.
+ */
 function loadCommandHandlers(dependencies) {
     const handlers = {};
+    const levels = {};
     const handlersDir = path.join(__dirname, '..', 'handlers');
 
     try {
         if (!fs.existsSync(handlersDir)) {
             logger.warn('CommandLoader', 'Handlers directory does not exist', { path: handlersDir });
-            return handlers;
+            return { handlers, levels };
         }
 
         const handlerFiles = fs.readdirSync(handlersDir)
@@ -32,6 +36,7 @@ function loadCommandHandlers(dependencies) {
                     const moduleHandlers = handlerModule(dependencies);
 
                     Object.assign(handlers, moduleHandlers);
+                    Object.assign(levels, handlerModule.levels || {});
 
                     logger.info('CommandLoader', 'Loaded handler module', {
                         file,
@@ -52,16 +57,17 @@ function loadCommandHandlers(dependencies) {
 
         logger.info('CommandLoader', 'Command handlers loaded successfully', {
             totalHandlers: Object.keys(handlers).length,
-            handlerNames: Object.keys(handlers)
+            handlerNames: Object.keys(handlers),
+            restrictedHandlers: levels
         });
 
-        return handlers;
+        return { handlers, levels };
     } catch (error) {
         logger.error('CommandLoader', 'Error loading command handlers', {
             error: error.message,
             stack: error.stack
         });
-        return handlers;
+        return { handlers, levels };
     }
 }
 

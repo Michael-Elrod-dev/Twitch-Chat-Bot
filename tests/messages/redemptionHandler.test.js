@@ -1,5 +1,3 @@
-// tests/messages/redemptionHandler.test.js
-
 const RedemptionHandler = require('../../src/messages/redemptionHandler');
 
 describe('RedemptionHandler', () => {

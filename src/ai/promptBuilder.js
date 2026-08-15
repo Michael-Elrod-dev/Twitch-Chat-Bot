@@ -1,5 +1,3 @@
-// src/ai/promptBuilder.js
-
 class PromptBuilder {
     constructor() {}
 

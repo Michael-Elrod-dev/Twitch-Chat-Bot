@@ -1,5 +1,3 @@
-// src/redemptions/quotes/handleQuote.js
-
 const logger = require('../../logger/logger');
 
 async function handleQuote(event, twitchBot) {
@@ -14,7 +12,7 @@ async function handleQuote(event, twitchBot) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'CANCELED'
             );
 
@@ -34,7 +32,7 @@ async function handleQuote(event, twitchBot) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'CANCELED'
             );
 
@@ -71,7 +69,7 @@ async function handleQuote(event, twitchBot) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'CANCELED'
             );
 
@@ -83,7 +81,7 @@ async function handleQuote(event, twitchBot) {
         await twitchBot.redemptionManager.updateRedemptionStatus(
             event.broadcasterId,
             event.rewardId,
-            [event.id],
+            event.id,
             'FULFILLED'
         );
 
@@ -110,7 +108,7 @@ async function handleQuote(event, twitchBot) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'CANCELED'
             );
 

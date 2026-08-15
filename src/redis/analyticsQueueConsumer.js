@@ -1,5 +1,3 @@
-// src/redis/analyticsQueueConsumer.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 
@@ -74,6 +72,25 @@ class AnalyticsQueueConsumer {
         const toDLQ = [];
         const successful = [];
 
+        // Fast path: the whole batch as one multi-row INSERT. On any failure we
+        // fall back to row-by-row below so each message still gets its own
+        // retry-vs-DLQ decision.
+        try {
+            if (await this.insertChatMessageBatch(messages.map(m => m.data))) {
+                logger.debug('AnalyticsQueueConsumer', 'Chat messages batch processed', {
+                    successful: messages.length,
+                    retried: 0,
+                    dlq: 0
+                });
+                return;
+            }
+        } catch (error) {
+            logger.warn('AnalyticsQueueConsumer', 'Batch insert failed, retrying row by row', {
+                count: messages.length,
+                error: error.message
+            });
+        }
+
         for (const message of messages) {
             try {
                 await this.insertChatMessage(message.data);
@@ -107,6 +124,47 @@ class AnalyticsQueueConsumer {
                 dlq: toDLQ.length
             });
         }
+    }
+
+    /**
+     * One multi-row INSERT for the whole batch inside a transaction. Falls back to
+     * row-by-row only if the batch fails, so per-row error attribution (retry vs
+     * DLQ) is preserved exactly as before.
+     * @returns {Promise<boolean>} true if the batch insert succeeded as a unit
+     */
+    async insertChatMessageBatch(rows) {
+        if (rows.length === 0) {
+            return true;
+        }
+
+        // A single row gains nothing from batching, and attempting it here would
+        // mean a failure got retried again by the row-by-row fallback below.
+        if (rows.length === 1) {
+            return false;
+        }
+
+        if (typeof this.dbManager.withTransaction !== 'function') {
+            return false;
+        }
+
+        const placeholders = rows.map(() => '(?, ?, ?, ?, ?)').join(', ');
+        const params = rows.flatMap(data => [
+            data.userId,
+            data.streamId,
+            data.messageTime || new Date(),
+            data.messageType,
+            data.content
+        ]);
+
+        await this.dbManager.withTransaction(async (tx) => {
+            await tx.query(
+                `INSERT INTO chat_messages (user_id, stream_id, message_time, message_type, message_content)
+                 VALUES ${placeholders}`,
+                params
+            );
+        });
+
+        return true;
     }
 
     async insertChatMessage(data) {

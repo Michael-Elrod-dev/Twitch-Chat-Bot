@@ -1,5 +1,3 @@
-// tests/redemptions/songs/songRequest.test.js
-
 const handleSongRequest = require('../../../src/redemptions/songs/songRequest');
 
 describe('handleSongRequest', () => {
@@ -60,7 +58,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'FULFILLED'
             );
 
@@ -136,7 +134,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
 
@@ -156,7 +154,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
         });
@@ -171,7 +169,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
 
@@ -191,7 +189,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
         });
@@ -208,7 +206,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
 
@@ -228,7 +226,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'CANCELED'
             );
         });
@@ -243,7 +241,7 @@ describe('handleSongRequest', () => {
             expect(mockTwitchBot.redemptionManager.updateRedemptionStatus).toHaveBeenCalledWith(
                 'broadcaster-456',
                 'reward-789',
-                ['redemption-abc'],
+                'redemption-abc',
                 'FULFILLED'
             );
         });

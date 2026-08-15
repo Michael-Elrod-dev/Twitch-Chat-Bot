@@ -1,6 +1,5 @@
-// tests/redemptions/songs/queueManager.test.js
-
 const QueueManager = require('../../../src/redemptions/songs/queueManager');
+const { createMockDbManager } = require('../../__mocks__/mockDbManager');
 
 describe('QueueManager', () => {
     let queueManager;
@@ -9,9 +8,7 @@ describe('QueueManager', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
-        mockDbManager = {
-            query: jest.fn()
-        };
+        mockDbManager = createMockDbManager();
 
         queueManager = new QueueManager();
     });
@@ -36,8 +33,8 @@ describe('QueueManager', () => {
             jest.clearAllMocks();
         });
 
-        it('should add track to end of queue', async () => {
-            mockDbManager.query
+        it('should add track to end of queue inside a transaction', async () => {
+            mockDbManager._transaction.query
                 .mockResolvedValueOnce([{ next_position: 5 }])
                 .mockResolvedValueOnce({ affectedRows: 1 });
 
@@ -50,12 +47,17 @@ describe('QueueManager', () => {
 
             await queueManager.addToPendingQueue(track);
 
-            expect(mockDbManager.query).toHaveBeenNthCalledWith(
+            // Read-then-insert has to be one atomic unit, or two concurrent
+            // requests both read the same MAX and collide on queue_position.
+            expect(mockDbManager.withTransaction).toHaveBeenCalledTimes(1);
+            expect(mockDbManager.query).not.toHaveBeenCalled();
+
+            expect(mockDbManager._transaction.query).toHaveBeenNthCalledWith(
                 1,
-                'SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position FROM song_queue'
+                expect.stringContaining('COALESCE(MAX(queue_position), 0) + 1')
             );
 
-            expect(mockDbManager.query).toHaveBeenNthCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenNthCalledWith(
                 2,
                 expect.stringContaining('INSERT INTO song_queue'),
                 ['spotify:track:123', 'Test Song', 'Test Artist', 'testuser', 5]
@@ -63,7 +65,7 @@ describe('QueueManager', () => {
         });
 
         it('should add first track at position 1', async () => {
-            mockDbManager.query
+            mockDbManager._transaction.query
                 .mockResolvedValueOnce([{ next_position: 1 }])
                 .mockResolvedValueOnce({ affectedRows: 1 });
 
@@ -76,7 +78,7 @@ describe('QueueManager', () => {
 
             await queueManager.addToPendingQueue(track);
 
-            expect(mockDbManager.query).toHaveBeenNthCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenNthCalledWith(
                 2,
                 expect.any(String),
                 expect.arrayContaining([expect.anything(), expect.anything(), expect.anything(), expect.anything(), 1])
@@ -86,7 +88,7 @@ describe('QueueManager', () => {
         it('should handle database error gracefully', async () => {
             const dbError = new Error('Database error');
             dbError.stack = 'Error stack';
-            mockDbManager.query.mockRejectedValue(dbError);
+            mockDbManager._transaction.query.mockRejectedValue(dbError);
 
             const track = {
                 uri: 'spotify:track:123',
@@ -105,9 +107,7 @@ describe('QueueManager', () => {
             jest.clearAllMocks();
         });
 
-        it('should add track to front of queue with transaction', async () => {
-            mockDbManager.query.mockResolvedValue({ affectedRows: 1 });
-
+        it('should add track to front of queue inside a transaction', async () => {
             const track = {
                 uri: 'spotify:track:456',
                 name: 'Priority Song',
@@ -117,26 +117,29 @@ describe('QueueManager', () => {
 
             await queueManager.addToPriorityQueue(track);
 
-            expect(mockDbManager.query).toHaveBeenCalledWith('START TRANSACTION');
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager.withTransaction).toHaveBeenCalledTimes(1);
+
+            // Both statements run on the transaction's connection, not the pool.
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 'UPDATE song_queue SET queue_position = queue_position + 1'
             );
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO song_queue'),
                 ['spotify:track:456', 'Priority Song', 'Priority Artist', 'vipuser']
             );
-            expect(mockDbManager.query).toHaveBeenCalledWith('COMMIT');
+            expect(mockDbManager.query).not.toHaveBeenCalled();
+
+            expect(mockDbManager._transaction.commit).toHaveBeenCalled();
+            expect(mockDbManager._transaction.rollback).not.toHaveBeenCalled();
         });
 
-        it('should rollback transaction on error', async () => {
+        it('should roll back and leave the queue untouched when the insert fails', async () => {
             const dbError = new Error('Insert failed');
             dbError.stack = 'Error stack';
 
-            mockDbManager.query
-                .mockResolvedValueOnce({ affectedRows: 1 }) // START TRANSACTION
-                .mockResolvedValueOnce({ affectedRows: 2 }) // UPDATE
-                .mockRejectedValueOnce(dbError)             // INSERT fails
-                .mockResolvedValueOnce({ affectedRows: 0 }); // ROLLBACK
+            mockDbManager._transaction.query
+                .mockResolvedValueOnce({ affectedRows: 2 }) // UPDATE shifts positions
+                .mockRejectedValueOnce(dbError);            // INSERT fails
 
             const track = {
                 uri: 'spotify:track:456',
@@ -147,20 +150,14 @@ describe('QueueManager', () => {
 
             await expect(queueManager.addToPriorityQueue(track)).rejects.toThrow('Insert failed');
 
-            expect(mockDbManager.query).toHaveBeenCalledWith('ROLLBACK');
+            // The position shift must not survive the failed insert.
+            expect(mockDbManager._transaction.rollback).toHaveBeenCalled();
+            expect(mockDbManager._transaction.commit).not.toHaveBeenCalled();
         });
 
-        it('should handle rollback failure', async () => {
-            const insertError = new Error('Insert failed');
-            const rollbackError = new Error('Rollback failed');
-            insertError.stack = 'Error stack';
-            rollbackError.stack = 'Rollback stack';
-
-            mockDbManager.query
-                .mockResolvedValueOnce({ affectedRows: 1 }) // START TRANSACTION
-                .mockResolvedValueOnce({ affectedRows: 2 }) // UPDATE
-                .mockRejectedValueOnce(insertError)         // INSERT fails
-                .mockRejectedValueOnce(rollbackError);      // ROLLBACK fails
+        it('should surface the original error when the transaction fails', async () => {
+            const txError = new Error('Deadlock found when trying to get lock');
+            mockDbManager.withTransaction.mockRejectedValue(txError);
 
             const track = {
                 uri: 'spotify:track:456',
@@ -169,7 +166,7 @@ describe('QueueManager', () => {
                 requestedBy: 'vipuser'
             };
 
-            await expect(queueManager.addToPriorityQueue(track)).rejects.toThrow('Insert failed');
+            await expect(queueManager.addToPriorityQueue(track)).rejects.toBe(txError);
         });
     });
 
@@ -260,28 +257,27 @@ describe('QueueManager', () => {
 
             await queueManager.removeFirstTrack();
 
-            expect(mockDbManager.query).toHaveBeenCalledWith('START TRANSACTION');
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager.withTransaction).toHaveBeenCalledTimes(1);
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 'DELETE FROM song_queue WHERE queue_position = 1'
             );
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 'UPDATE song_queue SET queue_position = queue_position - 1'
             );
-            expect(mockDbManager.query).toHaveBeenCalledWith('COMMIT');
+            expect(mockDbManager.query).not.toHaveBeenCalled();
+            expect(mockDbManager._transaction.commit).toHaveBeenCalled();
         });
 
-        it('should rollback on error', async () => {
+        it('should roll back so the pop and the reorder cannot half-apply', async () => {
             const deleteError = new Error('Delete failed');
             deleteError.stack = 'Error stack';
 
-            mockDbManager.query
-                .mockResolvedValueOnce({ affectedRows: 1 }) // START TRANSACTION
-                .mockRejectedValueOnce(deleteError)         // DELETE fails
-                .mockResolvedValueOnce({ affectedRows: 0 }); // ROLLBACK
+            mockDbManager._transaction.query.mockRejectedValueOnce(deleteError);
 
             await expect(queueManager.removeFirstTrack()).rejects.toThrow('Delete failed');
 
-            expect(mockDbManager.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(mockDbManager._transaction.rollback).toHaveBeenCalled();
+            expect(mockDbManager._transaction.commit).not.toHaveBeenCalled();
         });
     });
 
@@ -292,7 +288,7 @@ describe('QueueManager', () => {
         });
 
         it('should handle complete queue lifecycle', async () => {
-            mockDbManager.query
+            mockDbManager._transaction.query
                 .mockResolvedValueOnce([{ next_position: 1 }])
                 .mockResolvedValueOnce({ affectedRows: 1 })
                 .mockResolvedValueOnce([{ next_position: 2 }])
@@ -320,16 +316,16 @@ describe('QueueManager', () => {
             const tracks = await queueManager.getPendingTracks();
             expect(tracks).toHaveLength(2);
 
-            mockDbManager.query.mockResolvedValue({ affectedRows: 1 });
             await queueManager.removeFirstTrack();
 
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 'DELETE FROM song_queue WHERE queue_position = 1'
             );
+            expect(mockDbManager._transaction.commit).toHaveBeenCalled();
         });
 
         it('should handle priority and regular queue mix', async () => {
-            mockDbManager.query
+            mockDbManager._transaction.query
                 .mockResolvedValueOnce([{ next_position: 1 }])
                 .mockResolvedValueOnce({ affectedRows: 1 });
 
@@ -340,8 +336,6 @@ describe('QueueManager', () => {
                 requestedBy: 'user1'
             });
 
-            mockDbManager.query.mockResolvedValue({ affectedRows: 1 });
-
             await queueManager.addToPriorityQueue({
                 uri: 'spotify:track:2',
                 name: 'Priority Song',
@@ -349,9 +343,10 @@ describe('QueueManager', () => {
                 requestedBy: 'vipuser'
             });
 
-            expect(mockDbManager.query).toHaveBeenCalledWith(
+            expect(mockDbManager._transaction.query).toHaveBeenCalledWith(
                 'UPDATE song_queue SET queue_position = queue_position + 1'
             );
+            expect(mockDbManager._transaction.commit).toHaveBeenCalled();
         });
     });
 });

@@ -1,5 +1,3 @@
-// tests/__mocks__/testHelpers.js
-
 /**
  * Expects an async function to throw an error with a specific message
  * @param {Function} fn - Async function to test

@@ -1,5 +1,3 @@
-// src/ai/models/claudeModel.js
-
 const fetch = require('node-fetch');
 const config = require('../../config/config');
 const logger = require('../../logger/logger');

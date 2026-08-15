@@ -1,5 +1,3 @@
-// tests/redemptions/quotes/quoteManager.test.js
-
 const QuoteManager = require('../../../src/redemptions/quotes/quoteManager');
 
 describe('QuoteManager', () => {

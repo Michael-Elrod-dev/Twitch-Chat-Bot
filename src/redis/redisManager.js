@@ -1,5 +1,3 @@
-// src/redis/redisManager.js
-
 const Redis = require('ioredis');
 const config = require('../config/config');
 const logger = require('../logger/logger');

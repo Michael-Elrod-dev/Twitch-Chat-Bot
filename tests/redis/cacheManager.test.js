@@ -1,5 +1,3 @@
-// tests/redis/cacheManager.test.js
-
 const CacheManager = require('../../src/redis/cacheManager');
 
 describe('CacheManager', () => {

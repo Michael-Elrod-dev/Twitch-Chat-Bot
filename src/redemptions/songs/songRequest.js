@@ -1,5 +1,3 @@
-// src/redemptions/songs/songRequest.js
-
 const logger = require('../../logger/logger');
 
 async function handleSongRequest(event, twitchBot, spotifyManager) {
@@ -17,7 +15,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
-                    [event.id],
+                    event.id,
                     'CANCELED'
                 );
 
@@ -45,7 +43,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
-                    [event.id],
+                    event.id,
                     'CANCELED'
                 );
 
@@ -111,7 +109,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'FULFILLED'
             );
             logger.debug('SongRequest', 'Redemption marked as fulfilled', {
@@ -141,7 +139,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
                 await twitchBot.redemptionManager.updateRedemptionStatus(
                     event.broadcasterId,
                     event.rewardId,
-                    [event.id],
+                    event.id,
                     'CANCELED'
                 );
 
@@ -178,7 +176,7 @@ async function handleSongRequest(event, twitchBot, spotifyManager) {
             await twitchBot.redemptionManager.updateRedemptionStatus(
                 event.broadcasterId,
                 event.rewardId,
-                [event.id],
+                event.id,
                 'CANCELED'
             );
 

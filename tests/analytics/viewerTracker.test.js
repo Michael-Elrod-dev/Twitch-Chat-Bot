@@ -1,5 +1,3 @@
-// tests/analytics/viewerTracker.test.js
-
 const ViewerTracker = require('../../src/analytics/viewers/viewerTracker');
 const { createMockRedisManager, createMockRedisManagerWithQueue } = require('../__mocks__/mockRedisManager');
 
@@ -28,7 +26,7 @@ describe('ViewerTracker', () => {
     });
 
     describe('ensureUserExists', () => {
-        it('should insert new user with all properties', async () => {
+        it('should insert new user with all role columns', async () => {
             mockDbManager.query.mockResolvedValueOnce([]);
 
             const userId = await viewerTracker.ensureUserExists(
@@ -42,21 +40,17 @@ describe('ViewerTracker', () => {
 
             expect(userId).toBe('123456');
             expect(mockDbManager.query).toHaveBeenCalledWith(
-                expect.stringContaining('INSERT IGNORE INTO viewers'),
-                ['123456', 'testuser', true, false, false, false, 'testuser', true, false, false, false]
+                expect.stringContaining('INSERT INTO viewers'),
+                ['123456', 'testuser', true, false, false, false]
             );
         });
 
-        it('should use username as userId when userId is null', async () => {
-            mockDbManager.query.mockResolvedValueOnce([]);
+        it('should refuse to write a viewer with no Twitch user id', async () => {
+            // Falling back to the username poisoned the numeric id column.
+            const result = await viewerTracker.ensureUserExists('testuser', null);
 
-            const userId = await viewerTracker.ensureUserExists('testuser', null);
-
-            expect(userId).toBe('testuser');
-            expect(mockDbManager.query).toHaveBeenCalledWith(
-                expect.anything(),
-                expect.arrayContaining(['testuser', 'testuser'])
-            );
+            expect(result).toBeNull();
+            expect(mockDbManager.query).not.toHaveBeenCalled();
         });
 
         it('should update existing user on duplicate key', async () => {

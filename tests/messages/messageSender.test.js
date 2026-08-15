@@ -1,5 +1,3 @@
-// tests/messages/messageSender.test.js
-
 const MessageSender = require('../../src/messages/messageSender');
 
 jest.mock('node-fetch');
@@ -24,7 +22,8 @@ describe('MessageSender', () => {
                 clientId: 'test-client-id',
                 botAccessToken: 'test-bot-token'
             },
-            validateToken: jest.fn().mockResolvedValue(true)
+            validateToken: jest.fn().mockResolvedValue(true),
+            refreshToken: jest.fn().mockResolvedValue('refreshed-bot-token')
         };
 
         messageSender = new MessageSender(mockTokenManager);
@@ -46,7 +45,8 @@ describe('MessageSender', () => {
 
             await messageSender.sendMessage('testchannel', 'Hello, world!');
 
-            expect(mockTokenManager.validateToken).toHaveBeenCalledWith('bot');
+            // No pre-flight /validate: that cost an API call plus a DB write per line.
+            expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
             expect(fetch).toHaveBeenCalledWith(
                 'https://api.twitch.tv/helix/chat/messages',
                 expect.objectContaining({
@@ -70,7 +70,6 @@ describe('MessageSender', () => {
 
             await messageSender.sendMessage('testchannel', 'Test');
 
-            expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
             expect(fetch).not.toHaveBeenCalled();
         });
 
@@ -79,7 +78,6 @@ describe('MessageSender', () => {
 
             await messageSender.sendMessage('testchannel', 'Test');
 
-            expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
             expect(fetch).not.toHaveBeenCalled();
         });
 
@@ -89,31 +87,18 @@ describe('MessageSender', () => {
 
             await messageSender.sendMessage('testchannel', 'Test');
 
-            expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
-            expect(fetch).not.toHaveBeenCalled();
-        });
-
-        it('should handle token validation failure', async () => {
-            const tokenError = new Error('Token expired');
-            tokenError.stack = 'Error stack';
-            mockTokenManager.validateToken.mockRejectedValue(tokenError);
-
-            await expect(
-                messageSender.sendMessage('testchannel', 'Test')
-            ).rejects.toThrow('Token expired');
-
             expect(fetch).not.toHaveBeenCalled();
         });
 
         it('should handle API error response', async () => {
             const errorData = {
-                error: 'Unauthorized',
-                status: 401,
-                message: 'Invalid OAuth token'
+                error: 'Bad Request',
+                status: 400,
+                message: 'Invalid message'
             };
             const mockResponse = {
                 ok: false,
-                status: 401,
+                status: 400,
                 json: jest.fn().mockResolvedValue(errorData)
             };
             fetch.mockResolvedValue(mockResponse);
@@ -121,6 +106,9 @@ describe('MessageSender', () => {
             await expect(
                 messageSender.sendMessage('testchannel', 'Test')
             ).rejects.toThrow('Failed to send chat message');
+
+            // Only a 401 warrants a refresh.
+            expect(mockTokenManager.refreshToken).not.toHaveBeenCalled();
         });
 
         it('should handle rate limit error (429)', async () => {
@@ -206,6 +194,78 @@ describe('MessageSender', () => {
             expect(body.message).toBe(specialMessage);
         });
 
+        it('should refresh once and retry when the send is rejected with 401', async () => {
+            const unauthorized = {
+                ok: false,
+                status: 401,
+                json: jest.fn().mockResolvedValue({ message: 'Invalid OAuth token' })
+            };
+            const success = {
+                ok: true,
+                json: jest.fn().mockResolvedValue({ data: [] })
+            };
+            fetch.mockResolvedValueOnce(unauthorized).mockResolvedValueOnce(success);
+
+            await messageSender.sendMessage('testchannel', 'Test');
+
+            expect(mockTokenManager.refreshToken).toHaveBeenCalledWith('bot');
+            expect(mockTokenManager.refreshToken).toHaveBeenCalledTimes(1);
+            expect(fetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should use the refreshed token on the retry', async () => {
+            const unauthorized = {
+                ok: false,
+                status: 401,
+                json: jest.fn().mockResolvedValue({ message: 'Invalid OAuth token' })
+            };
+            const success = {
+                ok: true,
+                json: jest.fn().mockResolvedValue({ data: [] })
+            };
+            fetch.mockResolvedValueOnce(unauthorized).mockResolvedValueOnce(success);
+            mockTokenManager.refreshToken.mockImplementation(async () => {
+                mockTokenManager.tokens.botAccessToken = 'brand-new-token';
+            });
+
+            await messageSender.sendMessage('testchannel', 'Test');
+
+            const retryHeaders = fetch.mock.calls[1][1].headers;
+            expect(retryHeaders.Authorization).toBe('Bearer brand-new-token');
+        });
+
+        it('should retry only once when the 401 persists', async () => {
+            const unauthorized = {
+                ok: false,
+                status: 401,
+                json: jest.fn().mockResolvedValue({ message: 'Invalid OAuth token' })
+            };
+            fetch.mockResolvedValue(unauthorized);
+
+            await expect(
+                messageSender.sendMessage('testchannel', 'Test')
+            ).rejects.toThrow('Failed to send chat message');
+
+            // Refresh-once-retry-once, never a loop.
+            expect(mockTokenManager.refreshToken).toHaveBeenCalledTimes(1);
+            expect(fetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should surface a refresh failure during the 401 retry', async () => {
+            fetch.mockResolvedValue({
+                ok: false,
+                status: 401,
+                json: jest.fn().mockResolvedValue({ message: 'Invalid OAuth token' })
+            });
+            mockTokenManager.refreshToken.mockRejectedValue(new Error('Refresh token dead'));
+
+            await expect(
+                messageSender.sendMessage('testchannel', 'Test')
+            ).rejects.toThrow('Refresh token dead');
+
+            expect(fetch).toHaveBeenCalledTimes(1);
+        });
+
         it('should handle malformed JSON response', async () => {
             const mockResponse = {
                 ok: false,
@@ -233,7 +293,8 @@ describe('MessageSender', () => {
             await messageSender.sendMessage('testchannel', 'Message 3');
 
             expect(fetch).toHaveBeenCalledTimes(3);
-            expect(mockTokenManager.validateToken).toHaveBeenCalledTimes(3);
+            // One request per message - no validation round-trip riding along.
+            expect(mockTokenManager.validateToken).not.toHaveBeenCalled();
         });
 
         it('should handle alternating success and failure', async () => {

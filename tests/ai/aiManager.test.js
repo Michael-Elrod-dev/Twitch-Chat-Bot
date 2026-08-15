@@ -1,5 +1,3 @@
-// tests/ai/aiManager.test.js
-
 const AIManager = require('../../src/ai/aiManager');
 
 jest.mock('../../src/config/config', () => ({
@@ -368,7 +366,8 @@ describe('AIManager', () => {
         it('should remove almosthadai without @ from text prompt', () => {
             const prompt = aiManager.extractPrompt('hey almosthadai whats up', 'text');
 
-            expect(prompt).toBe('hey  whats up');
+            // Whitespace left by the removed trigger is collapsed.
+            expect(prompt).toBe('hey whats up');
         });
 
         it('should remove multiple mentions', () => {

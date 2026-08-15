@@ -16,7 +16,6 @@ module.exports = {
 
     collectCoverageFrom: [
         'src/**/*.js',
-        '!src/bot.js',
         '!src/logger/**',
         '!**/node_modules/**'
     ],
@@ -43,8 +42,5 @@ module.exports = {
 
     verbose: true,
 
-    testTimeout: 10000,
-
-    maxWorkers: 1,
-    forceExit: true
+    testTimeout: 10000
 };

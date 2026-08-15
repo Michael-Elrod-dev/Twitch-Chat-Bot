@@ -1,5 +1,3 @@
-// src/commands/handlers/utility.js
-
 const logger = require('../../logger/logger');
 
 function utilityHandlers() {

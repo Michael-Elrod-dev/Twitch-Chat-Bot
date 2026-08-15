@@ -1,5 +1,3 @@
-// tests/__mocks__/mockRedisManager.js
-
 /**
  * Creates a mock Redis manager for testing
  * @param {boolean} connected - Whether Redis should appear connected
@@ -20,6 +18,7 @@ const createMockRedisManager = (connected = true, options = {}) => {
         hset: jest.fn().mockResolvedValue(true),
         hdel: jest.fn().mockResolvedValue(true),
         hgetall: jest.fn().mockResolvedValue(null),
+        exists: jest.fn().mockResolvedValue(false),
         hmset: jest.fn().mockResolvedValue(true),
         expire: jest.fn().mockResolvedValue(true),
         incr: jest.fn().mockResolvedValue(1),

@@ -1,5 +1,3 @@
-// src/logger/logger.js
-
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
@@ -7,14 +5,15 @@ const config = require('../config/config');
 
 class Logger {
     constructor() {
-        this.logDirectory = path.join(__dirname, 'logs');
-        this.configDirectory = path.join(__dirname, 'config');
+        // Logs live outside the source tree. path.resolve keeps an absolute
+        // LOG_DIR working while treating a relative value as repo-root relative.
+        this.logDirectory = path.resolve(
+            path.join(__dirname, '..', '..'),
+            config.logging.directory || 'logs'
+        );
 
         if (!fs.existsSync(this.logDirectory)) {
             fs.mkdirSync(this.logDirectory, { recursive: true });
-        }
-        if (!fs.existsSync(this.configDirectory)) {
-            fs.mkdirSync(this.configDirectory, { recursive: true });
         }
 
         this.recentErrors = new Map();

@@ -1,5 +1,3 @@
-// src/messages/messageSender.js
-
 const fetch = require('node-fetch');
 const config = require('../config/config');
 const logger = require('../logger/logger');
@@ -24,29 +22,17 @@ class MessageSender {
                 messageLength: message.length
             });
 
-            try {
-                await this.tokenManager.validateToken('bot');
-            } catch (error) {
-                logger.error('MessageSender', 'Error validating bot token', {
-                    error: error.message,
-                    stack: error.stack
-                });
-                throw error;
-            }
+            // No pre-flight validation: the refresh cycle keeps the token current,
+            // and validating here cost a Twitch API call plus a DB write on every
+            // single chat line. A rejected send is handled below instead.
+            let response = await this.postMessage(message);
 
-            const response = await fetch(`${config.twitchApiEndpoint}/chat/messages`, {
-                method: 'POST',
-                headers: {
-                    'Client-Id': this.tokenManager.tokens.clientId,
-                    'Authorization': `Bearer ${this.tokenManager.tokens.botAccessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    broadcaster_id: this.tokenManager.tokens.channelId,
-                    sender_id: this.tokenManager.tokens.botId,
-                    message: message
-                })
-            });
+            if (response.status === 401) {
+                logger.warn('MessageSender', 'Bot token rejected, refreshing once and retrying');
+
+                await this.tokenManager.refreshToken('bot');
+                response = await this.postMessage(message);
+            }
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -68,6 +54,22 @@ class MessageSender {
             });
             throw error;
         }
+    }
+
+    postMessage(message) {
+        return fetch(`${config.twitchApiEndpoint}/chat/messages`, {
+            method: 'POST',
+            headers: {
+                'Client-Id': this.tokenManager.tokens.clientId,
+                'Authorization': `Bearer ${this.tokenManager.tokens.botAccessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                broadcaster_id: this.tokenManager.tokens.channelId,
+                sender_id: this.tokenManager.tokens.botId,
+                message: message
+            })
+        });
     }
 }
 

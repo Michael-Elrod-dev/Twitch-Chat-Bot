@@ -1,5 +1,3 @@
-// tests/services/songToggleService.test.js
-
 const SongToggleService = require('../../src/services/songToggleService');
 
 describe('SongToggleService', () => {

@@ -1,0 +1,9 @@
+# Normalize line endings.
+#
+# The repo is developed on Windows and tested on Linux CI, and ESLint enforces
+# `linebreak-style: unix`. Without this, git's autocrlf behaviour could hand CI a
+# CRLF working tree and fail lint on files that look fine locally.
+#
+# text=auto: git decides what is text; eol=lf: text files are checked out with LF
+# on every platform, including Windows.
+* text=auto eol=lf

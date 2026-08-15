@@ -1,5 +1,3 @@
-// src/messages/redemptionHandler.js
-
 const logger = require('../logger/logger');
 
 class RedemptionHandler {

@@ -1,5 +1,3 @@
-// tests/logger/logger.test.js
-
 jest.unmock('../../src/logger/logger');
 
 const winston = require('winston');

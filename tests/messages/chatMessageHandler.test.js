@@ -1,5 +1,3 @@
-// tests/messages/chatMessageHandler.test.js
-
 const ChatMessageHandler = require('../../src/messages/chatMessageHandler');
 
 jest.mock('../../src/config/config', () => ({
@@ -655,7 +653,7 @@ describe('ChatMessageHandler', () => {
             expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
         });
 
-        it('should default to AI enabled on DB query error', async () => {
+        it('should fail CLOSED when the AI flag cannot be read', async () => {
             const cacheManager = mockRedisManager.getCacheManager();
             cacheManager.get.mockResolvedValueOnce(null);
             mockBot.analyticsManager.dbManager.query.mockRejectedValueOnce(new Error('DB error'));
@@ -672,7 +670,8 @@ describe('ChatMessageHandler', () => {
 
             await chatMessageHandler.handleChatMessage(payload, mockBot);
 
-            expect(mockAiManager.handleTextRequest).toHaveBeenCalled();
+            // A DB outage must not resurrect an AI the broadcaster turned off.
+            expect(mockAiManager.handleTextRequest).not.toHaveBeenCalled();
         });
 
     });

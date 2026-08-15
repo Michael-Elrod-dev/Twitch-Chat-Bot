@@ -1,11 +1,50 @@
-// src/analytics/viewers/viewerTracker.js
-
 const logger = require('../../logger/logger');
 
 class ViewerTracker {
     constructor(analyticsManager, redisManager = null) {
         this.analyticsManager = analyticsManager;
         this.redisManager = redisManager;
+
+        // Per-stream set of user ids already counted as unique chatters. The DB
+        // COUNT(*) alone raced the 5s batch flush: a user's opening burst all saw
+        // zero rows and each incremented unique_chatters.
+        this.seenChattersByStream = new Map();
+    }
+
+    /**
+     * True the first time this user is seen in this stream. The DB check is only a
+     * cold-start seed for the set (so a mid-stream restart does not recount
+     * everyone); after that the set alone decides.
+     *
+     * Restart-during-stream edge: the set is rebuilt lazily, so a user whose rows
+     * have not yet flushed at restart time can be counted once more. Worst case is
+     * one extra increment per user per crash - acceptable versus per-burst inflation.
+     */
+    async isFirstMessageOfStream(userId, streamId) {
+        let seen = this.seenChattersByStream.get(streamId);
+        if (!seen) {
+            seen = new Set();
+            this.seenChattersByStream.set(streamId, seen);
+        }
+
+        if (seen.has(userId)) {
+            return false;
+        }
+
+        seen.add(userId);
+
+        const checkFirstMessageSql = `
+            SELECT COUNT(*) as count FROM chat_messages
+            WHERE user_id = ? AND stream_id = ?
+        `;
+        const result = await this.analyticsManager.dbManager.query(checkFirstMessageSql, [userId, streamId]);
+
+        return result[0].count === 0;
+    }
+
+    forgetStream(streamId) {
+        this.seenChattersByStream.delete(streamId);
+        logger.debug('ViewerTracker', 'Cleared unique-chatter tracking for stream', { streamId });
     }
 
     getQueueManager() {
@@ -15,26 +54,29 @@ class ViewerTracker {
         return null;
     }
 
+    /**
+     * Chat path: the caller genuinely knows this user's per-channel roles, so the
+     * role columns are authoritative and get written.
+     */
     async ensureUserExists(username, userId = null, isMod = false, isSubscriber = false, isVip = false, isBroadcaster = false) {
-        try {
-            if (!userId) {
-                userId = username;
-            }
+        if (!this.assertUserId(username, userId)) {
+            return null;
+        }
 
+        try {
             const sql = `
-                INSERT IGNORE INTO viewers (user_id, username, is_moderator, is_subscriber, is_vip, is_broadcaster, last_seen)
+                INSERT INTO viewers (user_id, username, is_moderator, is_subscriber, is_vip, is_broadcaster, last_seen)
                 VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE
                     last_seen = NOW(),
-                    username = ?,
-                    is_moderator = ?,
-                    is_subscriber = ?,
-                    is_vip = ?,
-                    is_broadcaster = ?
+                    username = VALUES(username),
+                    is_moderator = VALUES(is_moderator),
+                    is_subscriber = VALUES(is_subscriber),
+                    is_vip = VALUES(is_vip),
+                    is_broadcaster = VALUES(is_broadcaster)
             `;
             await this.analyticsManager.dbManager.query(sql, [
-                userId, username, isMod, isSubscriber, isVip, isBroadcaster,
-                username, isMod, isSubscriber, isVip, isBroadcaster
+                userId, username, isMod, isSubscriber, isVip, isBroadcaster
             ]);
             logger.debug('ViewerTracker', 'User record ensured', {
                 username,
@@ -54,6 +96,52 @@ class ViewerTracker {
             });
             throw error;
         }
+    }
+
+    /**
+     * Viewer-poll path: the chatters endpoint carries no role information, so the
+     * role columns are left alone. Writing defaults here reset every role set by
+     * the chat path once a minute.
+     */
+    async touchUserPresence(username, userId) {
+        if (!this.assertUserId(username, userId)) {
+            return null;
+        }
+
+        try {
+            const sql = `
+                INSERT INTO viewers (user_id, username, last_seen)
+                VALUES (?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    last_seen = NOW(),
+                    username = VALUES(username)
+            `;
+            await this.analyticsManager.dbManager.query(sql, [userId, username]);
+            logger.debug('ViewerTracker', 'User presence touched', { username, userId });
+            return userId;
+        } catch (error) {
+            logger.error('ViewerTracker', 'Error touching user presence', {
+                error: error.message,
+                stack: error.stack,
+                username,
+                userId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * viewers.user_id holds Twitch's numeric id. Falling back to the username
+     * poisoned that column with values that can never join correctly.
+     */
+    assertUserId(username, userId) {
+        if (!userId) {
+            logger.error('ViewerTracker', 'Refusing to write viewer without a Twitch user id', {
+                username
+            });
+            return false;
+        }
+        return true;
     }
 
     async handleFollowEvent(userId, username, followedAt) {
@@ -126,14 +214,11 @@ class ViewerTracker {
             const isVip = userContext.isVip || false;
             const isBroadcaster = userContext.isBroadcaster || false;
             const dbUserId = await this.ensureUserExists(username, userId, isMod, isSubscriber, isVip, isBroadcaster);
+            if (!dbUserId) {
+                return;
+            }
 
-            const checkFirstMessageSql = `
-                SELECT COUNT(*) as count FROM chat_messages
-                WHERE user_id = ? AND stream_id = ?
-            `;
-            const result = await this.analyticsManager.dbManager.query(checkFirstMessageSql, [dbUserId, streamId]);
-
-            if (result[0].count === 0) {
+            if (await this.isFirstMessageOfStream(dbUserId, streamId)) {
                 const updateUniqueSql = `
                     UPDATE streams
                     SET unique_chatters = unique_chatters + 1
@@ -148,44 +233,48 @@ class ViewerTracker {
             }
 
             const queueManager = this.getQueueManager();
-            if (queueManager) {
-                const chatMsgQueued = await queueManager.push('analytics:chat_messages', {
+
+            // Each write falls back independently. Falling back as a pair meant a
+            // half-failure replayed the write that had already been queued, which
+            // duplicated chat_messages rows and double-counted totals.
+            const chatMessageQueued = queueManager
+                ? await queueManager.push('analytics:chat_messages', {
                     type: 'chat_message',
                     userId: dbUserId,
                     streamId,
                     messageType: type,
                     content,
                     messageTime: new Date()
-                });
+                })
+                : false;
 
-                const chatTotalsQueued = await queueManager.push('analytics:chat_totals', {
+            const chatTotalsQueued = queueManager
+                ? await queueManager.push('analytics:chat_totals', {
                     type: 'chat_totals',
                     userId: dbUserId,
                     messageType: type
-                });
+                })
+                : false;
 
-                if (chatMsgQueued && chatTotalsQueued) {
-                    logger.debug('ViewerTracker', 'Interaction queued for batch processing', {
-                        username,
-                        userId: dbUserId,
-                        streamId,
-                        type
-                    });
-                    return;
-                }
+            if (!chatMessageQueued) {
+                const sql = `
+                    INSERT INTO chat_messages (user_id, stream_id, message_time, message_type, message_content)
+                    VALUES (?, ?, NOW(), ?, ?)
+                `;
+                await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
             }
 
-            const sql = `
-                INSERT INTO chat_messages (user_id, stream_id, message_time, message_type, message_content)
-                VALUES (?, ?, NOW(), ?, ?)
-            `;
-            await this.analyticsManager.dbManager.query(sql, [dbUserId, streamId, type, content]);
-            await this.updateChatTotals(dbUserId, type);
-            logger.debug('ViewerTracker', 'Interaction tracked (direct)', {
+            if (!chatTotalsQueued) {
+                await this.updateChatTotals(dbUserId, type);
+            }
+
+            logger.debug('ViewerTracker', 'Interaction tracked', {
                 username,
                 userId: dbUserId,
                 streamId,
-                type
+                type,
+                chatMessageQueued,
+                chatTotalsQueued
             });
         } catch (error) {
             logger.error('ViewerTracker', `Error tracking ${type} for ${username}`, {
@@ -302,6 +391,7 @@ class ViewerTracker {
                 WHERE stream_id = ? AND end_time IS NULL
             `;
             const result = await this.analyticsManager.dbManager.query(sql, [streamId]);
+            this.forgetStream(streamId);
             logger.info('ViewerTracker', 'Closed all viewing sessions for stream', {
                 streamId,
                 affectedRows: result.affectedRows
@@ -329,7 +419,7 @@ class ViewerTracker {
                 const userId = viewer.user_id;
                 const username = viewer.user_login;
 
-                await this.ensureUserExists(username, userId);
+                await this.touchUserPresence(username, userId);
 
                 const activeSession = await this.getActiveSession(userId, streamId);
 

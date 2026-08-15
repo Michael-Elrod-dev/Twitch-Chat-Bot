@@ -1,6 +1,5 @@
-// tests/redis/analyticsQueueConsumer.test.js
-
 const AnalyticsQueueConsumer = require('../../src/redis/analyticsQueueConsumer');
+const { createMockDbManager } = require('../__mocks__/mockDbManager');
 
 jest.mock('../../src/config/config', () => ({
     analyticsQueue: {
@@ -25,9 +24,7 @@ describe('AnalyticsQueueConsumer', () => {
             requeueWithRetry: jest.fn().mockResolvedValue(true)
         };
 
-        mockDbManager = {
-            query: jest.fn().mockResolvedValue({ affectedRows: 1 })
-        };
+        mockDbManager = createMockDbManager({ defaultQueryResult: { affectedRows: 1 } });
 
         consumer = new AnalyticsQueueConsumer(mockQueueManager, mockDbManager);
     });
@@ -162,6 +159,9 @@ describe('AnalyticsQueueConsumer', () => {
                 }
             ];
             mockQueueManager.pop.mockResolvedValueOnce(messages).mockResolvedValue([]);
+            // Force the batch path to fail so per-message retry/DLQ attribution
+            // is exercised on the row-by-row fallback.
+            mockDbManager.withTransaction.mockRejectedValue(new Error('Batch failed'));
             mockDbManager.query.mockRejectedValueOnce(new Error('Insert failed'));
 
             await consumer.processChatMessages();
@@ -181,6 +181,9 @@ describe('AnalyticsQueueConsumer', () => {
                 }
             ];
             mockQueueManager.pop.mockResolvedValueOnce(messages).mockResolvedValue([]);
+            // Force the batch path to fail so per-message retry/DLQ attribution
+            // is exercised on the row-by-row fallback.
+            mockDbManager.withTransaction.mockRejectedValue(new Error('Batch failed'));
             mockDbManager.query.mockRejectedValueOnce(new Error('Insert failed'));
 
             await consumer.processChatMessages();
@@ -287,6 +290,8 @@ describe('AnalyticsQueueConsumer', () => {
                 { data: { userId: 'u3', streamId: 's1', messageType: 'message', content: 'ok2' }, attempts: 0 }
             ];
             mockQueueManager.pop.mockResolvedValueOnce(messages).mockResolvedValue([]);
+            // Mixed outcomes only arise on the row-by-row fallback, so fail the batch.
+            mockDbManager.withTransaction.mockRejectedValue(new Error('Batch failed'));
 
             mockDbManager.query
                 .mockResolvedValueOnce({})

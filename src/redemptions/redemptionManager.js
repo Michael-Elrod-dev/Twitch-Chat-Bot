@@ -1,5 +1,3 @@
-// src/redemptions/redemptionManager.js
-
 const fetch = require('node-fetch');
 const config = require('../config/config');
 const logger = require('../logger/logger');
@@ -48,9 +46,9 @@ class RedemptionManager {
         }
     }
 
-    async updateRedemptionStatus(broadcasterId, rewardId, redemptionIds, status) {
+    async updateRedemptionStatus(broadcasterId, rewardId, redemptionId, status) {
         try {
-            const response = await fetch(`${config.twitchApiEndpoint}/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${rewardId}&id=${redemptionIds[0]}`, {
+            const response = await fetch(`${config.twitchApiEndpoint}/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${rewardId}&id=${redemptionId}`, {
                 method: 'PATCH',
                 headers: {
                     'Client-Id': this.twitchBot.tokenManager.tokens.clientId,
@@ -72,6 +70,7 @@ class RedemptionManager {
                 stack: error.stack,
                 broadcasterId,
                 rewardId,
+                redemptionId,
                 status
             });
             throw error;

@@ -1,209 +1,181 @@
-# AlmostHadAI Twitch Bot
+# AlmostHadAI
 
-A Twitch chat bot featuring AI-powered chat responses (via Claude), Spotify queue automation, channel point redemptions, dynamic commands, and comprehensive database-driven analytics.
+A single-channel Twitch chat bot for [`aimosthadme`](https://www.twitch.tv/aimosthadme),
+running as the bot account `almosthadai`.
 
-## Directory Structure
+Node.js, CommonJS, no build step. MySQL for persistence, Redis as an optional cache
+and analytics write queue, Twitch EventSub over WebSocket for all live events.
 
-```
-src/
-├── ai/                        # AI integration and management
-│   ├── models/                # AI model implementations
-│   │   └── claudeModel.js     # Claude text generation
-│   ├── aiManager.js           # Central AI coordination and rate limiting
-│   └── rateLimiter.js         # Per-user AI usage limits and tracking
-├── analytics/                 # Stream and chat analytics
-│   ├── viewers/               # Viewer tracking and statistics
-│   │   └── viewerTracker.js   # Viewer interaction tracking
-│   └── analyticsManager.js    # Central analytics coordination
-├── commands/                  # Command handling
-│   ├── commandManager.js      # Custom command management
-│   └── specialCommandHandlers.js # Built-in command implementations
-├── config/                    # Configuration
-│   └── config.js              # App-wide configuration including AI settings
-├── database/                  # Database management
-│   ├── dbManager.js           # Database connection handling
-│   └── schema.sql             # Database schema including AI usage tracking
-├── emotes/                    # Emote response system
-│   └── emoteManager.js        # Emote trigger and response handling
-├── logger/                    # Logging system
-│   ├── logger.js              # Winston-based structured logging
-│   └── logs/                  # Log file directory (gitignored)
-├── messages/                  # Message handling
-│   ├── chatMessageHandler.js  # Chat message processing with AI integration
-│   ├── messageSender.js       # Message sending to Twitch
-│   └── redemptionHandler.js   # Channel point redemption processing
-├── redemptions/               # Channel point features
-│   ├── quotes/                # Quote system
-│   │   ├── handleQuote.js     # Quote redemption handler
-│   │   └── quoteManager.js    # Quote storage and retrieval
-│   ├── songs/                 # Song request system
-│   │   ├── queueManager.js    # Song queue management
-│   │   ├── songRequest.js     # Song request handling
-│   │   └── spotifyManager.js  # Spotify API integration
-│   └── redemptionManager.js   # Channel point redemption routing
-├── tokens/                    # API authentication
-│   ├── tokenManager.js        # Token refresh and storage
-│   └── twitchAPI.js           # Twitch API wrapper
-├── websocket/                 # Real-time communication
-│   ├── eventHandler.js        # EventSub event handling (placeholder)
-│   ├── subscriptionManager.js # EventSub subscription management
-│   └── webSocketManager.js    # WebSocket connection handling
-└── bot.js                     # Main application entry point
-```
+---
 
-## Key Components
+## What it does
 
-### Core Bot (`bot.js`)
-- Initializes all subsystems and manages their lifecycle
-- Coordinates between components via dependency injection
-- Establishes event subscriptions and message routing
-- Handles stream start/end detection with automatic resource management
-- **Graceful Shutdown**: 30-minute auto-shutdown after stream offline or Ctrl+C for immediate shutdown
-- **Crash Recovery**: Automatically cleans up orphaned sessions from previous crashes on startup
-- Manages database connections and SQL-based data persistence with guaranteed integrity
-- Tracks current stream sessions and comprehensive viewer analytics
+- **AI chat** — responds to mentions, plus `!ai`, `!advice` and `!roast`, via the
+  Claude API. Per-role rate limits, per stream.
+- **Song requests** — channel-point redemptions add Spotify tracks to a MySQL-backed
+  queue; a poller feeds them into the real Spotify queue as the current track ends.
+- **Commands** — stored in MySQL. Static text commands are editable from chat;
+  richer ones are backed by handler modules discovered at startup.
+- **Emotes** — exact-match trigger/response pairs.
+- **Quotes** — added by redemption, recalled by command.
+- **Analytics** — chat messages, viewing sessions, per-stream totals, follows.
+- **Discord** — go-live notification with a cooldown.
+- **Backups** — hourly `mysqldump` to S3, verified before upload, with rotation.
+- **Stream Deck API** — loopback-only HTTP endpoint for toggling song requests.
 
-### AI Integration (`ai/`)
-- **aiManager.js**: Coordinates AI requests with rate limiting and user permission handling
-- **models/claudeModel.js**: Handles Claude API for contextual chat responses
-- **rateLimiter.js**: Enforces per-user AI usage limits with database tracking
+## Running it
 
-### Database Layer (`database/`)
-- **dbManager.js**: Handles MySQL database connections with transaction support
-- **schema.sql**: Defines database structure for analytics, commands, emotes, user data, and AI usage tracking
-
-### Authentication & API (`tokens/`)
-- **tokenManager.js**: Manages OAuth tokens for Twitch, Spotify, and AI services with automatic refreshing
-- **twitchAPI.js**: Provides methods for interacting with Twitch API including channel point management
-
-### Event Handling (`websocket/`)
-- **webSocketManager.js**: Maintains WebSocket connection to Twitch EventSub with automatic reconnection
-- **subscriptionManager.js**: Sets up event subscriptions for chat, channel points, and stream status
-- **eventHandler.js**: Placeholder for future specialized event handling logic
-
-### Message Processing (`messages/`)
-- **chatMessageHandler.js**: Processes chat messages with AI trigger detection and response routing
-- **messageSender.js**: Handles sending messages to Twitch chat with token validation
-- **redemptionHandler.js**: Processes channel point redemptions with analytics tracking
-
-### Commands (`commands/`)
-- **commandManager.js**: Manages custom commands with database storage, caching, and permission levels
-- **specialCommandHandlers.js**: Implements built-in commands including stats, quotes, and Spotify controls
-
-### Emote System (`emotes/`)
-- **emoteManager.js**: Handles automatic emote responses with database storage and caching
-
-### Channel Point Features (`redemptions/`)
-- **redemptionManager.js**: Routes redemptions to handlers and manages status updates
-- **quotes/**: Quote saving and retrieval system with database persistence
-- **songs/**: Spotify song request and queue management with database-backed queue
-
-### Spotify Integration (`redemptions/songs/`)
-- **spotifyManager.js**: Manages Spotify authentication and playback with automatic queue monitoring
-- **queueManager.js**: Handles song queue with database persistence and priority support
-- **songRequest.js**: Processes song requests with validation and error handling
-
-### Analytics & Viewer Tracking (`analytics/`)
-- **analyticsManager.js**: Coordinates comprehensive stream and chat data collection
-- **viewers/viewerTracker.js**: Tracks viewer participation, message counts, and AI usage statistics
-
-### Logging System (`logger/`)
-- **logger.js**: Winston-based structured logging with multiple log levels (debug, info, warn, error)
-- **Size-based rotation**: Automatically rotates logs when files reach 20MB
-- **Retention policy**: Keeps last 10 log files, automatically deletes older ones
-- **Separate error logs**: Dedicated error log files for quick troubleshooting
-- **Crash-safe**: Uses last known activity timestamps for accurate analytics even after crashes
-
-## Features
-
-### AI-Powered Responses
-- **Text Responses**: Context-aware chat responses via Claude AI with @mentions
-- **Rate Limiting**: Per-user usage limits with different tiers for mods/subscribers
-- **Smart Triggers**: Responds to @almosthadai mentions in chat
-
-### Chat Management
-- **Custom Commands**: Create, edit, and manage chat commands with permission levels
-- **Emote Responses**: Automatic responses to trigger words with database storage
-- **Dynamic Permissions**: Role-based access control for commands and features
-
-### Spotify Integration
-- **Song Requests**: Channel point integration with automatic queue management
-- **Queue Management**: Priority and regular queues with database persistence
-- **Playback Control**: Automatic track monitoring and playlist archiving
-- **Mod Controls**: Skip songs, toggle requests, and manage queue
-
-### Channel Point Features
-- **Quote System**: Save and retrieve memorable quotes with database storage
-- **Song Requests**: Spotify integration with validation and error handling
-- **Redemption Management**: Automatic status updates and point refunds
-
-### Analytics & Tracking
-- **Viewer Stats**: Comprehensive participation tracking including AI usage
-- **Stream Analytics**: Peak viewers, message counts, and session data
-- **Usage Tracking**: AI request monitoring and rate limit enforcement
-- **Database Persistence**: All data stored in MySQL with proper relationships
-
-### Advanced Features
-- **Stream Lifecycle Management**: Automatic resource management based on stream status
-- **Graceful Shutdown**: Database integrity protection with automatic data saves
-- **Auto-Shutdown Timer**: 30-minute grace period after stream offline (recovers from internet outages)
-- **Crash Recovery**: Orphaned session cleanup using last chat activity timestamps
-- **Token Management**: Automatic refresh for all API services
-- **Error Handling**: Comprehensive error recovery and user feedback
-- **Structured Logging**: Winston-based logging with rotation and retention policies
-- **Modular Architecture**: Easy to extend with new features and integrations
-
-## Running the Bot
-
-### Start the Bot
 ```bash
+npm install
 npm start
 ```
-or
+
+Node 24 or newer (see `.nvmrc`).
+
+Debug mode uses a separate `<DB_NAME>_debug` database, forces full operation
+regardless of stream status, and skips backups and Discord notifications:
+
 ```bash
-node src/bot.js
+npm run debug
 ```
 
-### Stop the Bot
-- **Graceful Shutdown**: Press `Ctrl+C` to safely stop the bot
-  - Saves all stream analytics
-  - Closes viewer sessions properly
-  - Ensures database integrity
-  - Closes all connections cleanly
+### Lifecycle
 
-### Automatic Shutdown
-- Bot automatically shuts down 30 minutes after stream goes offline
-- Countdown warnings logged at 15min, 5min, 1min remaining
-- Cancels shutdown if stream comes back online (internet outage recovery)
+The bot has two modes and moves between them on its own.
 
-### Log Files
-All logs are stored in `src/logger/logs/`:
-- `bot-YYYY-MM-DD-HHmmss.log` - All logs (info, debug, warn, error)
-- `error-YYYY-MM-DD-HHmmss.log` - Error logs only
+**Minimal mode** (stream offline): a WebSocket connection subscribed only to
+`stream.online`, `stream.offline` and `channel.follow`, plus the token refresh
+check. Nothing else runs.
 
-To enable debug logging, edit `src/config/config.js`:
-```javascript
-this.logging = {
-    level: 'debug',  // Change from 'info' to 'debug'
-    maxSize: '20m',
-    maxFiles: 10
-}
-```
+**Full operation** (stream live): everything above plus chat and channel-point
+subscriptions, analytics, viewer polling every 60s, the Spotify monitors, hourly
+backups, and the API server.
+
+Stream ends → tears back down to minimal mode and starts a 30-minute grace timer
+that exits the process. Stream returns → cancels the timer and starts up again.
+`SIGINT`/`SIGTERM` → graceful shutdown: ends sessions, drains the Redis queues,
+takes a final backup, closes connections.
 
 ## Configuration
 
-The bot supports extensive configuration through environment variables and `config.js`:
-- AI model settings and rate limits
-- Database connection parameters
-- API endpoints and authentication
-- Feature toggles and permissions
-- Caching intervals and timeouts
+Secrets come from `.env`. Behaviour knobs live in `src/config/config.js`, which is
+the intended place to tune the bot.
 
-## Database Schema
+### Environment
 
-Includes tables for:
-- User analytics and session tracking
-- Command and emote management
-- AI usage tracking and rate limiting
-- Song queue and quote storage
-- Stream analytics and viewer statistics
+| Variable | Required | Notes |
+|---|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | yes | MySQL connection |
+| `DB_CONNECTION_LIMIT` | no | Pool size, default 10 |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | no | Omit to run without Redis |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET_NAME` | for backups | S3 destination |
+| `DISCORD_WEBHOOK_URL` | for go-live posts | |
+| `API_ENABLED`, `API_PORT`, `API_KEY` | for the Stream Deck | Loopback only |
+| `LOG_DIR` | no | Log directory, default `logs/` at the repo root |
+
+Twitch and Spotify credentials are **not** environment variables — they live in the
+`tokens` table in MySQL, which the bot reads at startup and updates as tokens rotate.
+
+### Notable knobs in `config.js`
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `tokenRefreshInterval` | 5 min | How often expiry is *checked* |
+| `tokenRefreshSafetyMargin` | 15 min | How close to expiry a token is *rotated* |
+| `shutdownGracePeriod` | 30 min | Offline wait before the process exits |
+| `viewerTrackingInterval` | 60 s | Chatter poll |
+| `spotifyInterval` | 3 s | Playback poll |
+| `backupInterval` | 1 h | Scheduled backup |
+| `cache.*TTL` | 300 s | Redis cache lifetimes |
+| `rateLimits.claude.streamLimits` | per role | AI requests per user per stream |
+
+### Redis is optional
+
+Every Redis-backed path has a MySQL fallback. With Redis down the bot still works;
+commands and emotes read from an in-memory cache backed by MySQL, and analytics
+writes go straight to the database instead of through the queue.
+
+## Layout
+
+```
+src/
+├── bot.js                  Composition root: DI wiring, lifecycle, shutdown
+├── config/                 All configuration
+├── ai/                     Claude client, rate limiter, context and prompt builders
+├── analytics/              Analytics manager and viewer tracking
+├── api/                    Express server, API-key middleware, song routes
+├── commands/               Command registry + auto-discovered handler modules
+├── database/               Pool, transactions, backups, debug DB setup, schema
+├── emotes/                 Trigger/response matching
+├── logger/                 Winston setup with error dedup and rate limiting
+├── messages/               Chat routing, sending, redemption dispatch
+├── notifications/          Discord webhook
+├── redemptions/            Channel-point routing; quotes and songs
+├── redis/                  Connection, cache, queue, analytics consumer
+├── services/               Song-toggle service
+├── tokens/                 Token lifecycle and Twitch Helix client
+└── websocket/              EventSub connection and subscription management
+tests/                      Mirrors src/
+docs/                       Baseline review, work packages, migration, smoke test
+```
+
+### How a chat message flows
+
+EventSub → `bot.handleChatMessage` → `chatMessageHandler`, which in order: ignores
+the bot's own messages and reward-attached ones, checks whether the message mentions
+the bot (commands always win), checks for an exact emote match, dispatches `!`
+commands, and records analytics.
+
+### How a command resolves
+
+`commandManager` looks the name up in Redis, then its in-memory map, then MySQL.
+A command either has `handler_name` — dispatched to a function loaded from
+`commands/handlers/` — or a static `response_text`. Permission is decided in exactly
+one place: from the handler's declared level if it has one, otherwise from the
+database row.
+
+## Testing
+
+```bash
+npm test              # full suite
+npm run test:coverage # with coverage report
+npm run test:watch    # watch mode
+```
+
+The suite is fully mocked — no database, Redis, or network access required, and no
+test can reach an external host. Roughly 1200 tests across 49 suites, a few seconds
+to run.
+
+Coverage thresholds are enforced in `jest.config.js` (75% statements/lines/functions,
+70% branches).
+
+### CI
+
+Every push and pull request to `main` runs lint and the full suite via GitHub Actions
+(`.github/workflows/ci.yml`), on the Node version in `.nvmrc`. A separate job runs
+`npm audit --audit-level=high`.
+
+Dependencies are pinned exactly and updated by Renovate — see
+[`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+
+Lint locally with:
+
+```bash
+npx eslint src/ tests/
+```
+
+## Documentation
+
+- [`docs/BASELINE_REVIEW.md`](docs/BASELINE_REVIEW.md) — architectural review and
+  findings register
+- [`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) — the Phase 0 stabilisation plan
+  and its results
+- [`docs/MIGRATION_NOTES.md`](docs/MIGRATION_NOTES.md) — **read before deploying
+  against an existing database**
+- [`docs/SMOKE_TEST.md`](docs/SMOKE_TEST.md) — manual verification script
+- [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — pinning policy and the update flow
+
+## Status
+
+Phase 0 (baseline stabilisation) is complete. The system is single-channel by
+design; multi-channel support and a web frontend are later phases.

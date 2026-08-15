@@ -1,14 +1,19 @@
-// src/commands/commandManager.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 const { loadCommandHandlers } = require('./utils/commandLoader');
 
 const CACHE_KEY = 'cache:commands';
 
+// Ordered ranks: a command at a given level runs for that level and everything
+// above it. 'vip' sits between everyone and mod.
+const LEVELS = { everyone: 0, vip: 1, mod: 2, broadcaster: 3 };
+
 class CommandManager {
-    constructor(specialCommandHandlers) {
+    constructor(specialCommandHandlers, handlerLevels = {}) {
         this.specialCommandHandlers = specialCommandHandlers;
+        // Declared by the handler modules themselves - the single source of truth
+        // for what a handler-backed command requires.
+        this.handlerLevels = handlerLevels;
         this.dbManager = null;
         this.redisManager = null;
         this.commandCache = new Map();
@@ -17,12 +22,46 @@ class CommandManager {
     }
 
     static createWithDependencies(dependencies) {
-        const handlers = loadCommandHandlers(dependencies);
-        const manager = new CommandManager(handlers);
+        const { handlers, levels } = loadCommandHandlers(dependencies);
+        const manager = new CommandManager(handlers, levels);
         logger.info('CommandManager', 'Initialized with modular handler system', {
             handlerCount: Object.keys(handlers).length
         });
         return manager;
+    }
+
+    /**
+     * The one place permission is decided. Static commands take their level from
+     * the DB; handler commands take theirs from the handler's own declaration.
+     */
+    static hasPermission(requiredLevel, context) {
+        // An unrecognised level resolves to 'everyone' - it must never resolve to
+        // something MORE permissive than intended, so unknown means unrestricted
+        // rather than accidentally granting a higher tier.
+        const required = LEVELS[requiredLevel] ?? LEVELS.everyone;
+
+        return CommandManager.rankOf(context) >= required;
+    }
+
+    /** The highest tier this chatter holds. */
+    static rankOf(context) {
+        if (context.badges?.broadcaster) {
+            return LEVELS.broadcaster;
+        }
+        if (context.mod) {
+            return LEVELS.mod;
+        }
+        if (context.vip) {
+            return LEVELS.vip;
+        }
+        return LEVELS.everyone;
+    }
+
+    resolveUserLevel(command) {
+        if (command.handler && this.handlerLevels[command.handler]) {
+            return this.handlerLevels[command.handler];
+        }
+        return command.userLevel || 'everyone';
     }
 
     async init(dbManager, redisManager = null) {
@@ -50,10 +89,28 @@ class CommandManager {
             const cacheData = {};
 
             for (const row of results) {
+                const declaredLevel = row.handler_name ? this.handlerLevels[row.handler_name] : null;
+
+                // The DB row for a handler command has been decorative: real checks
+                // lived inline in the handler. Where they disagree the declaration
+                // wins and the row is corrected, so the table stops lying.
+                if (declaredLevel && declaredLevel !== row.user_level) {
+                    logger.warn('CommandManager', 'Correcting stale user_level for handler command', {
+                        commandName: row.command_name,
+                        handler: row.handler_name,
+                        was: row.user_level,
+                        now: declaredLevel
+                    });
+                    await this.dbManager.query(
+                        'UPDATE commands SET user_level = ? WHERE command_name = ?',
+                        [declaredLevel, row.command_name]
+                    );
+                }
+
                 const commandData = {
                     response: row.response_text,
                     handler: row.handler_name,
-                    userLevel: row.user_level
+                    userLevel: declaredLevel || row.user_level
                 };
                 this.commandCache.set(row.command_name.toLowerCase(), commandData);
                 cacheData[row.command_name.toLowerCase()] = commandData;
@@ -96,8 +153,11 @@ class CommandManager {
                     return cached;
                 }
 
-                const allCached = await cacheManager.hgetall(CACHE_KEY);
-                if (!allCached || Object.keys(allCached).length === 0) {
+                // A miss is the common case - every ordinary chat message hits it.
+                // EXISTS is O(1); pulling the whole hash back just to ask whether it
+                // was populated made each non-matching message pay for the entire set.
+                const populated = await cacheManager.exists(CACHE_KEY);
+                if (!populated) {
                     logger.debug('CommandManager', 'Redis cache empty, reloading commands');
                     await this.loadCommands();
                     return this.commandCache.get(normalizedName) || null;
@@ -124,7 +184,7 @@ class CommandManager {
 
     async handleCommand(twitchBot, channel, context, message) {
         if (message === '!command' || message.startsWith('!command ')) {
-            if (!context.mod && !context.badges?.broadcaster) return;
+            if (!CommandManager.hasPermission('mod', context)) return;
 
             const args = message.split(' ');
 
@@ -193,8 +253,16 @@ class CommandManager {
         const command = await this.getCommand(commandName);
 
         if (!command) return;
-        if (command.userLevel === 'mod' && !context.mod && !context.badges?.broadcaster) return;
-        if (command.userLevel === 'broadcaster' && !context.badges?.broadcaster) return;
+
+        const requiredLevel = this.resolveUserLevel(command);
+        if (!CommandManager.hasPermission(requiredLevel, context)) {
+            logger.debug('CommandManager', 'Command blocked by permission level', {
+                commandName,
+                requiredLevel,
+                userName: context.username
+            });
+            return;
+        }
 
         try {
             logger.debug('CommandManager', 'Executing command', {

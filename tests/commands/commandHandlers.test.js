@@ -1,15 +1,14 @@
-// tests/commands/commandHandlers.test.js
-
-
 const { loadCommandHandlers } = require('../../src/commands/utils/commandLoader');
 
-jest.mock('node-fetch', () => {
-    const actualFetch = jest.requireActual('node-fetch');
-    return jest.fn((...args) => actualFetch.default(...args));
-});
+// Never fall through to the real network. No handler under test performs a fetch;
+// if one starts to, this mock fails loudly instead of issuing a live request.
+jest.mock('node-fetch', () => jest.fn(() => {
+    throw new Error('Unexpected live fetch in tests - stub node-fetch for this case');
+}));
 
 describe('CommandHandlers (Modular)', () => {
     let handlers;
+    let levels;
     let mockTwitchBot;
     let mockQuoteManager;
     let mockSpotifyManager;
@@ -76,10 +75,10 @@ describe('CommandHandlers (Modular)', () => {
             badges: {}
         };
 
-        handlers = loadCommandHandlers({
+        ({ handlers, levels } = loadCommandHandlers({
             quoteManager: mockQuoteManager,
             spotifyManager: mockSpotifyManager
-        });
+        }));
     });
 
     describe('Utility Functions', () => {
@@ -637,16 +636,13 @@ describe('CommandHandlers (Modular)', () => {
             );
         });
 
-        it('should require mod permissions', async () => {
-            mockContext.mod = false;
-            mockContext.badges = {};
-
-            await handlers.emoteAdd(mockTwitchBot, 'channel', mockContext, ['pog', 'PogChamp']);
-
-            expect(mockTwitchBot.emoteManager.addEmote).not.toHaveBeenCalled();
+        it('should declare that it requires mod', () => {
+            // Enforcement moved to CommandManager, which is now the single gate.
+            // The handler's job is to DECLARE the level it needs.
+            expect(levels.emoteAdd).toBe('mod');
         });
 
-        it('should allow broadcaster to add emotes', async () => {
+        it('should add emotes when invoked', async () => {
             mockContext.mod = false;
             mockContext.badges = { broadcaster: '1' };
             mockTwitchBot.emoteManager.addEmote.mockResolvedValue(true);
@@ -734,13 +730,35 @@ describe('CommandHandlers (Modular)', () => {
             );
         });
 
-        it('should require mod permissions', async () => {
-            mockContext.mod = false;
-            mockContext.badges = {};
-
-            await handlers.toggleAI(mockTwitchBot, 'channel', mockContext, ['on']);
-
-            expect(mockTwitchBot.analyticsManager.dbManager.query).not.toHaveBeenCalled();
+        it('should declare that it requires mod', () => {
+            expect(levels.toggleAI).toBe('mod');
         });
+    });
+});
+
+describe('Handler permission declarations', () => {
+    const { loadCommandHandlers } = require('../../src/commands/utils/commandLoader');
+
+    it('should declare a level for every privileged handler', () => {
+        const { levels } = loadCommandHandlers({});
+
+        expect(levels).toEqual({
+            toggleAI: 'mod',
+            emoteAdd: 'mod',
+            skipSong: 'mod',
+            toggleSongs: 'mod'
+        });
+    });
+
+    it('should leave everything else unrestricted', () => {
+        const { handlers, levels } = loadCommandHandlers({});
+
+        const unrestricted = Object.keys(handlers).filter(name => !levels[name]);
+
+        expect(unrestricted).toEqual(expect.arrayContaining([
+            'currentSong', 'lastSong', 'nextSong', 'queueInfo',
+            'combinedStats', 'topStats', 'fursona', 'waifu',
+            'followAge', 'uptime', 'quoteHandler', 'advice', 'roast'
+        ]));
     });
 });

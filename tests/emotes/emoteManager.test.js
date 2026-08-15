@@ -1,12 +1,10 @@
-// tests/emotes/emoteManager.test.js
-
 const EmoteManager = require('../../src/emotes/emoteManager');
 const { createMockRedisManager } = require('../__mocks__/mockRedisManager');
 
 jest.mock('../../src/config/config', () => ({
     emoteCacheInterval: 60000,
     cache: {
-        emotesTTL: 500
+        emotesTTL: 300
     }
 }));
 
@@ -388,7 +386,7 @@ describe('EmoteManager', () => {
             expect(cacheManager.hmset).toHaveBeenCalledWith('cache:emotes', {
                 'kekw': 'LUL'
             });
-            expect(cacheManager.expire).toHaveBeenCalledWith('cache:emotes', 500);
+            expect(cacheManager.expire).toHaveBeenCalledWith('cache:emotes', 300);
         });
 
         it('should get emote from Redis cache', async () => {

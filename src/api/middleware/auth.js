@@ -1,5 +1,3 @@
-// src/api/middleware/auth.js
-
 const logger = require('../../logger/logger');
 
 function apiKeyAuth(config) {

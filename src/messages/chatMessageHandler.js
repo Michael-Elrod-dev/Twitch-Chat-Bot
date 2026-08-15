@@ -1,5 +1,3 @@
-// src/messages/chatMessageHandler.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 
@@ -51,6 +49,7 @@ class ChatMessageHandler {
                 username: event.chatter_user_name,
                 userId: event.chatter_user_id,
                 mod: isMod,
+                vip: isVip,
                 badges: {
                     broadcaster: isBroadcaster
                 },
@@ -206,11 +205,13 @@ class ChatMessageHandler {
 
             return aiEnabled;
         } catch (error) {
-            logger.error('ChatMessageHandler', 'Error checking AI enabled status', {
+            // Fails CLOSED: if we cannot read the flag we stay quiet rather than
+            // resurrecting an AI the broadcaster may have deliberately turned off.
+            logger.error('ChatMessageHandler', 'Error checking AI enabled status - treating AI as disabled', {
                 error: error.message,
                 stack: error.stack
             });
-            return true;
+            return false;
         }
     }
 }

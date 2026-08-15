@@ -1,5 +1,3 @@
-// tests/database/dbBackupManager.test.js
-
 const DbBackupManager = require('../../src/database/dbBackupManager');
 
 jest.mock('../../src/config/config', () => ({
@@ -37,18 +35,44 @@ describe('DbBackupManager', () => {
         });
     });
 
-    describe('buildMysqldumpCommand', () => {
-        it('should build command with correct parameters', () => {
-            const outputPath = '/tmp/backup.sql';
-            const command = backupManager.buildMysqldumpCommand(outputPath);
+    describe('buildMysqldumpInvocation', () => {
+        it('should pass the password via env, never on the command line', () => {
+            const { args, env } = backupManager.buildMysqldumpInvocation('/tmp/backup.sql');
 
-            expect(command).toContain('mysqldump');
-            expect(command).toContain('-h localhost');
-            expect(command).toContain('-P 3306');
-            expect(command).toContain('-u testuser');
-            expect(command).toContain('-ptestpass');
-            expect(command).toContain('testdb');
-            expect(command).toContain(`> "${outputPath}"`);
+            expect(env.MYSQL_PWD).toBe('testpass');
+            expect(args.join(' ')).not.toContain('testpass');
+        });
+
+        it('should write via --result-file rather than shell redirection', () => {
+            const { args } = backupManager.buildMysqldumpInvocation('/tmp/backup.sql');
+
+            expect(args).toContain('--result-file=/tmp/backup.sql');
+            expect(args.join(' ')).not.toContain('>');
+        });
+
+        it('should pass connection details as discrete arguments', () => {
+            const { args } = backupManager.buildMysqldumpInvocation('/tmp/backup.sql');
+
+            expect(args).toEqual([
+                '-h', 'localhost',
+                '-P', '3306',
+                '-u', 'testuser',
+                '--result-file=/tmp/backup.sql',
+                'testdb'
+            ]);
+        });
+
+        it('should not let a hostile database name become a second argument', () => {
+            const config = require('../../src/config/config');
+            const original = config.database.database;
+            config.database.database = 'testdb; rm -rf /';
+
+            const { args } = backupManager.buildMysqldumpInvocation('/tmp/backup.sql');
+
+            // execFile takes an argv array, so this stays one inert argument.
+            expect(args[args.length - 1]).toBe('testdb; rm -rf /');
+
+            config.database.database = original;
         });
     });
 

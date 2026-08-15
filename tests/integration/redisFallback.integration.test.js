@@ -1,5 +1,3 @@
-// tests/integration/redisFallback.integration.test.js
-
 const { createMockRedisManager, createDisconnectedRedisManager } = require('../__mocks__/mockRedisManager');
 const { createMockDbManager } = require('../__mocks__/mockDbManager');
 
@@ -15,7 +13,7 @@ describe('Redis Fallback Integration', () => {
             jest.mock('../../src/config/config', () => ({
                 commandCacheInterval: 60000,
                 cache: {
-                    commandsTTL: 500
+                    commandsTTL: 300
                 }
             }));
 
@@ -359,7 +357,7 @@ describe('Redis Fallback Integration', () => {
             expect(result).toBe(true);
         });
 
-        it('should default to true on error', async () => {
+        it('should fail closed on error', async () => {
             const disconnectedRedis = createDisconnectedRedisManager();
             mockDbManager.query.mockRejectedValue(new Error('DB Error'));
 
@@ -377,7 +375,7 @@ describe('Redis Fallback Integration', () => {
 
             const result = await chatMessageHandler.isAIEnabled(mockBot);
 
-            expect(result).toBe(true);
+            expect(result).toBe(false);
         });
     });
 });

@@ -1,13 +1,10 @@
-// tests/commands/commandManager.test.js
-
-
 const CommandManager = require('../../src/commands/commandManager');
 const { createMockRedisManager, createDisconnectedRedisManager } = require('../__mocks__/mockRedisManager');
 
 jest.mock('../../src/config/config', () => ({
     commandCacheInterval: 60000,
     cache: {
-        commandsTTL: 500
+        commandsTTL: 300
     }
 }));
 
@@ -606,7 +603,7 @@ describe('CommandManager', () => {
                     userLevel: 'everyone'
                 })
             }));
-            expect(cacheManager.expire).toHaveBeenCalledWith('cache:commands', 500);
+            expect(cacheManager.expire).toHaveBeenCalledWith('cache:commands', 300);
         });
 
         it('should get command from Redis cache', async () => {

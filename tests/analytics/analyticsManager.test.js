@@ -1,5 +1,3 @@
-// tests/analytics/analyticsManager.test.js
-
 const AnalyticsManager = require('../../src/analytics/analyticsManager');
 
 jest.mock('../../src/analytics/viewers/viewerTracker');

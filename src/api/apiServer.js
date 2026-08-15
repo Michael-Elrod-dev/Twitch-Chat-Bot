@@ -1,5 +1,3 @@
-// src/api/apiServer.js
-
 const express = require('express');
 const logger = require('../logger/logger');
 const { apiKeyAuth } = require('./middleware/auth');
@@ -12,6 +10,7 @@ class ApiServer {
         this.messageSender = messageSender;
         this.app = express();
         this.server = null;
+        this.isConfigured = false;
     }
 
     setupMiddleware() {
@@ -70,12 +69,28 @@ class ApiServer {
             return;
         }
 
-        this.setupMiddleware();
-        this.setupRoutes();
+        if (this.server) {
+            logger.debug('API', 'API server already listening, skipping start', {
+                port: this.config.apiPort
+            });
+            return;
+        }
+
+        // Routes are registered once per instance - re-running them on a restart
+        // would stack duplicate middleware on the same express app.
+        if (!this.isConfigured) {
+            this.setupMiddleware();
+            this.setupRoutes();
+            this.isConfigured = true;
+        }
 
         return new Promise((resolve, reject) => {
+            let settled = false;
+
             try {
-                this.server = this.app.listen(this.config.apiPort, '127.0.0.1', () => {
+                const server = this.app.listen(this.config.apiPort, '127.0.0.1', () => {
+                    settled = true;
+                    this.server = server;
                     logger.info('API', 'API server started', {
                         port: this.config.apiPort,
                         host: '127.0.0.1'
@@ -83,11 +98,19 @@ class ApiServer {
                     resolve();
                 });
 
-                this.server.on('error', (error) => {
+                server.on('error', (error) => {
                     logger.error('API', 'Server error', {
                         error: error.message,
                         stack: error.stack
                     });
+
+                    // Errors after a successful listen (a client socket blowing up,
+                    // a late EADDRINUSE) must not settle an already-resolved promise.
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
                     reject(error);
                 });
             } catch (error) {
@@ -95,7 +118,11 @@ class ApiServer {
                     error: error.message,
                     stack: error.stack
                 });
-                reject(error);
+
+                if (!settled) {
+                    settled = true;
+                    reject(error);
+                }
             }
         });
     }
@@ -105,8 +132,13 @@ class ApiServer {
             return;
         }
 
+        // Dropped before closing so a failed close cannot leave a stale handle that
+        // blocks the next start().
+        const server = this.server;
+        this.server = null;
+
         return new Promise((resolve) => {
-            this.server.close(() => {
+            server.close(() => {
                 logger.info('API', 'API server stopped');
                 resolve();
             });

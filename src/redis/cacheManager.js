@@ -1,5 +1,3 @@
-// src/redis/cacheManager.js
-
 const logger = require('../logger/logger');
 
 class CacheManager {
@@ -187,6 +185,23 @@ class CacheManager {
                 error: error.message
             });
             return null;
+        }
+    }
+
+    async exists(key) {
+        const client = this.getClient();
+        if (!client) {
+            return false;
+        }
+
+        try {
+            return (await client.exists(key)) === 1;
+        } catch (error) {
+            logger.error('CacheManager', 'Error checking key existence', {
+                key,
+                error: error.message
+            });
+            return false;
         }
     }
 

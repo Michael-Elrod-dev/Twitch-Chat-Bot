@@ -1,5 +1,3 @@
-// src/commands/handlers/thirdParty.js
-
 function thirdPartyHandlers() {
     function hashCode(str) {
         return str.split('').reduce((a, b) => {

@@ -1,5 +1,3 @@
-// src/redis/queueManager.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 
@@ -58,11 +56,10 @@ class QueueManager {
         }
 
         try {
-            const messages = [];
-            for (let i = 0; i < count; i++) {
-                const item = await client.lpop(`queue:${queueName}`);
-                if (!item) break;
+            const items = await this.lpopMany(client, `queue:${queueName}`, count);
 
+            const messages = [];
+            for (const item of items) {
                 try {
                     messages.push(JSON.parse(item));
                 } catch (parseError) {
@@ -82,6 +79,39 @@ class QueueManager {
         }
     }
 
+    /**
+     * One round-trip via LPOP key count (Redis 6.2+), falling back to a loop of
+     * single LPOPs on older servers. Previously a 50-message batch cost 50 round
+     * trips every 5 seconds.
+     */
+    async lpopMany(client, key, count) {
+        if (count === 1) {
+            const item = await client.lpop(key);
+            return item ? [item] : [];
+        }
+
+        if (this.supportsCountedLpop !== false) {
+            try {
+                const items = await client.lpop(key, count);
+                this.supportsCountedLpop = true;
+                return items || [];
+            } catch (error) {
+                this.supportsCountedLpop = false;
+                logger.warn('QueueManager', 'Counted LPOP unavailable, falling back to single pops', {
+                    error: error.message
+                });
+            }
+        }
+
+        const items = [];
+        for (let i = 0; i < count; i++) {
+            const item = await client.lpop(key);
+            if (!item) break;
+            items.push(item);
+        }
+        return items;
+    }
+
     async getQueueLength(queueName) {
         const client = this.getClient();
         if (!client) {
@@ -95,8 +125,21 @@ class QueueManager {
                 queueName,
                 error: error.message
             });
-            return 0;
+            // null means UNKNOWN. Returning 0 here made a failing Redis look
+            // identical to a fully drained queue.
+            return null;
         }
+    }
+
+    /**
+     * @returns {Promise<{total: number, unknown: boolean, lengths: Array}>}
+     */
+    async measureQueues(queueNames) {
+        const lengths = await Promise.all(queueNames.map(q => this.getQueueLength(q)));
+        const unknown = lengths.some(length => length === null);
+        const total = lengths.reduce((sum, length) => sum + (length || 0), 0);
+
+        return { total, unknown, lengths };
     }
 
     async moveToDLQ(queueName, message, error) {
@@ -183,7 +226,7 @@ class QueueManager {
 
         if (!this.isAvailable()) {
             logger.debug('QueueManager', 'Redis unavailable, nothing to drain');
-            return;
+            return { drained: true, timedOut: false, remaining: 0, unknown: false };
         }
 
         const startTime = Date.now();
@@ -194,40 +237,33 @@ class QueueManager {
         return new Promise((resolve) => {
             const checkQueues = async () => {
                 const elapsed = Date.now() - startTime;
+                const { total, unknown, lengths } = await this.measureQueues(queuesToDrain);
 
                 if (elapsed >= timeoutMs) {
-                    const lengths = await Promise.all(
-                        queuesToDrain.map(q => this.getQueueLength(q))
-                    );
-                    const total = lengths.reduce((a, b) => a + b, 0);
-
-                    if (total > 0) {
-                        logger.warn('QueueManager', 'Drain timeout reached with messages remaining', {
-                            remainingMessages: total,
-                            queueLengths: Object.fromEntries(
-                                queuesToDrain.map((q, i) => [q, lengths[i]])
-                            )
-                        });
-                    }
-                    resolve();
+                    logger.warn('QueueManager', 'Drain timeout reached', {
+                        remainingMessages: total,
+                        lengthsUnknown: unknown,
+                        elapsedMs: elapsed,
+                        queueLengths: Object.fromEntries(
+                            queuesToDrain.map((q, i) => [q, lengths[i]])
+                        )
+                    });
+                    resolve({ drained: false, timedOut: true, remaining: total, unknown });
                     return;
                 }
 
-                const lengths = await Promise.all(
-                    queuesToDrain.map(q => this.getQueueLength(q))
-                );
-                const total = lengths.reduce((a, b) => a + b, 0);
-
-                if (total === 0) {
+                // An unreadable length is not a drained queue - keep trying.
+                if (!unknown && total === 0) {
                     logger.info('QueueManager', 'All queues drained successfully', {
                         elapsedMs: elapsed
                     });
-                    resolve();
+                    resolve({ drained: true, timedOut: false, remaining: 0, unknown: false });
                     return;
                 }
 
                 logger.debug('QueueManager', 'Waiting for queues to drain', {
                     remainingMessages: total,
+                    lengthsUnknown: unknown,
                     elapsedMs: elapsed
                 });
 

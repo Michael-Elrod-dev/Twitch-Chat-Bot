@@ -1,10 +1,19 @@
+-- src/database/schema/schema.sql
+--
+-- Engine and charset are declared explicitly on every table rather than inherited
+-- from server defaults: InnoDB is required (song_queue's insert path relies on
+-- SELECT ... FOR UPDATE, which MyISAM silently ignores), and utf8mb4 is required
+-- for emoji in chat messages and quotes.
+--
+-- For applying these to an existing database, see docs/MIGRATION_NOTES.md.
+
 CREATE TABLE tokens (
     id INT PRIMARY KEY AUTO_INCREMENT,
     token_key VARCHAR(50) UNIQUE NOT NULL,
     token_value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE song_queue (
     queue_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -14,7 +23,7 @@ CREATE TABLE song_queue (
     requested_by VARCHAR(25),
     added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     queue_position INT
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE emotes (
     emote_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -22,17 +31,17 @@ CREATE TABLE emotes (
     response_text VARCHAR(100) NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE commands (
     command_id INT PRIMARY KEY AUTO_INCREMENT,
     command_name VARCHAR(50) UNIQUE NOT NULL,
     response_text TEXT NULL,
     handler_name VARCHAR(50) NULL,
-    user_level ENUM('everyone', 'mod', 'broadcaster') NOT NULL DEFAULT 'everyone',
+    user_level ENUM('everyone', 'vip', 'mod', 'broadcaster') NOT NULL DEFAULT 'everyone',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE viewers (
     user_id VARCHAR(50) PRIMARY KEY,
@@ -45,7 +54,7 @@ CREATE TABLE viewers (
     followed_at DATETIME NULL,
     context TEXT NULL,
     UNIQUE KEY unique_username (username)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE streams (
     stream_id VARCHAR(50) PRIMARY KEY,
@@ -56,7 +65,7 @@ CREATE TABLE streams (
     peak_viewers INT DEFAULT 0,
     total_messages INT DEFAULT 0,
     unique_chatters INT DEFAULT 0
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE viewing_sessions (
     session_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -68,7 +77,7 @@ CREATE TABLE viewing_sessions (
     FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
     INDEX idx_user_stream (user_id, stream_id),
     INDEX idx_stream_active (stream_id, end_time)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE chat_messages (
     message_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -80,8 +89,11 @@ CREATE TABLE chat_messages (
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
     FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
     INDEX user_id (user_id),
-    INDEX stream_id (stream_id)
-);
+    INDEX stream_id (stream_id),
+    -- Serves the per-stream analytics reads, which always filter by stream and
+    -- order or range by time.
+    INDEX idx_stream_time (stream_id, message_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE chat_totals (
     user_id VARCHAR(50) PRIMARY KEY,
@@ -91,7 +103,7 @@ CREATE TABLE chat_totals (
     total_count INT DEFAULT 0,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES viewers(user_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE quotes (
     quote_id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -102,7 +114,7 @@ CREATE TABLE quotes (
     saved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
     INDEX user_id (user_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE api_usage (
     user_id VARCHAR(50),
@@ -113,4 +125,4 @@ CREATE TABLE api_usage (
     FOREIGN KEY (user_id) REFERENCES viewers(user_id),
     FOREIGN KEY (stream_id) REFERENCES streams(stream_id),
     INDEX stream_id (stream_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

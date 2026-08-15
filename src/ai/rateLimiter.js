@@ -1,5 +1,3 @@
-// src/ai/rateLimiter.js
-
 const config = require('../config/config');
 const logger = require('../logger/logger');
 

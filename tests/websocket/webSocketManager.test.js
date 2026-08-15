@@ -1,5 +1,3 @@
-// tests/websocket/webSocketManager.test.js
-
 const WebSocketManager = require('../../src/websocket/webSocketManager');
 
 jest.mock('ws');
@@ -43,13 +41,13 @@ describe('WebSocketManager', () => {
 
         WebSocket.mockImplementation(() => mockWsInstance);
 
-        webSocketManager = new WebSocketManager(
-            mockTokenManager,
-            mockChatHandler,
-            mockRedemptionHandler,
-            mockStreamOnlineHandler,
-            mockStreamOfflineHandler
-        );
+        webSocketManager = new WebSocketManager({
+            tokenManager: mockTokenManager,
+            onChatMessage: mockChatHandler,
+            onRedemption: mockRedemptionHandler,
+            onStreamOnline: mockStreamOnlineHandler,
+            onStreamOffline: mockStreamOfflineHandler
+        });
     });
 
     afterEach(() => {
@@ -59,10 +57,10 @@ describe('WebSocketManager', () => {
     describe('constructor', () => {
         it('should initialize with handlers', () => {
             expect(webSocketManager.tokenManager).toBe(mockTokenManager);
-            expect(webSocketManager.chatHandler).toBe(mockChatHandler);
-            expect(webSocketManager.redemptionHandler).toBe(mockRedemptionHandler);
-            expect(webSocketManager.streamOnlineHandler).toBe(mockStreamOnlineHandler);
-            expect(webSocketManager.streamOfflineHandler).toBe(mockStreamOfflineHandler);
+            expect(webSocketManager.onChatMessage).toBe(mockChatHandler);
+            expect(webSocketManager.onRedemption).toBe(mockRedemptionHandler);
+            expect(webSocketManager.onStreamOnline).toBe(mockStreamOnlineHandler);
+            expect(webSocketManager.onStreamOffline).toBe(mockStreamOfflineHandler);
             expect(webSocketManager.wsConnection).toBeNull();
             expect(webSocketManager.sessionId).toBeNull();
         });
@@ -220,14 +218,20 @@ describe('WebSocketManager', () => {
             const reconnectMessage = {
                 metadata: {
                     message_type: 'session_reconnect'
+                },
+                payload: {
+                    session: {
+                        id: 'session-123',
+                        reconnect_url: 'wss://reconnect.twitch.tv/ws?challenge=abc'
+                    }
                 }
             };
 
-            const connectSpy = jest.spyOn(webSocketManager, 'connect').mockResolvedValue(true);
+            const reconnectSpy = jest.spyOn(webSocketManager, 'reconnectTo').mockResolvedValue();
 
             await webSocketManager.handleMessage(reconnectMessage);
 
-            expect(connectSpy).toHaveBeenCalled();
+            expect(reconnectSpy).toHaveBeenCalledWith('wss://reconnect.twitch.tv/ws?challenge=abc');
         });
 
         it('should handle unknown message type', async () => {
@@ -253,7 +257,7 @@ describe('WebSocketManager', () => {
         });
 
         it('should handle missing chat handler gracefully', async () => {
-            webSocketManager.chatHandler = null;
+            webSocketManager.onChatMessage = null;
 
             const chatMessage = {
                 metadata: {

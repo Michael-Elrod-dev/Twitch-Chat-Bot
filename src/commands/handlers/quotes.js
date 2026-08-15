@@ -1,5 +1,3 @@
-// src/commands/handlers/quotes.js
-
 const logger = require('../../logger/logger');
 
 function quoteHandlers(dependencies) {
