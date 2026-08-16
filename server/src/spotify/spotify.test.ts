@@ -544,6 +544,125 @@ describe('February 2026 platform changes', () => {
         expect(calls[0]).not.toContain('/tracks');
     });
 
+    /**
+     * The production bug, modelled on Spotify's actual reply.
+     *
+     * `POST /me/player/queue` answers 2xx with no JSON body. The client demanded
+     * parseable JSON of every response, so each real success was thrown as
+     * `failed with 200: response was not valid JSON`. The monitor honoured its
+     * own contract and refused to remove a track it believed had not been
+     * queued — so it re-queued it every tick. Four ticks in the end window put
+     * one track into Spotify's queue four times.
+     *
+     * The body varies (empty, whitespace, a bare status line); none of it is
+     * JSON and none of it is read. Any 2xx is success.
+     */
+    for (const [label, body] of [
+        ['an empty body', ''],
+        ['a whitespace body', '\n'],
+        ['a non-JSON body', 'OK']
+    ] as const) {
+        it(`treats a 2xx with ${label} as a successful queue add`, async () => {
+            const client = new HttpSpotifyClient({
+                accessToken: async () => 'token',
+                logger,
+                fetchImpl: (async () => new Response(body, { status: 200 })) as unknown as typeof fetch
+            });
+
+            await expect(client.queueTrack('spotify:track:abc')).resolves.toBeUndefined();
+            await expect(client.skipTrack()).resolves.toBeUndefined();
+        });
+    }
+
+    it('still reports a real failure on the no-content endpoints', async () => {
+        // The counterweight: "any 2xx is success" must not decay into "anything
+        // is success", or a failed add would drop the track silently.
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async () => new Response(
+                JSON.stringify({ error: { message: 'Player command failed: No active device found' } }),
+                { status: 403 }
+            )) as unknown as typeof fetch
+        });
+
+        await expect(client.queueTrack('spotify:track:abc')).rejects.toThrow(/403/);
+    });
+
+    it('does not turn a 404 on a write into a success', async () => {
+        /*
+         * The mirror of the duplicate bug, and the worse direction. A read 404
+         * means "no active device" and resolves to null; if a WRITE did the
+         * same, the monitor would remove a track it never queued and the song
+         * would vanish with nothing in any log.
+         */
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async () => new Response('', { status: 404 })) as unknown as typeof fetch
+        });
+
+        await expect(client.queueTrack('spotify:track:abc')).rejects.toThrow(/404/);
+        // Reads keep the old, correct behaviour.
+        await expect(client.getPlaybackState()).resolves.toBeNull();
+    });
+
+    it('still demands JSON where the body is actually read', async () => {
+        // getTrack/search USE their bodies, so an unparseable one is a genuine
+        // failure there and must stay one.
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async () => new Response('not json', { status: 200 })) as unknown as typeof fetch
+        });
+
+        await expect(client.getTrack('abc')).rejects.toThrow(/not valid JSON/);
+    });
+
+    it('hands a track to Spotify exactly once across the end window', async () => {
+        /*
+         * The end-to-end shape of the production incident: four ticks inside the
+         * ten-second window, against a client whose queue-add replies the way
+         * Spotify really replies. Four adds and zero removals is the failure;
+         * one add and one removal is correct.
+         */
+        let adds = 0;
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async (url: string | URL) => {
+                if (String(url).includes('/me/player/queue')) {
+                    adds++;
+                    // NOT an empty body: the old code already returned null for
+                    // that, so an empty reply here would let this test pass
+                    // against the very client that caused the incident.
+                    return new Response('OK', { status: 200 });
+                }
+                return new Response(JSON.stringify({
+                    is_playing: true,
+                    progress_ms: 175_000,
+                    item: { uri: 'spotify:track:current', duration_ms: 180_000 }
+                }), { status: 200 });
+            }) as unknown as typeof fetch
+        });
+
+        const queued = [{ trackUri: 'spotify:track:doomed', trackName: 'Doomed', artistName: 'Maphra' }];
+        const monitor = new PlaybackMonitor({
+            channelId: 'ch-1',
+            client,
+            queue: {
+                list: async () => [...queued],
+                removeHead: async () => queued.shift() ?? null
+            } as unknown as SongQueueRepository,
+            logger
+        });
+
+        for (let i = 0; i < 4; i++) await monitor.tick();
+
+        expect(adds).toBe(1);
+        expect(queued).toEqual([]);
+    });
+
     it('asks for a search limit inside the reduced maximum', async () => {
         // The max fell from 50 to 10. We ask for 1, so the change is a non-event
         // - but a future edit raising it would break silently.

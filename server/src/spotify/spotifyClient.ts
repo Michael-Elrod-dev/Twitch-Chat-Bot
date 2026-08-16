@@ -44,6 +44,30 @@ import { TwitchError } from '../twitch/errors.js';
  *                              removed endpoints, so the obvious spelling would
  *                              404 in production.
  *
+ * ## Response bodies are declared per call, not guessed
+ *
+ * The path check above was only half the verification. A call can survive with
+ * the right URL and still be read wrong, and this one was: the client demanded
+ * parseable JSON from EVERY response, so `POST /me/player/queue` — which
+ * answers 2xx with no JSON body — was read as a failure on a success. The
+ * monitor then correctly declined to remove a track it believed had not been
+ * queued, and re-queued it on the next tick. One track entered Spotify's queue
+ * four times.
+ *
+ * So each call now declares what it returns, and a body is parsed only where
+ * one is used:
+ *
+ *   GET  /tracks/{id}          json    the track
+ *   GET  /search               json    the results
+ *   GET  /me/player            json    playback state, or 204 when idle
+ *   POST /me/player/queue      none    2xx, no usable body
+ *   POST /me/player/next       none    2xx, no usable body
+ *   POST /playlists/{id}/items none    returns a snapshot_id we do not read
+ *
+ * `none` means the status IS the result: any 2xx is success and the body is
+ * never touched. That is not laxness — demanding a shape from a body we never
+ * read invents a failure mode with nothing on the other side of it.
+ *
  * We operate in **Development Mode**: the app owner must hold Spotify Premium,
  * and every user is allowlisted in the dashboard (5 per app). Any additional
  * broadcaster must be added there before their connect flow can succeed.
@@ -155,25 +179,32 @@ export class HttpSpotifyClient implements SpotifyClient {
         };
     }
 
+    /** Success is the status alone — Spotify sends no JSON body here. */
     async queueTrack(uri: string): Promise<void> {
-        await this.request(`/me/player/queue?uri=${encodeURIComponent(uri)}`, { method: 'POST' });
+        await this.request(`/me/player/queue?uri=${encodeURIComponent(uri)}`, {
+            method: 'POST',
+            expects: 'none'
+        });
     }
 
     async skipTrack(): Promise<void> {
-        await this.request('/me/player/next', { method: 'POST' });
+        await this.request('/me/player/next', { method: 'POST', expects: 'none' });
     }
 
     /** `/items`, not `/tracks` — the old path was removed in February 2026. */
     async addToPlaylist(playlistId: string, uri: string): Promise<void> {
         await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
             method: 'POST',
-            body: { uris: [uri] }
+            body: { uris: [uri] },
+            // Answers with a snapshot_id. We do not read it, so we do not
+            // require it to arrive or to parse.
+            expects: 'none'
         });
     }
 
     private async request<T>(
         path: string,
-        options: { method?: string; body?: unknown } = {}
+        options: { method?: string; body?: unknown; expects?: 'json' | 'none' } = {}
     ): Promise<T> {
         const token = await this.options.accessToken();
 
@@ -186,25 +217,44 @@ export class HttpSpotifyClient implements SpotifyClient {
             ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) })
         });
 
+        const expects = options.expects ?? 'json';
+
         // 204 means "nothing playing" on the player endpoints and "accepted"
         // on the write ones. Either way there is no body to parse.
         if (response.status === 204) return null as T;
 
-        if (response.status === 404) {
-            // Spotify uses 404 for "no active device", which is an ordinary
-            // state for a streamer whose Spotify is closed - not a failure to
-            // shout about.
+        if (response.status === 404 && expects === 'json') {
+            /*
+             * Spotify uses 404 for "no active device", which is an ordinary
+             * state for a streamer whose Spotify is closed - not a failure to
+             * shout about.
+             *
+             * Reads only. On a write, 404 means the write did not happen, and
+             * reporting that as success would let the monitor drop a track it
+             * never queued — the mirror image of the duplicate bug, and the
+             * worse direction, because a lost song is not visible in any log.
+             */
             this.options.logger.debug({ path }, 'Spotify reports no active device');
             return null as T;
         }
 
+        // Read unconditionally: even a discarded body is what makes a failure
+        // legible in the error message.
         const raw = await response.text();
 
         if (!response.ok) {
             throw new SpotifyError(path, response.status, extractMessage(raw));
         }
 
-        if (raw === '') return null as T;
+        /*
+         * The status IS the result for these. Spotify answers the queue-add and
+         * skip endpoints with a 2xx and no JSON, so parsing here would turn
+         * every success into a thrown failure — which is precisely what put one
+         * track into Spotify's queue four times in production.
+         */
+        if (expects === 'none') return null as T;
+
+        if (raw.trim() === '') return null as T;
 
         try {
             return JSON.parse(raw) as T;
