@@ -172,6 +172,14 @@ export const apiUsage = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
     },
     (table) => [
+        /*
+         * NOTE: Postgres treats NULLs in a unique index as DISTINCT, so this
+         * does not constrain rows where `stream_id` is null — which is exactly
+         * the offline bucket. `NULLS NOT DISTINCT` would fix it but this
+         * Drizzle version cannot express it, so the AI rate limiter serialises
+         * its own read-then-write under a channel row lock instead. See
+         * server/src/ai/rateLimiter.ts.
+         */
         uniqueIndex('api_usage_channel_user_type_stream_key').on(
             table.channelId,
             table.twitchUserId,
