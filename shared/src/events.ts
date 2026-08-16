@@ -30,6 +30,12 @@ export interface StreamOnlineEvent {
     kind: 'stream_online';
     messageId: string;
     broadcasterTwitchId: string;
+    /**
+     * Twitch's own stream id. Phase 0 minted `Date.now()` here, which made its
+     * rows impossible to correlate with Twitch and made every restart look like
+     * a new stream.
+     */
+    streamId: string;
     startedAt: string;
 }
 

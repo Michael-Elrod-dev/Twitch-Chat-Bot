@@ -37,6 +37,13 @@ export interface ChannelAiServiceOptions {
     logger: Logger;
     /** Resolves the current stream, so limits bucket per stream. Null when offline. */
     currentStreamId: () => string | null;
+    /**
+     * The live stream's title/category/duration for the prompt. Null offline.
+     *
+     * Phase 0 put this in every prompt; without it the bot cannot answer "what
+     * game is this" or "how long have you been live" with anything true.
+     */
+    streamContext: () => StreamContext | null;
     broadcasterLogin: string;
     maxTokens?: number;
     fallbackMessage?: string;
@@ -124,7 +131,7 @@ export class ChannelAiService implements AiService {
                 ? await o.history.recent(job.historyLimit)
                 : [];
 
-            const { system, userMessage } = await job.build(history, null, {
+            const { system, userMessage } = await job.build(history, o.streamContext(), {
                 broadcaster: o.broadcasterLogin,
                 mods: []
             });

@@ -69,6 +69,8 @@ export function normalizeEvent(
             kind: 'stream_online',
             messageId,
             broadcasterTwitchId: asString(payload['broadcaster_user_id']),
+            // `id` on this payload is the STREAM id, not the event id.
+            streamId: asString(payload['id']),
             startedAt: asString(payload['started_at'])
         };
 

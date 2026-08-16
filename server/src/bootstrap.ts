@@ -13,6 +13,9 @@ import { AiRateLimiter } from './ai/rateLimiter.js';
 import { ChatHistoryRepository } from './db/repositories/chatHistoryRepository.js';
 import { createAiHandlers } from './domain/aiHandlers.js';
 import { createSongHandlers } from './domain/songHandlers.js';
+import { createStreamHandlers } from './domain/streamHandlers.js';
+import { StreamService } from './domain/streamService.js';
+import { StreamRepository } from './db/repositories/streamRepository.js';
 import { SongToggleService } from './domain/songToggle.js';
 import { createSongRequestHandler, createSkipQueueHandler } from './domain/songRedemption.js';
 import { createQuoteRedemptionHandler } from './domain/quoteRedemption.js';
@@ -137,6 +140,21 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
      */
     const songQueue = deps.db ? new SongQueueRepository(deps.db, channelId) : null;
 
+    /*
+     * Stream lifecycle. Needs only a database: metadata comes from Helix where
+     * available, but a channel without Helix still records its streams, which
+     * is what the AI rate-limit bucket and !uptime actually depend on.
+     */
+    const streams = deps.db
+        ? new StreamService({
+            channelId,
+            broadcasterTwitchId: channel.twitchBroadcasterId,
+            streams: new StreamRepository(deps.db, channelId),
+            logger: channelLogger,
+            ...(deps.helix ? { helix: deps.helix } : {})
+        })
+        : null;
+
     let spotify: SpotifyClient | null = null;
     if (deps.db && deps.cipher && deps.spotifyOAuth) {
         const spotifyTokens = new SpotifyTokenProvider({
@@ -231,6 +249,9 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                     lastPlayed: () => monitor?.lastPlayed() ?? null
                 })
                 : {}),
+            ...(streams
+                ? createStreamHandlers({ streams, broadcasterLogin: channel.twitchLogin })
+                : {}),
             ...(handlers ?? {})
         }
     });
@@ -250,10 +271,10 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             history: new ChatHistoryRepository(deps.db, channelId),
             rateLimiter: new AiRateLimiter({ db: deps.db, channelId }),
             logger: channelLogger,
-            // Stream-scoped buckets arrive with the analytics pipeline; until
-            // then everything shares the offline bucket, which the limiter
-            // handles explicitly.
-            currentStreamId: () => null,
+            // The P1-WP4.1 flag, closed: buckets are per stream and the
+            // prompt carries the real title and category.
+            currentStreamId: () => streams?.currentStreamId() ?? null,
+            streamContext: () => streams?.context() ?? null,
             broadcasterLogin: channel.twitchLogin
         })
         : ai_fallback;
@@ -292,7 +313,8 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         // The session owns the monitor's lifetime: started on start, stopped on
         // stop. Building one and never handing it over is exactly the bug that
         // left a queued track untouched through ninety minutes of playback.
-        ...(monitor ? { monitor } : {})
+        ...(monitor ? { monitor } : {}),
+        ...(streams ? { streams } : {})
     });
 }
 

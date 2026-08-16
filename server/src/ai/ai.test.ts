@@ -186,6 +186,7 @@ describeDb('AI service', () => {
             rateLimiter: new AiRateLimiter({ db: handle.db, channelId }),
             logger,
             currentStreamId: () => null,
+            streamContext: () => null,
             broadcasterLogin: 'broadcaster',
             ...overrides
         });
@@ -374,6 +375,7 @@ describeDb('AI service', () => {
                 } as unknown as AiRateLimiter,
                 logger,
                 currentStreamId: () => null,
+                streamContext: () => null,
                 broadcasterLogin: 'b'
             });
 

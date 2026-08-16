@@ -112,12 +112,17 @@ describe('normalizeEvent', () => {
 
     it('normalises stream.online and stream.offline', () => {
         expect(normalizeEvent(SUBSCRIPTION_TYPES.streamOnline, {
+            id: '48765430',
             broadcaster_user_id: '1001',
             started_at: '2026-08-15T12:00:00Z'
         }, 'd')).toEqual({
             kind: 'stream_online',
             messageId: 'd',
             broadcasterTwitchId: '1001',
+            // `id` on this payload is Twitch's stream id, NOT the event id -
+            // reading the wrong one would key every stream row on a value that
+            // changes per delivery.
+            streamId: '48765430',
             startedAt: '2026-08-15T12:00:00Z'
         });
 

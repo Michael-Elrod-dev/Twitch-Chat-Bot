@@ -5,6 +5,7 @@ import type { CommandManager } from '../domain/commandManager.js';
 import type { EmoteManager } from '../domain/emoteManager.js';
 import type { RedemptionPipeline } from './redemptionPipeline.js';
 import type { PlaybackMonitor } from '../spotify/playbackMonitor.js';
+import type { StreamService } from '../domain/streamService.js';
 
 /** Bounded dedup history. Twitch documents EventSub as at-least-once. */
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -26,6 +27,11 @@ export interface ChannelSessionOptions {
      * Spotify for a channel the bot no longer serves.
      */
     monitor?: PlaybackMonitor;
+    /**
+     * Stream lifecycle. Absent means online/offline are logged and forgotten,
+     * which is what every channel did before P1-WP4.3.
+     */
+    streams?: StreamService;
 }
 
 export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
@@ -49,6 +55,7 @@ export class ChannelSession {
     private readonly emotes: EmoteManager;
     private readonly redemptions: RedemptionPipeline | undefined;
     private readonly monitor: PlaybackMonitor | undefined;
+    private readonly streams: StreamService | undefined;
 
     private state: SessionState = 'stopped';
     private live = false;
@@ -65,6 +72,7 @@ export class ChannelSession {
         this.emotes = options.emotes;
         this.redemptions = options.redemptions;
         this.monitor = options.monitor;
+        this.streams = options.streams;
     }
 
     getState(): SessionState {
@@ -85,6 +93,13 @@ export class ChannelSession {
         try {
             await this.commands.load();
             await this.emotes.load();
+
+            /*
+             * Before the monitor starts and before any event can be handled: a
+             * restart mid-stream must resume the stream it was already in, or
+             * the AI's rate-limit bucket resets and !uptime reports nothing.
+             */
+            await this.streams?.load();
 
             // Started only once the session is otherwise ready, so a failed
             // load cannot leave a poller running for a session that never came up.
@@ -159,12 +174,12 @@ export class ChannelSession {
         switch (event.kind) {
         case 'stream_online':
             this.live = true;
-            this.logger.info({ channelId: this.channelId }, 'Stream online');
+            await this.streams?.onOnline(event.streamId, new Date(event.startedAt));
             return null;
 
         case 'stream_offline':
             this.live = false;
-            this.logger.info({ channelId: this.channelId }, 'Stream offline');
+            await this.streams?.onOffline();
             return null;
 
         case 'redemption':
