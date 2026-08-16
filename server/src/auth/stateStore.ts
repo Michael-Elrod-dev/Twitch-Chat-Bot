@@ -20,11 +20,21 @@ export interface StateRecord {
     flow: OAuthFlow | 'spotify';
     /** Where to send the browser afterwards, when the flow was started from the app. */
     returnTo?: string;
+    /**
+     * A flow to continue into once this one completes.
+     *
+     * This is what makes `/auth/spotify/connect` work in a plain browser: an
+     * unauthenticated visit chains through Twitch sign-in and continues to
+     * Spotify, so a human never handles a token. Carried in the server-issued
+     * state rather than a query parameter, so a caller cannot ask to be
+     * forwarded somewhere of their choosing.
+     */
+    then?: 'spotify';
     createdAt: number;
 }
 
 export interface StateStore {
-    issue: (flow: OAuthFlow | 'spotify', returnTo?: string) => Promise<string>;
+    issue: (flow: OAuthFlow | 'spotify', returnTo?: string, then?: 'spotify') => Promise<string>;
     /** @returns the record and consumes it, or null when unknown, expired or replayed. */
     consume: (state: string) => Promise<StateRecord | null>;
 }
@@ -41,12 +51,13 @@ export function createStateStore(cache: CacheManager, memory = new Map<string, S
     const key = (state: string): string => `oauth:state:${state}`;
 
     return {
-        issue: async (flow, returnTo) => {
+        issue: async (flow, returnTo, then) => {
             // 256 bits of CSPRNG. Guessing one is not a threat worth modelling.
             const state = randomBytes(STATE_BYTES).toString('base64url');
             const record: StateRecord = {
                 flow,
                 ...(returnTo === undefined ? {} : { returnTo }),
+                ...(then === undefined ? {} : { then }),
                 createdAt: Date.now()
             };
 

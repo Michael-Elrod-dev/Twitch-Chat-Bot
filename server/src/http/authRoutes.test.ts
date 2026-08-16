@@ -33,14 +33,23 @@ interface Harness {
     sessions: Map<string, AppSession>;
     revoked: string[];
     fetchCalls: string[];
+    spotifyConnected: { twitchUserId: string }[];
 }
 
-function buildHarness(overrides: { configured?: boolean; jwtSecret?: string | undefined; tokenExchangeStatus?: number } = {}): Harness {
+function buildHarness(overrides: {
+    configured?: boolean;
+    jwtSecret?: string | undefined;
+    tokenExchangeStatus?: number;
+    /** Lets a test sign in as the wrong Twitch account. */
+    identityUserId?: string;
+    identityLogin?: string;
+} = {}): Harness {
     const onboardedChannels: { login: string }[] = [];
     const botConsents: { login: string }[] = [];
     const sessions = new Map<string, AppSession>();
     const revoked: string[] = [];
     const fetchCalls: string[] = [];
+    const spotifyConnected: { twitchUserId: string }[] = [];
 
     const fetchImpl = (async (url: string | URL | Request) => {
         const target = String(url);
@@ -53,9 +62,18 @@ function buildHarness(overrides: { configured?: boolean; jwtSecret?: string | un
                 : { message: 'Invalid authorization code' }
             ), { status });
         }
+        if (target.includes('accounts.spotify.com/api/token')) {
+            return new Response(JSON.stringify({
+                access_token: 'spotify-access', refresh_token: 'spotify-refresh',
+                expires_in: 3600, scope: 'user-read-playback-state'
+            }), { status: 200 });
+        }
         if (target.includes('/oauth2/validate')) {
             return new Response(JSON.stringify({
-                user_id: '1001', login: 'aimosthadme', scopes: [...CHANNEL_SCOPES], expires_in: 14_400
+                user_id: overrides.identityUserId ?? '1001',
+                login: overrides.identityLogin ?? 'aimosthadme',
+                scopes: [...CHANNEL_SCOPES],
+                expires_in: 14_400
             }), { status: 200 });
         }
         if (target.includes('/oauth2/revoke')) {
@@ -97,9 +115,19 @@ function buildHarness(overrides: { configured?: boolean; jwtSecret?: string | un
 
     const authRouter = createAuthRouter({
         oauth, states, onboarding, sessions: sessionRepo, logger,
+        channels,
         jwtSecret: 'jwtSecret' in overrides ? overrides.jwtSecret : JWT_SECRET,
         jwtTtlSeconds: 900,
-        configured: overrides.configured ?? true
+        configured: overrides.configured ?? true,
+        spotify: {
+            config: {
+                clientId: 'spotify-client',
+                clientSecret: 'spotify-secret',
+                redirectUri: 'https://x.test/auth/spotify/callback'
+            },
+            onConnected: async (twitchUserId) => { spotifyConnected.push({ twitchUserId }); },
+            fetchImpl
+        }
     });
 
     const apiRouter = createApiRouter({
@@ -110,7 +138,7 @@ function buildHarness(overrides: { configured?: boolean; jwtSecret?: string | un
 
     return {
         app: createApp({ logger, version: 'test', routers: [authRouter, apiRouter] }),
-        states, onboardedChannels, botConsents, sessions, revoked, fetchCalls
+        states, onboardedChannels, botConsents, sessions, revoked, fetchCalls, spotifyConnected
     };
 }
 
@@ -465,5 +493,125 @@ describe('end-to-end sign-in to guarded resource', () => {
             .expect(200);
 
         expect(response.body.data.login).toBe('aimosthadme');
+    });
+});
+
+describe('Spotify connect in a plain browser', () => {
+    /**
+     * As first shipped this flow could not be completed by a human: it demanded
+     * a bearer token a browser cannot attach to a link it was handed, and the
+     * sign-in returned its token in a URL fragment only a desktop app could
+     * read. This is the broadcaster's onboarding path, so the bar is one click
+     * and no token handling.
+     */
+    let harness: Harness;
+
+    beforeEach(() => {
+        harness = buildHarness();
+    });
+
+    it('bounces an unauthenticated visitor through Twitch sign-in', async () => {
+        const response = await request(harness.app).get('/auth/spotify/connect').expect(302);
+        const location = new URL(response.headers['location'] as string);
+
+        // Twitch first, not the 401 that stopped the owner.
+        expect(location.origin).toBe('https://id.twitch.tv');
+        expect(location.searchParams.get('scope')).toBe('');
+    });
+
+    it('continues to Spotify after sign-in, handing the browser no token', async () => {
+        const start = await request(harness.app).get('/auth/spotify/connect').expect(302);
+        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        const afterSignIn = await request(harness.app)
+            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${state}`)
+            .expect(302);
+
+        expect(new URL(afterSignIn.headers['location'] as string).origin).toBe('https://accounts.spotify.com');
+        expect(afterSignIn.headers['location']).not.toContain('access_token');
+    });
+
+    it('completes the whole journey in one click', async () => {
+        const start = await request(harness.app).get('/auth/spotify/connect').expect(302);
+        const signInState = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        const toSpotify = await request(harness.app)
+            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${signInState}`)
+            .expect(302);
+        const spotifyState = new URL(toSpotify.headers['location'] as string).searchParams.get('state') as string;
+
+        await request(harness.app)
+            .get(`/auth/spotify/callback?code=spotify-code&state=${spotifyState}`)
+            .expect(200);
+
+        expect(harness.spotifyConnected).toEqual([{ twitchUserId: '1001' }]);
+    });
+
+    it('names the wrong Twitch account rather than connecting the wrong channel', async () => {
+        // The easy mistake, because the consent flows leave the BOT account
+        // signed in to Twitch in that browser.
+        const stranger = buildHarness({ identityUserId: '9999', identityLogin: 'almosthadai' });
+
+        const start = await request(stranger.app).get('/auth/spotify/connect').expect(302);
+        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        const response = await request(stranger.app)
+            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${state}`)
+            .expect(400);
+
+        expect(response.text).toContain('almosthadai');
+        expect(response.text).toContain('no connected channel');
+        expect(stranger.spotifyConnected).toHaveLength(0);
+    });
+
+    it('refuses a forged Spotify callback state', async () => {
+        await request(harness.app).get('/auth/spotify/callback?code=x&state=invented').expect(403);
+
+        expect(harness.spotifyConnected).toHaveLength(0);
+    });
+
+    it('refuses a Twitch-flow state replayed at the Spotify callback', async () => {
+        // Flows are not interchangeable: a channel-connect state must not be
+        // spendable as a Spotify one.
+        const start = await request(harness.app).get('/auth/twitch/connect').expect(302);
+        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        await request(harness.app).get(`/auth/spotify/callback?code=x&state=${state}`).expect(403);
+    });
+
+    it('still issues tokens for an ordinary sign-in with no continuation', async () => {
+        // The chained path must not have broken the desktop app's flow.
+        const start = await request(harness.app).get('/auth/app/login').expect(302);
+        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        const response = await request(harness.app)
+            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${state}`)
+            .expect(200);
+
+        expect(response.body.data.access_token).toBeTruthy();
+    });
+});
+
+describe('the continuation cannot be chosen by the caller', () => {
+    it('ignores a `then` query parameter on the callback', async () => {
+        /*
+         * The continuation lives in the server-issued state, never in the
+         * request. If a caller could ask to be forwarded, they could aim a
+         * completed sign-in at any flow the server supports - so a plausible
+         * future "convenience" edit reading it from the query string is a
+         * regression this pins.
+         */
+        const harness = buildHarness();
+
+        const start = await request(harness.app).get('/auth/app/login').expect(302);
+        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
+
+        const response = await request(harness.app)
+            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${state}&then=spotify`)
+            .expect(200);
+
+        // Tokens, not a redirect to Spotify.
+        expect(response.body.data.access_token).toBeTruthy();
+        expect(harness.spotifyConnected).toHaveLength(0);
     });
 });

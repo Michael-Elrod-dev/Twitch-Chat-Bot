@@ -6,6 +6,7 @@ import { TwitchError } from '../twitch/errors.js';
 import type { StateStore } from '../auth/stateStore.js';
 import type { OnboardingService } from '../auth/onboarding.js';
 import type { AppSessionRepository } from '../db/repositories/appSessionRepository.js';
+import type { ChannelRepository } from '../db/repositories/channelRepository.js';
 import { generateRefreshToken, signJwt, verifyJwt } from '../auth/jwt.js';
 import {
     buildSpotifyAuthorizeUrl,
@@ -40,11 +41,15 @@ export interface AuthRoutesOptions {
     jwtTtlSeconds: number;
     /** False when client credentials are absent; every route then 503s honestly. */
     configured: boolean;
+    /** Resolves the signed-in identity to a channel, for the chained connect. */
+    channels: ChannelRepository;
     /** Spotify connect, per channel. Absent means the routes 503. */
     spotify?: {
         config: SpotifyOAuthConfig;
         /** Stores the grant against the channel that started the flow. */
         onConnected: (twitchUserId: string, grant: SpotifyGrant) => Promise<void>;
+        /** Injectable so tests exercise the flow without a network. */
+        fetchImpl?: typeof fetch;
     };
 }
 
@@ -98,16 +103,29 @@ export function createAuthRouter(options: AuthRoutesOptions): Router {
                 ? header.slice('Bearer '.length)
                 : (typeof req.query['access_token'] === 'string' ? req.query['access_token'] : '');
 
-            if (token === '') {
-                res.status(401).type('text/plain').send('Sign in first, then open this link from the app.');
-                return;
+            /*
+             * No usable session? Chain through Twitch sign-in and come back.
+             *
+             * This route has to be completable by a human in a plain browser -
+             * it is how a broadcaster onboards their Spotify - and a browser has
+             * no way to attach a bearer token to a link it was handed. Bouncing
+             * through sign-in and continuing makes the whole thing one click.
+             */
+            let claims;
+            if (token !== '') {
+                try {
+                    claims = verifyJwt(token, options.jwtSecret);
+                } catch {
+                    claims = undefined;
+                }
             }
 
-            let claims;
-            try {
-                claims = verifyJwt(token, options.jwtSecret);
-            } catch {
-                res.status(401).type('text/plain').send('That sign-in has expired. Sign in again and retry.');
+            if (!claims) {
+                if (!requireConfigured(res)) return;
+
+                const signInState = await states.issue('signin', undefined, 'spotify');
+                logger.info('Spotify connect started without a session - chaining through Twitch sign-in');
+                res.redirect(oauth.authorizeUrl('signin', signInState));
                 return;
             }
 
@@ -149,7 +167,7 @@ export function createAuthRouter(options: AuthRoutesOptions): Router {
                 return;
             }
 
-            const grant = await exchangeSpotifyCode(options.spotify.config, code);
+            const grant = await exchangeSpotifyCode(options.spotify.config, code, options.spotify.fetchImpl);
             await options.spotify.onConnected(record.returnTo as string, grant);
 
             res.status(200).type('text/plain').send('Spotify connected. You can close this tab.');
@@ -307,6 +325,42 @@ async function handleCallback(req: Request, res: Response, options: AuthRoutesOp
         // Sign-in wants identity and nothing else, so Twitch's token is discarded
         // immediately - the app never holds a Twitch credential.
         await oauth.revoke(grant.accessToken);
+
+        /*
+         * Chained Spotify connect: identity is established, so continue
+         * straight into Spotify rather than handing a token to a browser that
+         * cannot use one.
+         */
+        if (record.then === 'spotify') {
+            if (!options.spotify) {
+                res.status(503).type('text/plain').send('Spotify is not configured on this server.');
+                return;
+            }
+
+            const channel = await options.channels.findByBroadcasterId(identity.userId);
+            if (!channel) {
+                // The named error the exit bar asks for. Signing in as the bot
+                // account is the easy mistake here, because the consent flows
+                // leave that account signed in.
+                logger.warn(
+                    { login: identity.login, twitchUserId: identity.userId },
+                    'Spotify connect attempted by an account with no connected channel'
+                );
+                res.status(400).type('text/plain').send(
+                    `You are signed in to Twitch as "${identity.login}", which has no connected channel here.
+
+` +
+                    'Sign out of Twitch, sign in as the broadcaster whose channel is connected, and open the link again.'
+                );
+                return;
+            }
+
+            const spotifyState = await states.issue('spotify', identity.userId);
+            logger.info({ login: identity.login, channelId: channel.id }, 'Continuing to Spotify authorization');
+
+            res.redirect(buildSpotifyAuthorizeUrl(options.spotify.config, spotifyState));
+            return;
+        }
 
         if (!options.jwtSecret) {
             res.status(503).type('text/plain').send('Sign-in is not configured on this server.');

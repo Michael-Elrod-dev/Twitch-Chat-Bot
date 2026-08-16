@@ -376,6 +376,7 @@ async function main(): Promise<void> {
         jwtSecret: env.JWT_SECRET,
         jwtTtlSeconds: env.JWT_TTL_SECONDS,
         configured: twitchConfigured,
+        channels: channelRepository,
         ...(spotifyConfigured ? {
             spotify: {
                 config: {
