@@ -744,6 +744,52 @@ The three items that blocked it at the end of P1-WP4.3:
 
 Part regression fix, part owner-requested redesign (owner delegated the how; lead ruled). The legacy suppression (`aiManager.js:91`: no counter for broadcasters/unlimited caps) was dropped in the 4.1 port — the owner saw `(2/999999)` live. Restore the intent and improve it: **no counter for anyone while remaining > 3**; at ≤3, a human suffix `(2 left this stream)`; `(last one this stream)` on the final request; denial message unchanged; unlimited caps (≥1000) never see a counter. Absolute threshold, constant 3, env-knobbed; uniform across roles. Flag the threshold/always-on as a future `channel_settings` field for the app's AI settings screen. Tests pin the show/hide boundary at exactly 3, the last-one message, and unlimited suppression; reintroduction-validated.
 
+### Completion report — P1-WP4.5 (engineer, 2026-08-16)
+
+**Status:** complete and deployed. Server **766/766** (45 files); lint 0; typecheck clean.
+
+#### The regression, and what replaced it
+
+Phase 0 suppressed the counter for broadcasters and unlimited caps
+(`aiManager.js:91`: `if (!userContext.isBroadcaster && userLimits.streamLimit < 999999)`).
+The P1-WP4.1 port dropped that condition and prefixed every answer unconditionally, so the
+owner watched their own bot reply `(2/999999)` in their own chat.
+
+Restored as intent rather than as code. A raw `used/limit` on every message answers a
+question nobody asked until the answer starts to matter, so the counter is now shown only
+when it is actionable, and as a **suffix** — the answer is what the viewer asked for:
+
+| Remaining | Shown |
+|---|---|
+| more than 3 | nothing |
+| 3, 2, 1 | `(2 left this stream)` |
+| 0 | `(last one this stream)` |
+| unlimited cap (≥1000) | nothing, ever |
+
+Uniform across roles. The broadcaster suppression Phase 0 special-cased now falls out of
+the unlimited rule instead of being a separate role check — same outcome, one fewer thing
+to keep in sync. Denial is untouched: running out is already its own message.
+
+`(last one this stream)` rather than `(0 left this stream)` because a zero reads as a
+refusal, and this request *was* answered.
+
+**Threshold:** constant `3`, env-knobbed via `AI_COUNTER_THRESHOLD`. **Flagged for the
+app:** threshold and an always-on preference belong in `channel_settings` for the AI
+settings screen, so a streamer who wants the old running count can have it.
+
+#### Reintroduction validation
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 29 | Unlimited caps counted again (**the exact regression**) | unlimited tests |
+| 30 | Counter shown always (threshold gate removed) | boundary + placement tests |
+| 31 | Boundary off by one (`>=` for `>`) | exactly-three test |
+| 32 | Last-one message replaced by a zero count | final-request tests |
+
+**Four pre-existing assertions were updated, not weakened.** `ai.test.ts` pinned the old
+`(1/5)` prefix in four places; the format deliberately changed, so each now asserts the new
+contract — including that a first request is silent, which is the point of the redesign.
+
 ---
 
 ## P1-LR — Legacy Retirement  [STATUS: ISSUED 2026-08-16]
@@ -760,3 +806,137 @@ Part regression fix, part owner-requested redesign (owner delegated the how; lea
 
 ### Exit criteria
 - CI fully green on the shrunk pipeline; prod healthy; zero grep hits for deleted artifacts; the declaration: **repo is Claude-Design-ready pending the rebrand.**
+
+### Completion report — P1-LR (engineer, 2026-08-16)
+
+**Status:** complete. **766/766** server tests (45 files); lint 0; typecheck clean from a
+clean `npm ci`; production healthy and provably untouched.
+
+#### Task 0 — the freshness window, closed
+
+Before anything was deleted, a fresh read of the production `commands` table at
+**2026-08-16T15:01:44Z**: **17** handler names, `diff` **identical** to the list pinned in
+the gate test. No row was added between the WP4.4 declaration and this deletion, so the
+gate's evidence was still true at the moment it was acted on.
+
+#### Deleted
+
+| Artifact | Size |
+|---|---|
+| `src/` — the Phase-0 bot | 50 files |
+| `tests/` — its Jest suite | 52 files |
+| `jest.config.js`, `jest.setup.js` | 2 files |
+| `scripts/getFollowers.js` | 1 file |
+| **Total** | **105 files** |
+
+Also removed: the stale `coverage/` and `logs/` directories (untracked, gitignored, pure
+legacy output — a jest HTML report and `bot.log`).
+
+**Retained per spec:** `server/scripts/etl/` (it reads the historical dump) and
+`docs/archive/` (it is the record).
+
+#### Dependency audit
+
+Every one of the nine root runtime dependencies existed solely for the Phase-0 bot, so
+`dependencies` at the root is now **empty**:
+
+| Dependency | Verdict |
+|---|---|
+| `express`, `ioredis`, `ws` | the **server** declares its own — root copy was legacy's |
+| `mysql2` | server declares it for the ETL — root copy was legacy's |
+| `winston`, `spotify-web-api-node` | legacy only; Phase 1 uses pino and a thin fetch client |
+| `dotenv` | legacy `config.js` only |
+| `@aws-sdk/client-s3` | legacy `dbBackupManager` only — `pg-backup.sh` shells out to the `aws` CLI |
+| `node-fetch` | only `scripts/getFollowers.js`, deleted here |
+
+Dev dependencies: `jest` and `@types/jest` removed; `supertest` removed from the root (the
+server already declares it).
+
+**One audit error, caught and corrected.** I also removed `@types/express` from the root as
+legacy-only. It was not — the **server** needs it, and the root was simply where it lived.
+The first build after a clean install failed on it (an incremental cache had masked it on
+the run before). Fixed properly rather than reverted: it now sits in `server/package.json`,
+where the workspace that needs it declares it.
+
+#### CI and lint shrink
+
+- The `test-legacy` job (Jest over the Phase-0 bot) removed; four jobs remain — lint,
+  typecheck, test-server, docker-smoke.
+- `eslint.config.js` dropped its CommonJS block for `src/**` and `tests/**` and the Jest
+  globals block. The only JavaScript left in the repo is `eslint.config.js` itself.
+- `.dockerignore` and `scripts/deploy.sh` no longer exclude a tree that does not exist.
+
+#### Docs sweep
+
+`README.md` was still substantially a Phase-0 document — it opened by describing a
+single-channel CommonJS bot on MySQL, documented `npm start`/`config.js`/Jest coverage
+thresholds, and closed with "Phase 0 is complete… multi-channel support is a later phase".
+
+Rewritten to the Phase-1 world: multi-tenant TypeScript on Postgres with EventSub
+webhooks, the real repository layout, the tenant rule stated plainly, the current test
+story (including the loud-skip behaviour), and a Status section that says the bot is in
+production and points at the absorption ledgers for where Phase 0 went. The API v1,
+realtime, local-development and CI sections were already Phase-1 accurate and were kept.
+
+Also corrected: `server/src/logger.ts` still claimed "Phase 0's winston setup stays
+legacy-side", which stopped being true the moment legacy-side stopped existing.
+
+#### Production indifference — proven, not asserted
+
+The deletion touched no deployable file. Verified by hashing all **109** non-test
+`.ts` files under `server/src` and `shared/src` locally and on the box:
+
+```
+local:  109 files    remote: 109 files    content differences: NONE
+```
+
+`/healthz` returns `{"status":"ok","uptime":438,"version":"0.1.0"}` over TLS. No deploy was
+needed, which is itself the evidence: the server tree is byte-identical to what is running.
+
+*(Method note: the first comparison reported a mismatch caused by Windows `sha256sum`
+prefixing paths with `*` in binary mode. That was a bug in my comparison, not a real
+difference — chased down rather than reported as a discrepancy.)*
+
+#### Final state
+
+| Measure | Before | After |
+|---|---|---|
+| Tracked files | 316 | **211** |
+| Root runtime dependencies | 9 | **0** |
+| Root dev dependencies | 12 | **8** |
+| JavaScript files (tracked) | 105 | **1** (`eslint.config.js`) |
+| Test suites | 45 Vitest + 49 Jest | **45 Vitest** |
+| Tests | 766 + 1222 | **766** |
+| CI jobs | 5 | **4** |
+
+Dependencies now live where they are used: root 0 runtime / 8 dev (tooling), server 10 / 7,
+shared 1 / 0.
+
+```
+shared/     the typed contract
+server/     the bot
+scripts/    deploy, backups, secrets, test database, ETL
+docs/       design, work packages, dependency policy, Phase-0 archive
+caddy/      TLS reverse proxy
+```
+
+Zero grep hits across tracked files for `jest`, `src/bot.js`, `getFollowers`, or
+`spotify-web-api-node`. The two remaining `mysql2` references are the ETL and its
+declaration — retained by design.
+
+#### The declaration
+
+**The repository contains exactly one bot.** The Phase-0 tree is gone, its 3,592 lines
+accounted for in the absorption ledgers above, and its history preserved in
+`docs/archive/`. Nothing in the repo builds, tests, lints, or deploys the old bot, and
+nothing depends on it.
+
+**The repo is Claude-Design-ready pending the rebrand.**
+
+One thing a designer will still meet, flagged rather than fixed because it is outside this
+package: the product is named `AlmostHadAI` and the bot account is `almosthadai`, both of
+which the rebrand will change. The README, `package.json`, the Docker image name, the
+Postgres volume `almosthadai-postgres-data`, and the deploy path `/opt/almosthadai` all
+carry it.
+
+> **P1-WP4.5 + P1-LR verified by lead 2026-08-16:** legacy tree confirmed gone from disk; server 766/766 on the throwaway DB; lint 0 on the shrunk config; prod healthy and **indifference proven by per-file hashing rather than asserted** (109 files, zero content differences — including chasing the Windows binary-mode false mismatch to ground instead of reporting it). Task-0 freshness check (17 rows, identical) closed the declaration-to-deletion window exactly as designed. The `@types/express` audit error was caught by the clean-`npm ci` discipline and fixed in the right place. Counter design refinements endorsed: `(last one this stream)` over `(0 left)` because "a zero reads as a refusal and this request was answered," and broadcaster suppression falling out of the unlimited rule rather than a role special-case. Committed as `3f3bb0c` (counter) and `56ac532` (retirement — the repo contains exactly one bot). **Owner decision executed next micro: waifu images reset — keep the substitute host, add a deployment salt to the hash so all prior image associations reset now and future wipes are a salt bump.** THE REPO IS CLAUDE-DESIGN-READY PENDING THE REBRAND.

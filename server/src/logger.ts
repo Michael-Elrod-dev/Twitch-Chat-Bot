@@ -3,8 +3,8 @@ import type { Env } from './config/env.js';
 
 /**
  * Structured JSON logs in production (machine-parseable, ships to whatever we
- * point at it); human-readable in development. Phase 0's winston setup stays
- * legacy-side - nothing here is shared with it.
+ * point at it); human-readable in development. Replaced Phase 0's winston, which
+ * was deleted with the rest of the legacy tree in P1-LR.
  */
 export function createLogger(env: Env): Logger {
     const isDev = env.NODE_ENV === 'development';

@@ -61,7 +61,6 @@ EXCLUDE_ANYWHERE=(
     'coverage' 'logs' 'temp_backups' '.claude'
 )
 EXCLUDE_ROOT_ONLY=(
-    'src' 'tests' 'jest.config.js' 'jest.setup.js'
     '.env' '.env.*' 'compose.override.yml'
 )
 

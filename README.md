@@ -1,84 +1,78 @@
 # AlmostHadAI
 
-A single-channel Twitch chat bot for [`aimosthadme`](https://www.twitch.tv/aimosthadme),
-running as the bot account `almosthadai`.
+A multi-tenant Twitch chat bot. One server process serves many broadcasters, each
+with their own commands, emotes, quotes, song queue, AI budget and analytics, and
+no channel can read or affect another's.
 
-Node.js, CommonJS, no build step. MySQL for persistence, Redis as an optional cache
-and analytics write queue, Twitch EventSub over WebSocket for all live events.
+TypeScript on Node 24, strict ESM. PostgreSQL for persistence via Drizzle, Redis
+for caching, Twitch EventSub over **webhooks** for every live event, and a
+JWT-guarded REST + WebSocket API for the desktop client.
 
 ---
 
 ## What it does
 
 - **AI chat** — responds to mentions, plus `!ai`, `!advice` and `!roast`, via the
-  Claude API. Per-role rate limits, per stream.
-- **Song requests** — channel-point redemptions add Spotify tracks to a MySQL-backed
-  queue; a poller feeds them into the real Spotify queue as the current track ends.
-- **Commands** — stored in MySQL. Static text commands are editable from chat;
-  richer ones are backed by handler modules discovered at startup.
-- **Emotes** — exact-match trigger/response pairs.
-- **Quotes** — added by redemption, recalled by command.
-- **Analytics** — chat messages, viewing sessions, per-stream totals, follows.
-- **Discord** — go-live notification with a cooldown.
-- **Backups** — hourly `mysqldump` to S3, verified before upload, with rotation.
-- **Stream Deck API** — loopback-only HTTP endpoint for toggling song requests.
+  Claude API. Per-role rate limits, bucketed per stream, budgeted per channel.
+- **Song requests** — channel-point redemptions add Spotify tracks to a queue; a
+  per-channel poller feeds them into Spotify as the current track ends, and
+  requested tracks can be saved to the channel's requests playlist.
+- **Commands** — stored per channel. Static text commands are editable from chat
+  (`!command add/edit/delete`); richer ones are backed by declarative handlers.
+- **Emotes** — exact-match trigger/response pairs, per channel.
+- **Quotes** — added by redemption, recalled by `!quote`.
+- **Analytics** — chat totals, viewing sessions, streams and follows, per channel.
+- **Channel points** — redemptions routed by reward id, with a fulfil-or-refund
+  invariant: anything the bot cannot do gives the viewer their points back.
+- **API v1** — REST and realtime for the desktop client; API keys for Stream Deck.
+
+## Repository layout
+
+An npm workspaces monorepo. There is exactly one bot in this repo.
+
+```
+shared/     Types and zod schemas — the typed contract between server and client
+server/     The bot: transport, session, domain, db, http
+scripts/    Deploy, backups, secrets, throwaway test database, ETL import
+docs/       Design, work packages, dependency policy, and the Phase-0 archive
+```
+
+Inside `server/src`:
+
+```
+transport/  EventSub webhook, signature verification, normalisation, reconciler
+session/    Per-channel session, chat pipeline, redemption pipeline
+domain/     Commands, emotes, quotes, songs, streams, presence, stats, AI toggles
+db/         Drizzle schema, channel-scoped repositories, migrations
+http/       API v1, auth routes, realtime
+spotify/    Client, OAuth, playback monitor
+ai/         Claude client, prompt builder, rate limiter, usage counter
+```
 
 ## Running it
 
 ```bash
 npm install
-npm start
+npm run dev          # the server, with live reload, in Docker
 ```
 
-Node 24 or newer (see `.nvmrc`).
+Node 24 or newer (see `.nvmrc`). The full local stack — Postgres, Redis, Caddy and
+the server — comes up with Docker Compose; see the development loop below.
 
-Debug mode uses a separate `<DB_NAME>_debug` database, forces full operation
-regardless of stream status, and skips backups and Discord notifications:
+### Multi-tenancy in one paragraph
 
-```bash
-npm run debug
-```
-
-### Lifecycle
-
-The bot has two modes and moves between them on its own.
-
-**Minimal mode** (stream offline): a WebSocket connection subscribed only to
-`stream.online`, `stream.offline` and `channel.follow`, plus the token refresh
-check. Nothing else runs.
-
-**Full operation** (stream live): everything above plus chat and channel-point
-subscriptions, analytics, viewer polling every 60s, the Spotify monitors, hourly
-backups, and the API server.
-
-Stream ends → tears back down to minimal mode and starts a 30-minute grace timer
-that exits the process. Stream returns → cancels the timer and starts up again.
-`SIGINT`/`SIGTERM` → graceful shutdown: ends sessions, drains the Redis queues,
-takes a final backup, closes connections.
+Every repository is bound to a channel id at construction, so a query for one
+channel's data cannot be written to return another's. Sessions are shared-nothing:
+no static state, no module-level caches, no cross-channel lookups. Redis keys are
+namespaced `ch:{channelId}:…`. And no API route accepts a channel identifier — the
+credential *is* the tenant selector, so a token for channel A structurally cannot
+address channel B.
 
 ## Configuration
 
-Secrets come from `.env`. Behaviour knobs live in `src/config/config.js`, which is
-the intended place to tune the bot.
-
 ### Environment
 
-| Variable | Required | Notes |
-|---|---|---|
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | yes | MySQL connection |
-| `DB_CONNECTION_LIMIT` | no | Pool size, default 10 |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | no | Omit to run without Redis |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET_NAME` | for backups | S3 destination |
-| `DISCORD_WEBHOOK_URL` | for go-live posts | |
-| `API_ENABLED`, `API_PORT`, `API_KEY` | for the Stream Deck | Loopback only |
-| `LOG_DIR` | no | Log directory, default `logs/` at the repo root |
-
-Twitch and Spotify credentials are **not** environment variables — they live in the
-`tokens` table in MySQL, which the bot reads at startup and updates as tokens rotate.
-
-### Environment — the Phase-1 server
-
-Separate from the legacy bot's variables above. Validated at boot by
+Validated at boot by
 `server/src/config/env.ts`, which reports **every** problem at once and exits 78.
 
 | Variable | Required | Notes |
@@ -105,118 +99,60 @@ TWITCH_EVENTSUB_SECRET=... docker compose -f docker-compose.yml up -d
 See [`.env.example`](.env.example) for the full annotated list, including the Twitch
 application credentials, `TOKEN_ENCRYPTION_KEY` and `JWT_SECRET`.
 
+
 ### Connecting to Twitch
 
-Three OAuth flows share **one** registered redirect URI — the flow is carried in the
-server-issued `state`, so the Twitch console needs a single callback URL:
+Two consents, and they are different things.
 
-| Route | Who visits it | Grants |
-|---|---|---|
-| `/auth/bot/connect` | the shared bot account, once | `user:read:chat`, `user:write:chat`, `user:bot` |
-| `/auth/twitch/connect` | each broadcaster | `channel:bot`, `channel:read:redemptions`, `channel:manage:redemptions`, `moderator:read:followers`, `moderator:read:chatters` |
-| `/auth/app/login` | a desktop-app user | nothing — identity only |
+**The bot account, once, globally.** `/auth/twitch/bot` records the shared bot
+identity and its grant. Only the refresh token is kept, and only so consent can be
+re-established; it is on no request path.
 
-Both URLs are logged at boot. Connecting a channel stores its tokens encrypted,
-starts its session immediately, and reconciles its subscriptions — no restart.
+**Each broadcaster, per channel.** `/auth/twitch/connect` onboards a channel:
+identity from Twitch's validate endpoint (never a supplied login), tokens encrypted
+at rest, session started, subscriptions reconciled, channel-point rewards adopted.
 
-Subscription management stays a **dry run** until `EVENTSUB_DRY_RUN=false`, which
-additionally requires real client credentials and a `PUBLIC_URL`. A misconfigured
-deployment therefore cannot delete a working channel's subscriptions on its first boot.
+**Spotify, per channel.** `/auth/spotify/connect` connects the broadcaster's
+Spotify. Unauthenticated visitors are sent through Twitch sign-in first and land
+back at Spotify automatically.
 
 ### Tokens at rest
 
-Every OAuth token in `channel_tokens` and `bot_identity` is AES-256-GCM encrypted
-under `TOKEN_ENCRYPTION_KEY`, bound to its column so a value cannot be moved between
-them. Without the key the server still boots in development but **refuses to store or
-read any credential** — it cannot silently fall back to plaintext.
-
-Rows imported by the ETL predate encryption. Upgrade them once:
-
-```bash
-npm run db:encrypt-tokens -w server -- --dry-run
-```
-
-Drop `--dry-run` to write. It is idempotent and reports counts only — never a value.
-
-### Database roles
-
-Runtime connects as `almosthadai_app`, which can read and write data but does not own
-the tables and cannot alter them. Migrations use `MIGRATION_DATABASE_URL` (the owner
-role) on a connection opened at boot and closed immediately. If the runtime credential
-leaks, the blast radius is the data it could always read — not the schema.
-
-### Notable knobs in `config.js`
-
-| Setting | Default | Meaning |
-|---|---|---|
-| `tokenRefreshInterval` | 5 min | How often expiry is *checked* |
-| `tokenRefreshSafetyMargin` | 15 min | How close to expiry a token is *rotated* |
-| `shutdownGracePeriod` | 30 min | Offline wait before the process exits |
-| `viewerTrackingInterval` | 60 s | Chatter poll |
-| `spotifyInterval` | 3 s | Playback poll |
-| `backupInterval` | 1 h | Scheduled backup |
-| `cache.*TTL` | 300 s | Redis cache lifetimes |
-| `rateLimits.claude.streamLimits` | per role | AI requests per user per stream |
-
-### Redis is optional
-
-Every Redis-backed path has a MySQL fallback. With Redis down the bot still works;
-commands and emotes read from an in-memory cache backed by MySQL, and analytics
-writes go straight to the database instead of through the queue.
-
-## Layout
-
-```
-src/
-├── bot.js                  Composition root: DI wiring, lifecycle, shutdown
-├── config/                 All configuration
-├── ai/                     Claude client, rate limiter, context and prompt builders
-├── analytics/              Analytics manager and viewer tracking
-├── api/                    Express server, API-key middleware, song routes
-├── commands/               Command registry + auto-discovered handler modules
-├── database/               Pool, transactions, backups, debug DB setup, schema
-├── emotes/                 Trigger/response matching
-├── logger/                 Winston setup with error dedup and rate limiting
-├── messages/               Chat routing, sending, redemption dispatch
-├── notifications/          Discord webhook
-├── redemptions/            Channel-point routing; quotes and songs
-├── redis/                  Connection, cache, queue, analytics consumer
-├── services/               Song-toggle service
-├── tokens/                 Token lifecycle and Twitch Helix client
-└── websocket/              EventSub connection and subscription management
-tests/                      Mirrors src/
-docs/                       Baseline review, work packages, migration, smoke test
-```
+AES-256-GCM with a random IV per operation, authenticated with additional data
+bound to the column's purpose, so a ciphertext moved between columns fails to
+decrypt rather than silently succeeding. The key comes from `TOKEN_ENCRYPTION_KEY`;
+in production the server refuses to boot without one.
 
 ### How a chat message flows
 
-EventSub → `bot.handleChatMessage` → `chatMessageHandler`, which in order: ignores
-the bot's own messages and reward-attached ones, checks whether the message mentions
-the bot (commands always win), checks for an exact emote match, dispatches `!`
-commands, and records analytics.
+EventSub delivers a signed webhook → the signature is verified over
+`id + timestamp + raw body` → the event is enqueued and acknowledged inside
+Twitch's timeout → the session for that broadcaster deduplicates it, records roles
+and totals, then runs the pipeline: command, emote, AI trigger, or nothing.
 
 ### How a command resolves
 
-`commandManager` looks the name up in Redis, then its in-memory map, then MySQL.
-A command either has `handler_name` — dispatched to a function loaded from
-`commands/handlers/` — or a static `response_text`. Permission is decided in exactly
-one place: from the handler's declared level if it has one, otherwise from the
-database row.
+`CommandManager` looks the name up in its per-channel cache, then Postgres. A
+command either names a `handler_name` — dispatched to a declarative handler that
+carries its own permission level — or has static `response_text`. Permission is
+decided in exactly one place: the handler's declared level if it has one,
+otherwise the database row, and a disagreeing row is corrected at load.
 
 ## Testing
 
 ```bash
-npm test              # full suite
-npm run test:coverage # with coverage report
-npm run test:watch    # watch mode
+npm test                                              # the server suite
+eval "$(bash scripts/test-db.sh start)" && npm test    # including the DB suites
 ```
 
-The suite is fully mocked — no database, Redis, or network access required, and no
-test can reach an external host. Roughly 1200 tests across 49 suites, a few seconds
-to run.
+Roughly 770 tests across 45 files. The database-backed suites need a throwaway
+Postgres — `scripts/test-db.sh` starts one on port 55432, isolated from the dev
+database, which the test helper refuses to touch.
 
-Coverage thresholds are enforced in `jest.config.js` (75% statements/lines/functions,
-70% branches).
+**Skips are loud.** Without `TEST_DATABASE_URL` the DB-backed suites self-skip so a
+contributor without Docker can still run the suite, and a banner reports exactly
+how many tests did not run. CI sets `REQUIRE_DB_TESTS=1`, which turns any skip into
+a failed job — a green check that silently covered nothing is worse than a red one.
 
 ### Local development loop
 
@@ -437,5 +373,9 @@ whole tenancy at once or trust a header the client controls.
 
 ## Status
 
-Phase 0 (baseline stabilisation) is complete. The system is single-channel by
-design; multi-channel support and a web frontend are later phases.
+**In production, serving live channels.** The Phase-0 single-channel bot has been
+fully superseded and its tree deleted — the absorption ledgers in
+[`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) record where all 3,592 of its
+lines went, and [`docs/archive/`](docs/archive) keeps its history.
+
+Next is the desktop client (Tauri + React), which the API here already serves.

@@ -123,6 +123,8 @@ export interface ChannelDependencies {
     /** Spotify application credentials, for the per-channel connect. */
     spotifyOAuth?: SpotifyOAuthConfig;
     cipher?: TokenCipher;
+    /** AI_COUNTER_THRESHOLD — how few requests left before the viewer is told. */
+    counterThreshold?: number;
 }
 
 export function buildChannelSession(deps: ChannelDependencies, channel: ChannelRecord): ChannelSession {
@@ -268,7 +270,8 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             // prompt carries the real title and category.
             currentStreamId: () => streams?.currentStreamId() ?? null,
             streamContext: () => streams?.context() ?? null,
-            broadcasterLogin: channel.twitchLogin
+            broadcasterLogin: channel.twitchLogin,
+            ...(deps.counterThreshold === undefined ? {} : { counterThreshold: deps.counterThreshold })
         })
         : ai_fallback;
 

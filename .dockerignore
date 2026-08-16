@@ -9,12 +9,6 @@ coverage
 logs
 temp_backups
 
-# The Phase-0 bot does not ship in the Phase-1 image.
-src
-tests
-jest.config.js
-jest.setup.js
-
 docs
 *.md
 .env

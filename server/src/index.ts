@@ -240,6 +240,7 @@ async function main(): Promise<void> {
         claude,
         db: database.db,
         cipher,
+        counterThreshold: env.AI_COUNTER_THRESHOLD,
         ...(helix ? { helix } : {}),
         ...(twitchConfigured ? {
             twitchOAuth: {

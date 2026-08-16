@@ -2,7 +2,13 @@ const js = require('@eslint/js');
 const globals = require('globals');
 const tseslint = require('typescript-eslint');
 
-/** Style rules shared by the legacy JS and the new TypeScript workspaces. */
+/**
+ * One bot, one language.
+ *
+ * The Phase-0 CommonJS block and its Jest globals were removed with the legacy
+ * tree in P1-LR; the only JavaScript left in the repo is this config and the
+ * handful of tooling scripts beside it.
+ */
 const houseStyle = {
     indent: ['error', 4],
     'linebreak-style': ['error', 'unix'],
@@ -32,9 +38,9 @@ module.exports = [
         ]
     },
 
-    // ---- Legacy Phase-0 bot: CommonJS JavaScript --------------------------
+    // ---- Repo tooling: the CommonJS config files at the root --------------
     {
-        files: ['src/**/*.js', 'tests/**/*.js', '*.js'],
+        files: ['*.js'],
         ...js.configs.recommended,
         languageOptions: {
             ecmaVersion: 'latest',
@@ -50,18 +56,7 @@ module.exports = [
         }
     },
 
-    {
-        // jest.setup.js runs inside the Jest environment too, so it gets the
-        // same globals as the suites themselves.
-        files: ['tests/**/*.js', 'jest.setup.js'],
-        languageOptions: {
-            globals: {
-                ...globals.jest
-            }
-        }
-    },
-
-    // ---- Phase-1 workspaces: TypeScript ESM -------------------------------
+    // ---- The application: TypeScript ESM ----------------------------------
     ...tseslint.configs.recommended.map((config) => ({
         ...config,
         files: ['server/**/*.ts', 'shared/**/*.ts']
