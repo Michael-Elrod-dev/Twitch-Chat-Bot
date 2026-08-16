@@ -1,5 +1,5 @@
-import { asc, eq } from 'drizzle-orm';
-import { songQueue, viewers } from '../schema/index.js';
+import { and, asc, eq, sql as raw } from 'drizzle-orm';
+import { songQueue, viewers, channels } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
 
 export interface QueuedSongRecord {
@@ -45,6 +45,73 @@ export class SongQueueRepository extends ChannelScopedRepository {
             requestedByLogin: r.requestedByLogin,
             createdAt: r.createdAt.toISOString()
         }));
+    }
+
+    /**
+     * Appends a requested track.
+     *
+     * Only the redemption path calls this — there is deliberately no API route
+     * to enqueue, because a track that entered without a redemption has no
+     * channel points behind it and nothing to refund if it is skipped.
+     */
+    async add(track: {
+        trackUri: string;
+        trackName: string;
+        artistName: string;
+        requestedByTwitchUserId: string | null;
+    }): Promise<void> {
+        // The position is allocated under a channel row lock, the same shape
+        // quote numbering uses: two simultaneous redemptions would otherwise
+        // read the same max and both claim it.
+        await this.db.transaction(async (tx) => {
+            await tx
+                .select({ id: channels.id })
+                .from(channels)
+                .where(eq(channels.id, this.channelId))
+                .for('update');
+
+            const [row] = await tx
+                .select({ next: raw<number>`coalesce(max(${songQueue.queuePosition}), 0) + 1` })
+                .from(songQueue)
+                .where(eq(songQueue.channelId, this.channelId));
+
+            /*
+             * `requested_by_twitch_user_id` references `viewers`, and a viewer
+             * can redeem channel points without ever having chatted - so the
+             * requester may genuinely not exist yet. Null is the accurate
+             * answer there, not a lost attribution: there is no viewer record
+             * to point at. The queue still shows the track.
+             */
+            let requestedBy = track.requestedByTwitchUserId;
+            if (requestedBy !== null) {
+                const [known] = await tx
+                    .select({ id: viewers.twitchUserId })
+                    .from(viewers)
+                    .where(eq(viewers.twitchUserId, requestedBy))
+                    .limit(1);
+                if (!known) requestedBy = null;
+            }
+
+            await tx.insert(songQueue).values({
+                channelId: this.channelId,
+                queuePosition: row?.next ?? 1,
+                trackUri: track.trackUri,
+                trackName: track.trackName,
+                artistName: track.artistName,
+                requestedByTwitchUserId: requestedBy
+            });
+        });
+    }
+
+    /** @returns whether this track is already queued for this channel. */
+    async contains(trackUri: string): Promise<boolean> {
+        const [row] = await this.db
+            .select({ id: songQueue.id })
+            .from(songQueue)
+            .where(and(eq(songQueue.channelId, this.channelId), eq(songQueue.trackUri, trackUri)))
+            .limit(1);
+
+        return row !== undefined;
     }
 
     async count(): Promise<number> {
