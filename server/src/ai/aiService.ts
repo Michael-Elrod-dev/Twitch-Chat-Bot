@@ -7,6 +7,7 @@ import type { ChatHistoryRepository } from '../db/repositories/chatHistoryReposi
 import { AiRateLimiter } from './rateLimiter.js';
 import { buildUserMessage, buildGamePrompt, type StreamContext, type UserRoles } from './promptBuilder.js';
 import { CHAT_SYSTEM_PROMPT, GAME_PROMPTS, CHAT_HISTORY_LIMITS, type GamePromptType } from './prompts.js';
+import { withUsageSuffix } from './usageCounter.js';
 
 /**
  * The real AI service, per channel.
@@ -45,6 +46,8 @@ export interface ChannelAiServiceOptions {
      */
     streamContext: () => StreamContext | null;
     broadcasterLogin: string;
+    /** Remaining-requests threshold below which the viewer is told. */
+    counterThreshold?: number;
     maxTokens?: number;
     fallbackMessage?: string;
 }
@@ -167,7 +170,11 @@ export class ChannelAiService implements AiService {
 
             return {
                 ok: true,
-                response: `(${used}/${decision.limit}) ${completion.text}`
+                response: withUsageSuffix(completion.text, {
+                    used,
+                    limit: decision.limit,
+                    ...(o.counterThreshold === undefined ? {} : { threshold: o.counterThreshold })
+                })
             };
         } catch (err) {
             // The hard rule. Nothing from here reaches the pipeline as an

@@ -132,6 +132,14 @@ const envSchema = z.object({
     AI_MODEL: z.string().min(1).default('claude-sonnet-5'),
 
     /**
+     * How few AI requests must remain before the viewer is told.
+     *
+     * Tunable without a deploy while the app's AI settings screen does not
+     * exist yet; it becomes a per-channel `channel_settings` field there.
+     */
+    AI_COUNTER_THRESHOLD: z.coerce.number().int().min(0).default(3),
+
+    /**
      * Spotify application credentials.
      *
      * A server secret like the others: one application, per-channel user

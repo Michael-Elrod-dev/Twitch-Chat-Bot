@@ -194,8 +194,12 @@ describeDb('AI service', () => {
     };
 
     describe('the happy path', () => {
-        it('answers and prefixes the usage counter', async () => {
-            // Phase 0's "(1/5) ..." prefix, so a viewer can see their budget.
+        it('answers with no counter while the viewer has plenty left', async () => {
+            /*
+             * P1-WP4.5 replaced Phase 0's unconditional "(1/5)" prefix. A raw
+             * count on every message answers a question nobody asked until the
+             * answer starts to matter, so it appears only near the cap.
+             */
             const user = await makeViewer(`ai-usage-${Date.now()}`);
             const { service, client } = buildService(alphaId);
             client.reply = 'a considered answer';
@@ -206,10 +210,10 @@ describeDb('AI service', () => {
             });
 
             expect(result.ok).toBe(true);
-            expect(result.response).toBe(`(1/${DEFAULT_STREAM_LIMITS.everyone}) a considered answer`);
+            expect(result.response).toBe('a considered answer');
         });
 
-        it('increments the counter across requests', async () => {
+        it('starts warning as the viewer approaches the cap', async () => {
             const user = await makeViewer(`ai-inc-${Date.now()}`);
             const { service } = buildService(alphaId);
 
@@ -222,7 +226,8 @@ describeDb('AI service', () => {
                 chatter: { twitchUserId: user, displayName: 'V' }
             });
 
-            expect(second.response).toContain('(2/');
+            // Default cap 5: the second request leaves 3, which is the boundary.
+            expect(second.response).toContain('(3 left this stream)');
         });
 
         it('sends the chat system prompt, not a game one', async () => {
@@ -291,7 +296,9 @@ describeDb('AI service', () => {
                 chatter: { twitchUserId: user, displayName: 'V' }
             });
 
-            expect(next.response).toContain('(1/');
+            // A failed call is not charged, so this is still the first paid
+            // request of five - well clear of the warning threshold.
+            expect(next.response).not.toContain('left this stream');
         });
 
         it('counts the offline bucket, where the unique index cannot', async () => {
@@ -454,7 +461,8 @@ describeDb('AI service', () => {
 
             expect(refusedInAlpha.ok).toBe(false);
             expect(allowedInBeta.ok).toBe(true);
-            expect(allowedInBeta.response).toContain('(1/');
+            // Beta's budget is untouched, so its first request is silent.
+            expect(allowedInBeta.response).not.toContain('left this stream');
         });
 
         it('never shows one channel history to another', async () => {
