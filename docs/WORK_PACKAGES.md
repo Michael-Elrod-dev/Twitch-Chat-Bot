@@ -1109,6 +1109,58 @@ which is the part that had to be right before any UI was built against it.
 
 ---
 
+### Report — P1-WP8b (engineer, 2026-08-16): NOT DELIVERED
+
+**Status: not delivered.** No code was produced for this package. The repository is
+unchanged from the WP8 commit: **794/794**, lint 0, typecheck clean, production healthy.
+
+I am stopping rather than starting, because I do not have the working context left to
+build this package to the standard the rest of this run has held. Half of a Tauri
+workspace, or an endpoint wired but not reintroduction-tested, would be worse than an
+honest hand-off — and every previous package in this log earned its approval by being
+finished and proven, not by being begun.
+
+**One partial edit was made and reverted.** I began the channel enable/disable contract
+(`setChannelEnabledSchema`, `ChannelEnabledResponse`, an `enabled` field on
+`ChannelSummary`) before concluding I could not also deliver the migration, repository,
+route, session wiring, tests and reintroduction validation it needs. Contract types with
+no implementation are dead code, so `shared/src/contract/resources.ts` was restored. The
+design work is written down below instead, where it costs nothing and loses nothing.
+
+#### Design decisions worth keeping for whoever picks this up
+
+**`enabled` must be a new column, not a reuse of `status: 'suspended'`.** They answer
+different questions: `status` reports what the world did to a channel (Twitch revoked
+consent → `needs_reauth`), while `enabled` records what its owner chose. Conflating them
+means the app tells a broadcaster their bot is off when it is actually broken, or the
+reverse — and the handoff README is explicit that server-unreachable and channel status
+must never be conflated (`4b`). The same discipline applies one layer down.
+
+So: `channels.enabled boolean not null default true` (migration `0005`), returned on
+`ChannelSummary`, with `PATCH /api/v1/me/channel` flipping it and driving
+`SessionManager` start/stop. The response should carry both `enabled` and the resulting
+`status`, so the header updates from one round trip rather than a refetch.
+
+**Reintroduction targets when it is built:** enabled-flip does not start/stop the session;
+`enabled` conflated with `status` (a paused channel reporting `needs_reauth` or vice
+versa); the endpoint reachable by API key (it must be `rejectApiKey`, like every other
+management route); and one channel's switch affecting another's session.
+
+#### What remains open in WP8b
+
+Everything as specced: the `app/` workspace, Tauri 2 shell with updater scaffold, bundled
+fonts, Lucide React, the theme module (`{{APP_NAME}}` as one constant,
+`prefers-reduced-motion` honoured), the persistent shell with all four channel-header pill
+states, the auth screens (`3g`/`5d`/`3h`) against the now-hardened `return_to` flow, the WS
+connection state machine with `4b` semantics, the channel enable/disable endpoint, and the
+CI Windows installer artifact. WP9's three tranches follow it, unstarted.
+
+The auth foundation they all sit on is sound and deployed, the handoff README is read in
+full, and the contract is surveyed — so the next session starts with the groundwork done
+and nothing to unpick.
+
+---
+
 ## P1-WP9 — Screens (three tranches, each verified separately)  [STATUS: ISSUED 2026-08-16 — sequential after WP8]
 
 - **9a — Dashboard & live** (`2a`,`2b`,`4a`,`4b`): status strip, numbers, chat card with outcome chips (server 🔶: enrich `chat.message` with pipeline outcome), song-queue card, offline + failure states, uptime tick.
@@ -1126,3 +1178,5 @@ The full WP8 scope minus the now-complete auth-foundation fix: `app/` workspace 
 
 ## FUTURE — Security review (owner-requested 2026-08-16)
 **A dedicated security-audit stage, run by a SEPARATE Fable session (fresh eyes, not this build thread), before any public/promoted launch.** Scope: system-design vulnerabilities across the whole surface — auth/OAuth flows and token handling, the public webhook, API authz/tenant isolation, secret handling, dependency CVEs, AND the **public GitHub repo** itself (history for leaked secrets, workflow permissions, exposed config). Rationale: the repo is public now, and the open-redirect find proves design-level vulns exist and are worth a deliberate pass rather than incidental catches. Constraint (owner): keep routine per-package compute lean — this is a concentrated audit stage, not ongoing overhead on every package. Trigger: before public launch, or sooner if the threat surface changes materially. Deliverable: a findings report ranked by severity, fixes issued as normal packages.
+
+> **WP8b — HONEST STOP, verified by lead 2026-08-16:** engineer halted on limited working context rather than ship a half-built package; repo confirmed unchanged from the security-fix commit (contract edit made-and-reverted, no dangling code), 794/794, lint clean, prod healthy. Endorsed without reservation — an unfinished-but-unproven package would violate the standard every prior entry met. **Carried forward for the next build session (all still OPEN):** the auth foundation is hardened/deployed and the handoff is read/surveyed/gitignored, so groundwork is done. Design note preserved from the report: the master switch needs a NEW `enabled` column, never a reuse of `status` — `status` is what the world did to the channel, `enabled` is what the owner chose; conflating them lies to the broadcaster (same distinction as handoff `4b`). Four reintroduction targets for that endpoint are named in the engineer's report. Remaining scope = WP8b in full + WP9 a/b/c as pre-issued. No verdict pending; nothing to unpick.
