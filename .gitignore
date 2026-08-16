@@ -42,3 +42,7 @@ coverage/
 dist/
 build/
 *.tsbuildinfo
+
+# Design handoff from Claude Design: working reference only, never committed.
+# Deleted entirely as an exit criterion of the final P1-WP9 tranche.
+design_handoff_bot_desktop_app/

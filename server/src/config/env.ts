@@ -149,6 +149,14 @@ const envSchema = z.object({
     IMAGE_SEED_SALT: z.string().min(1).optional(),
 
     /**
+     * Permits `return_to=http://localhost:*` for the desktop app's dev loop.
+     *
+     * Development only. In production nothing should be handing a session to a
+     * laptop, and the boot guard below refuses to start if this is set there.
+     */
+    ALLOW_LOOPBACK_RETURN_TO: z.coerce.boolean().default(false),
+
+    /**
      * Spotify application credentials.
      *
      * A server secret like the others: one application, per-channel user

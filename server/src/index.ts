@@ -405,6 +405,10 @@ async function main(): Promise<void> {
         jwtTtlSeconds: env.JWT_TTL_SECONDS,
         configured: twitchConfigured,
         channels: channelRepository,
+        returnToPolicy: {
+            // Never in production: nothing there should hand a session to a laptop.
+            allowLoopback: env.NODE_ENV !== 'production' && env.ALLOW_LOOPBACK_RETURN_TO
+        },
         ...(spotifyConfigured ? {
             spotify: {
                 config: {

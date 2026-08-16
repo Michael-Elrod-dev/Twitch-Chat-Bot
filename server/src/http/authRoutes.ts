@@ -8,6 +8,7 @@ import type { OnboardingService } from '../auth/onboarding.js';
 import type { AppSessionRepository } from '../db/repositories/appSessionRepository.js';
 import type { ChannelRepository } from '../db/repositories/channelRepository.js';
 import { generateRefreshToken, signJwt, verifyJwt } from '../auth/jwt.js';
+import { isAllowedReturnTo, type ReturnToPolicy } from '../auth/returnTo.js';
 import {
     buildSpotifyAuthorizeUrl,
     exchangeSpotifyCode,
@@ -43,6 +44,8 @@ export interface AuthRoutesOptions {
     configured: boolean;
     /** Resolves the signed-in identity to a channel, for the chained connect. */
     channels: ChannelRepository;
+    /** Which `return_to` destinations may receive a session. See returnTo.ts. */
+    returnToPolicy: ReturnToPolicy;
     /** Spotify connect, per channel. Absent means the routes 503. */
     spotify?: {
         config: SpotifyOAuthConfig;
@@ -67,6 +70,18 @@ export function createAuthRouter(options: AuthRoutesOptions): Router {
         if (!requireConfigured(res)) return;
 
         const returnTo = typeof req.query['return_to'] === 'string' ? req.query['return_to'] : undefined;
+
+        /*
+         * Refused here, before Twitch is involved, so the failure is a clear
+         * 400 rather than a silent drop after a full consent round trip. The
+         * callback checks again - see the comment there.
+         */
+        if (returnTo !== undefined && !isAllowedReturnTo(returnTo, options.returnToPolicy)) {
+            logger.warn({ flow }, 'Rejected an OAuth flow with a disallowed return_to');
+            res.status(400).json(apiFailure('bad_request', 'return_to is not an allowed destination'));
+            return;
+        }
+
         const state = await states.issue(flow, returnTo);
 
         logger.info({ flow }, 'OAuth flow started');
@@ -379,6 +394,22 @@ async function handleCallback(req: Request, res: Response, options: AuthRoutesOp
         logger.info({ login: identity.login }, 'App sign-in completed');
 
         if (record.returnTo) {
+            /*
+             * Checked again at the point of use. The state is server-issued, so
+             * this is belt-and-braces - but this is the line that actually hands
+             * out a session, and it should not depend on a check made in another
+             * function to be safe. A future code path that issues state without
+             * validating would otherwise reopen the hole silently.
+             */
+            if (!isAllowedReturnTo(record.returnTo, options.returnToPolicy)) {
+                logger.error(
+                    { login: identity.login },
+                    'Refusing to hand a session to a disallowed return_to'
+                );
+                res.status(400).type('text/plain').send('return_to is not an allowed destination.');
+                return;
+            }
+
             // Fragment, not query: a fragment is not sent to servers and does not
             // land in access logs or Referer headers.
             res.redirect(`${record.returnTo}#access_token=${accessToken}&refresh_token=${refresh.token}`);

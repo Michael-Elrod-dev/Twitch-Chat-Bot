@@ -43,6 +43,7 @@ function buildHarness(overrides: {
     /** Lets a test sign in as the wrong Twitch account. */
     identityUserId?: string;
     identityLogin?: string;
+    returnToPolicy?: { allowLoopback: boolean };
 } = {}): Harness {
     const onboardedChannels: { login: string }[] = [];
     const botConsents: { login: string }[] = [];
@@ -119,6 +120,7 @@ function buildHarness(overrides: {
         jwtSecret: 'jwtSecret' in overrides ? overrides.jwtSecret : JWT_SECRET,
         jwtTtlSeconds: 900,
         configured: overrides.configured ?? true,
+        returnToPolicy: overrides.returnToPolicy ?? { allowLoopback: false },
         spotify: {
             config: {
                 clientId: 'spotify-client',
@@ -613,5 +615,60 @@ describe('the continuation cannot be chosen by the caller', () => {
         // Tokens, not a redirect to Spotify.
         expect(response.body.data.access_token).toBeTruthy();
         expect(harness.spotifyConnected).toHaveLength(0);
+    });
+});
+
+
+describe('return_to is not an open redirect', () => {
+    /**
+     * The vulnerability: `return_to` went unvalidated from the query string into
+     * `res.redirect()` alongside a live access AND refresh token in the
+     * fragment. Any URL an attacker could get a user to click handed over a
+     * working session, invisibly - a fragment reaches no server log.
+     *
+     * Tested at the route rather than only on the helper, because the helper
+     * being correct is worth nothing if the route forgets to call it.
+     */
+    it('refuses to start a flow aimed at an attacker', async () => {
+        const { app } = buildHarness();
+
+        const response = await request(app)
+            .get('/auth/app/login')
+            .query({ return_to: 'https://evil.example/steal' });
+
+        expect(response.status).toBe(400);
+        // Refused before Twitch is involved at all.
+        expect(response.headers['location']).toBeUndefined();
+    });
+
+    it('starts a flow aimed at the desktop app', async () => {
+        const { app } = buildHarness();
+
+        const response = await request(app)
+            .get('/auth/app/login')
+            .query({ return_to: 'almosthadai://auth' });
+
+        expect(response.status).toBe(302);
+        expect(response.headers['location']).toContain('id.twitch.tv');
+    });
+
+    it('still allows a flow with no return_to at all', async () => {
+        const { app } = buildHarness();
+
+        const response = await request(app).get('/auth/app/login');
+
+        expect(response.status).toBe(302);
+    });
+
+    it('refuses loopback unless development has enabled it', async () => {
+        const strict = buildHarness();
+        expect((await request(strict.app)
+            .get('/auth/app/login')
+            .query({ return_to: 'http://localhost:1420/cb' })).status).toBe(400);
+
+        const permissive = buildHarness({ returnToPolicy: { allowLoopback: true } });
+        expect((await request(permissive.app)
+            .get('/auth/app/login')
+            .query({ return_to: 'http://localhost:1420/cb' })).status).toBe(302);
     });
 });

