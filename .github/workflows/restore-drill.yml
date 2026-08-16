@@ -1,0 +1,148 @@
+name: Restore drill
+
+# Design §4.1 guardrail 5: backups are proven restorable continuously, not
+# discovered broken during an incident. This drill needs no cloud credentials -
+# it proves the dump/restore *tooling and schema* round-trip. The S3-sourced
+# variant (restoring the newest real backup) becomes possible once AWS secrets
+# exist in the repo; see docs/DEPENDENCIES.md.
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC - before the Renovate window, so a red drill is
+    # visible before dependency PRs land.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    # Any change to schema or migration tooling re-proves the round trip.
+    paths:
+      - 'server/src/db/**'
+      - 'server/drizzle/**'
+      - 'scripts/pg-backup.sh'
+      - '.github/workflows/restore-drill.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    name: Dump and restore round-trip
+    runs-on: ubuntu-latest
+
+    services:
+      # The source: migrated, seeded, then dumped.
+      source-db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: almosthadai
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: almosthadai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U almosthadai"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      # The target: a genuinely separate, empty server. Restoring into the same
+      # instance would prove far less.
+      target-db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: almosthadai
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: almosthadai
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U almosthadai"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      SOURCE_URL: postgres://almosthadai:drill@127.0.0.1:5432/almosthadai
+      TARGET_URL: postgres://almosthadai:drill@127.0.0.1:5433/almosthadai
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The runner's client must not be older than the server, or pg_dump
+      # refuses to dump a newer catalogue.
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Migrate the source database
+        run: npm run db:migrate -w server
+        env:
+          DATABASE_URL: ${{ env.SOURCE_URL }}
+
+      - name: Seed representative data
+        run: npm run db:seed -w server
+        env:
+          DATABASE_URL: ${{ env.SOURCE_URL }}
+
+      - name: Record source row counts
+        run: |
+          psql "$SOURCE_URL" -At -c "
+            select table_name || '=' || (xpath('/row/c/text()',
+              query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name),
+              false, true, '')))[1]::text::int
+            from information_schema.tables
+            where table_schema = 'public' and table_type = 'BASE TABLE'
+            order by table_name;
+          " > source-counts.txt
+          echo "--- source ---"
+          cat source-counts.txt
+
+      - name: Back up and verify
+        run: BACKUP_DIR=./drill-backups bash scripts/pg-backup.sh
+        env:
+          DATABASE_URL: ${{ env.SOURCE_URL }}
+
+      - name: Restore into the second, empty database
+        run: |
+          DUMP=$(ls -1 ./drill-backups/*.dump | head -1)
+          echo "Restoring $DUMP"
+          pg_restore --no-owner --no-privileges --dbname "$TARGET_URL" "$DUMP"
+
+      - name: Record target row counts
+        run: |
+          psql "$TARGET_URL" -At -c "
+            select table_name || '=' || (xpath('/row/c/text()',
+              query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name),
+              false, true, '')))[1]::text::int
+            from information_schema.tables
+            where table_schema = 'public' and table_type = 'BASE TABLE'
+            order by table_name;
+          " > target-counts.txt
+          echo "--- target ---"
+          cat target-counts.txt
+
+      - name: Assert the restore is faithful
+        run: |
+          if diff -u source-counts.txt target-counts.txt; then
+            echo "Restore verified: every table's row count matches."
+          else
+            echo "RESTORE DRILL FAILED: row counts differ between source and restored database." >&2
+            exit 1
+          fi

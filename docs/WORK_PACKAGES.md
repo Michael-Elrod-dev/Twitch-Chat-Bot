@@ -1,224 +1,122 @@
-# Phase 0 Work Packages
+# Work Packages
 
-Companion to `docs/BASELINE_REVIEW.md` (incl. its §8 addendum). Issued by the lead; executed by the engineer; verified by the lead before the next package is issued. One package = one reviewable unit of work. Keep the suite green at every step. No features, no scope creep; anything discovered mid-package that isn't in scope gets *flagged in the completion report*, not fixed.
+The living log of lead-issued work packages: spec → engineer completion report → lead verification verdict. Active phase only — completed phases are archived.
 
-**Planned sequence** (subject to revision as results come in):
-
-- **WP-1 — Test-suite trustworthiness** (this document, below) — make the safety net honest before touching production code.
-- **WP-2 — WebSocket lifecycle** (P0-1, P0-2a/b): named-options refactor, reconnect_url handling, state-aware resubscription, constructor-contract + lifecycle tests.
-- **WP-3 — Database layer** (P0-3): mysql2 pool + `withTransaction`, migrate the two transaction scopes.
-- **WP-4 — Runtime teardown** (P0-4 extended): SpotifyManager monitor lifecycle + `is_playing` gate, API-server reuse/teardown across stream cycles.
-- **WP-5 — Token lifecycle** (P0-5, P1-11, P1-15): expiry-based refresh, atomic persist, fix revalidation branch, stop per-message validation.
-- **WP-6 — P1 correctness sweep** (analytics/viewer bugs, AI-flag staleness + fail-closed, EventSub dedup, queue races, permission-model consolidation, backup hardening incl. mysqldump credential fix).
-- **WP-7 — Hygiene** (dead deps/files, README rewrite, schema nits that don't require migration, hot-path optimizations approved by lead).
-
-Verification protocol: the engineer has no live credentials. Each package's exit criteria are static: suite green + new targeted tests + lead code review. Live verification happens once at the end of Phase 0: the owner runs `npm run debug` (debug DB, forced full operation) and relays output; WP exit criteria must NOT depend on live runs.
+**Phase 0 (baseline stabilization) — COMPLETE 2026-08-15, archived to [`archive/PHASE0_WORK_PACKAGES.md`](archive/PHASE0_WORK_PACKAGES.md).** Summary: WP-1..8.2 fixed all 5 P0s + 12 P1s from the baseline review with reintroduction-validated tests; 910 → 1222 tests; CI + Renovate + exact pins; pre-commit and dead code removed. Owner decisions from that era (Option B client-server, pre-commit removal, header retirement) are recorded in the archive and in `PHASE1_DESIGN.md` §8.
 
 ---
 
-## WP-1 — Test-suite trustworthiness  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15]
+# PHASE 1 — Client-Server System
 
-> Lead verification: 36 suites / 943 tests, exit 0, no open-handle warning, `git status` confirms zero `src/` changes, coverage thresholds hold with `bot.js` included. Root-cause analysis of the forceExit leak (test-side: real timers + automocked AnalyticsManager leaving `viewerManager` undefined → offline path threw → intervals leaked) accepted. Flagged items routed: offline-catch interval leak → WP-4; untracked warning timers → WP-4; `getStreamByUserName` mock/reality mismatch → WP-7; schema-validation testing → held open for owner decision at WP-6.
+Design: `docs/PHASE1_DESIGN.md` (owner decisions locked in its §8: TypeScript, Tauri 2, Hetzner VPS + Docker Compose, signing deferred, shared bot account, DuckDNS to start).
 
-**Goal:** the suite must be able to catch the bugs we're about to fix. Test files and Jest config only — **zero production-code changes** in this package. If a test cannot be written without a production change, write it up in the completion report instead.
+## P1-WP1 — EventSub transport spike  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** lock the Twitch facts before any Phase 1 code. Research-only package — **no repo changes except the deliverable document.** Use current official Twitch documentation (dev.twitch.tv), not memory; cite doc URLs for every load-bearing claim.
+
+**Deliverable:** `docs/PHASE1_EVENTSUB_FACTS.md` answering, with citations:
+
+1. **Transport choice:** webhook vs **conduits** (Twitch's newer transport abstraction) for a small multi-channel server — what conduits actually are, whether they obsolete plain webhooks for our case, and a recommendation.
+2. **Auth model per event type we use** (`channel.chat.message`, `channel.channel_points_custom_reward_redemption.add`, `stream.online`, `stream.offline`, `channel.follow`): which token creates the subscription on webhook/conduit transport, which user must have granted which scopes, and specifically how `channel.chat.message` works when the reader is the shared bot account (`user_id` = bot) across N broadcasters.
+3. **Limits & costs:** subscription cost model against app access tokens, max_total_cost defaults, per-type costs when authorization exists vs not, webhook callback requirements (TLS, port, verification challenge, HMAC), retry/timeout behavior, and any rate limits on subscription creation.
+4. **Chat send path:** confirm the Helix send-chat-message API's auth requirements for a bot sending to N channels (scopes on whose token; any per-channel authorization needed from the broadcaster).
+5. **OAuth specifics for our two flows:** authorization-code (server onboarding) and PKCE/device (desktop app sign-in) — current endpoints, refresh semantics, and any Twitch app-registration constraints (redirect URI rules, one client-id vs two for server+app).
+6. **Anything that invalidates §2 of the design doc** — called out explicitly with the correction.
+
+**Exit criteria:** the document exists, every claim cited, a clear transport recommendation made, and a short "design corrections" section (empty is a valid finding). Standalone report.
+
+> **Verified by lead 2026-08-15:** both load-bearing claims independently spot-checked (PKCE absence — confirmed, a years-open request on Twitch's own forums; the app-access-token `user:bot`/`channel:bot` "Cloud Chatbot" model — confirmed). Design doc corrected: §2.4 sign-in is now server-mediated auth-code (one client-id, app never an OAuth client); bot-identity simplification flagged to P1-WP3; dual-transport dev-mode question routed to P1-WP5 with deletion of the WS manager as the preferred outcome; onboarding consent = 3 scopes. The scope-hygiene call (single modern scope + empirical check at P1-WP6 rather than over-requesting, citing Twitch's suspension warning) is exactly right. Repo diff confirmed as the single deliverable file.
+
+---
+
+## P1-WP2 — Server skeleton  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** the Phase 1 server exists as a modern TypeScript service that builds, runs, tests, and ships as a Docker image — with zero bot features in it yet. Everything after this lands into a working chassis.
+
+**Scope guard:** additive only. New `server/` and `shared/` workspaces + root workspace wiring + Docker/compose + CI extension. The existing `src/` + `tests/` (the Phase-0 bot) remain untouched and their suite keeps running in CI until modules port over in later packages.
+
+**Lead architecture calls (locked — build to these):**
+- **npm workspaces** monorepo: `server/` (the service), `shared/` (types shared with the future app; starts near-empty), root scripts orchestrating both. The legacy bot stays at root `src/` until fully absorbed, then dies.
+- **TypeScript strict** (`strict: true`, `noUncheckedIndexedAccess`), ESM, build via `tsc` to `dist/`, dev via `tsx watch`.
+- **Vitest** for new-code tests (Jest remains for the legacy suite only; both run in CI; the house reintroduction-validation standard applies in both).
+- **pino** for server logging (winston stays legacy-side; structured JSON logs, pretty-print in dev).
+- **zod-validated env config**: a `config` module that parses/validates all env at boot and fails fast with a readable report of what's missing — the config.js "control panel" philosophy, typed.
+- **express** stays (Phase-0 hardening carries), mounted with `/healthz` + `/readyz` and the graceful-shutdown discipline from Phase 0 (drain, close, exit).
 
 ### Tasks
 
-1. **Remove the `'!src/bot.js'` coverage exclusion** (`jest.config.js:19`).
-2. **Add bot lifecycle tests** (new file(s) under `tests/bot/`), covering at minimum:
-   - `handleStreamOffline`: ends sessions + tracks stream end, clears intervals, sets `isStreaming=false`, detaches WS handlers, unsubscribes, starts the shutdown timer.
-   - `handleStreamOnline`: cancels a pending shutdown timer, reaches full operation.
-   - `startShutdownTimer`: fires `gracefulShutdown` after the grace period; cancelled by stream-online (use fake timers; note `process.exit` must be stubbed).
-   - `cleanupOrphanedSessions`: issues the four UPDATE statements; resilient to query errors.
-   - `handleFollow`: guards missing viewerManager; delegates correctly.
-   - `sendMessage`: no-ops when not streaming / shutting down.
-   Test the methods' *current correct behavior* — do NOT write tests that enshrine P0 bugs (e.g., do not assert the current WebSocketManager constructor arg order; the contract test for that lands with WP-2's fix). Work around the require-time self-start via `NODE_ENV=test` (already how existing bot tests do it).
-3. **Fix the live-network mock hazard:** `tests/commands/commandHandlers.test.js:6-9` — the `node-fetch` mock must default to a rejected promise (or `jest.fn()` with no passthrough), never real fetch. Audit the other test files for the same pattern.
-4. **Add real assertions to the two empty `checkAndRefreshTokens` tests** (`tests/tokens/tokenManager.test.js:427-486`): assert which refreshes occur and what is persisted.
-5. **Investigate `forceExit: true`** (`jest.config.js:49`): identify the leaked handles (run with `--detectOpenHandles`). If the leaks are test-side (un-cleared timers/servers in tests), fix them and remove `forceExit`. If a leak traces to production code (e.g., SpotifyManager constructor intervals), document it in the completion report, keep `forceExit` with a comment naming the responsible WP, and move on.
-6. **Coverage thresholds:** after including `bot.js`, thresholds (75/70/75) may dip. Prefer recovering via the new lifecycle tests. If still short, lower the global thresholds minimally, with a comment `// TODO restore to 75/70/75 by end of Phase 0`, and state the numbers in the completion report.
-7. Leave `maxWorkers: 1` as-is for now (not worth churn in this package).
+1. Workspace conversion: root `package.json` becomes a workspaces root (existing scripts keep working: `npm test` still runs the legacy suite; add `npm run test:server`, `build`, `dev`). Exact pins + Renovate coverage extend to the new workspaces.
+2. `server/`: TS toolchain, strict config, pino logger, zod env config, express app with health endpoints, graceful shutdown, first Vitest tests (config validation matrix, health endpoints, shutdown ordering).
+3. `shared/`: package scaffold with a placeholder API-types module consumed by `server/` (proves the dependency path).
+4. **Docker:** multi-stage `Dockerfile` (node:24 slim, non-root user, prod deps only), `docker-compose.yml` (server + postgres:17 + redis:7 + caddy with a placeholder Caddyfile), `.dockerignore`. Compose runs locally end-to-end: `docker compose up` → healthy `/healthz`.
+5. **CI extension:** typecheck + lint + Vitest for the workspaces alongside the legacy jobs; a `docker build` job proving the image builds on every PR (no registry push yet — deploy workflow arrives with the VPS).
+6. ESLint flat config extended with typescript-eslint for the workspaces (same spirit: recommended + our style rules).
 
 ### Exit criteria
 
-- `npm test` green; no live network access possible from any test (verify by running once with networking assumptions in mind — e.g., temporarily set an invalid proxy env or grep for surviving passthroughs).
-- `src/bot.js` included in coverage; report the resulting global coverage numbers.
-- Completion report: what was added/changed per task, coverage before/after, forceExit outcome, any flagged-not-fixed items.
+- `docker compose up` yields a healthy server locally; both test suites + typecheck + lint + image build green in CI; legacy suite untouched at 49/1222.
+- Completion report: layout tree, every toolchain version pinned, any deviations flagged.
+
+> **Verified by lead 2026-08-15:** independently ran lint (exit 0), typecheck (clean), legacy suite (49/1222), server Vitest (43), and the compose stack itself — healthy `/healthz` + `/readyz` through Caddy. The Express-5 self-reversal is exemplary deviation handling: flagged going in, reverted on reproducible evidence (two-major hoisting failure), escape path documented for post-absorption. The empty-string env finding is a genuinely valuable class of bug only live containers surface; the schema-level fix (empty ≡ absent, empty-required still fatal, four tests) is the right location. Flags accepted: compose dev-override → first real feature package; `.env.example` → P1-WP6; TLS Caddyfile → VPS provisioning; Express-4/5 types coupling → recorded for Renovate majors.
 
 ---
 
-## WP-2 — WebSocket lifecycle + owner config edits  [STATUS: COMPLETE — VERIFIED, ONE AMENDMENT REQUIRED (WP-2.1) 2026-08-15]
+## P1-WP3 — Schema v2 + data layer + migration  [STATUS: ISSUED 2026-08-15]
 
-> Lead verification: 38 suites / 971 tests, exit 0; production diff confined to the scope guard; wiring fix, intent-aware close, reconnect_url handling, and single-SubscriptionManager design all read correct; contract-test validation methodology (reintroduce bug → 5/9 fail → restore) accepted. Flagged items accepted: config-mock model drift → WP-7; reuse-branch second subscription path → WP-4 review; event dedup rationale → P1-7 in WP-6; bot.js size → Phase 1 note.
->
-> **WP-2.1 (required amendment, found in lead review):** if the OLD socket dies unexpectedly after `session_reconnect` but before the replacement's welcome (Twitch itself closes it with 4004 after 30s), `handleClose` arms a reconnect timer that nothing cancels when the replacement is then promoted — the timer later fires, `connect()` overwrites the healthy promoted socket, and `resubscribeAll` on the new session duplicates subscriptions across two live sessions. Fix: `handleSessionWelcome` must call `clearReconnectTimer()` (both paths is fine; the promotion path is the load-bearing one). Add a reconnect test for exactly this interleaving: reconnect requested → old socket unexpected-close (timer armed) → replacement welcome → assert timer cancelled and no second connect occurs. Report with the WP-3 completion report.
+**Goal:** the multi-tenant PostgreSQL schema exists as versioned migrations, the server can talk to it, the owner's recovered production data imports as channel #1, and the backup/restore guardrails from design §4.1 become real.
 
-**Goal:** the bot survives its real lifecycle — stream going online/offline while it waits, and Twitch-initiated reconnects mid-stream — without losing events. Fixes P0-1 and P0-2a/b. Also carries two small owner-approved config edits (task 0) so they ship with a tested package rather than floating alone.
+**Scope guard:** `server/` + `shared/` + compose (postgres wiring) + scripts + docs. Legacy `src/`+`tests/` untouched (49/1222). The recovered dump at `temp_backups/recovered-backup-2026-01-30.sql` is **read-only input; never print, log, or copy the values in its `tokens` table** — the ETL moves secrets opaquely.
 
-**Scope guard:** `src/websocket/`, `src/bot.js` (wiring/lifecycle only — do not touch the Spotify, DB, token, or API-server code paths; those are WP-3/4/5), `src/config/config.js` (task 0 only), and tests. Suite stays green throughout.
+**Lead architecture calls (locked):**
+- **Drizzle ORM + `postgres` (postgres.js) driver; drizzle-kit for versioned migrations.** Schema defined in TS under `server/src/db/schema/`, migrations generated and committed; migrations are the only way schema exists (design guardrail 2).
+- **Schema v2 per design §2.3:** `channels`, `channel_tokens` (provider ∈ twitch/spotify), `channel_settings`, `bot_identity`, `viewers` (global identity) + `channel_roles`, and channel-scoped `commands`, `emotes`, `quotes`, `song_queue`, `streams`, `chat_messages`, `chat_totals`, `api_usage` (api_type as varchar), `editors` (schema-prep only). Composite indexes led by `channel_id`; FKs with explicit ON DELETE choices (document each).
+- **`bot_identity` resolution (the P1-WP1 flag):** decide it here, evidence-first — enumerate every Helix call the bot makes (legacy `twitchAPI.js` is the inventory) against current docs for whose token each requires under the Cloud-Chatbot model. Note `Get Chatters` requires a moderator-scoped **user** token — likely the broadcaster's with `moderator:read:chatters`, which would add a fourth onboarding scope; if so, update design §2.4's consent list and flag it in the report. Shape `bot_identity` (consent record vs stored token pair) from that enumeration, not assumption.
 
 ### Tasks
 
-0. **Owner-approved config edits** (`src/config/config.js`):
-   - `cache.commandsTTL` and `cache.emotesTTL`: `500` → `300` (owner confirmed they were meant to match the 5-minute refresh intervals; values are seconds).
-   - `aiModels.claude.model`: `'claude-sonnet-4-5-20250929'` → `'claude-sonnet-5'` (exact ID, no date suffix — current-generation IDs are undated). Grep the repo for any other `claude-` model strings and upgrade to the current equivalent if found; report what you found either way. Update any tests pinned to the old values.
-1. **Named-options refactor of WebSocketManager.** Replace the 6-positional-arg constructor with a single options object (e.g. `{ tokenManager, onChatMessage, onRedemption, onStreamOnline, onStreamOffline, onFollow }`). Update both bot.js call sites — **this is where P0-1 dies**: wire `onStreamOnline` to `handleStreamOnline` and `onStreamOffline` to `handleStreamOffline`. Update existing websocket tests to the new shape.
-2. **Wiring contract test.** A test that constructs the real Bot with the real (un-automocked) WebSocketManager class, feeds a synthetic EventSub `stream.online` notification through `handleMessage`, and asserts the bot takes the *online* transition (and mirror-case for `stream.offline`). This test must be written to fail against the old swapped wiring — state in the completion report how you confirmed it would have caught P0-1.
-3. **Honor `reconnect_url` on `session_reconnect`.** Per Twitch EventSub protocol: connect a NEW socket to the provided `reconnect_url`, wait for its `session_welcome`, then close the old socket. Subscriptions carry over on a reconnect-URL session (no resubscribe needed on this path — verify against Twitch docs and note it). The old socket's close must NOT schedule another connect.
-4. **Intent-aware close handling.** The `close` handler currently always schedules a reconnect (webSocketManager.js:27-31). Add intent tracking so: intentional `close()` (shutdown) → no reconnect; replaced-socket close (task 3) → no reconnect; unexpected close → reconnect with the existing delay to the standard endpoint, followed by full resubscription via task 5.
-5. **Single state-aware resubscription path.** One long-lived SubscriptionManager whose session id is updated via `setSessionId`, never replaced (fixes the orphaned-unsubscribe defect). Replace both `onSessionReady` closures with one `resubscribeAll()` that subscribes based on current bot mode: minimal → online/offline/follow; full → those plus chat + channel points. Used by both initial connects and unexpected-close reconnects.
-6. **Reconnect tests.** Simulate: `session_reconnect` message (new socket to reconnect_url, old socket closed without reconnect scheduling); unexpected close mid-full-operation (reconnect + full resubscribe including chat/points); intentional close (no reconnect). Mock the `ws` module — no real network.
+1. **DB client + readyz:** postgres.js client in the server chassis (env-configured via `DATABASE_URL`, least-privilege role in compose init), `/readyz` gains a real postgres probe.
+2. **Schema v2** as Drizzle schema + generated migrations; a fresh `docker compose up` + migrate yields the full schema. Document each ON DELETE decision inline.
+3. **ETL script** (`scripts/` or `server/scripts/`): reads the Phase-0 MySQL dump via a throwaway mysql:8 container, transforms into v2 (owner's data becomes channel #1; viewers' role flags become `channel_roles` rows; `tokens` rows route to `channel_tokens`/`bot_identity`/`channel_settings` per the §2.3 mapping), loads into Postgres. Idempotent (re-run = clean re-import). Report row counts per table, never values.
+4. **Backup pipeline port (guardrail 4):** `pg_dump` → verify (size floor + completion marker, Phase-0 discipline) → S3 script, env-driven, runnable from the server box; wired into compose as a documented manual/cron invocation for now (server-scheduled backups land with ChannelSession work).
+5. **CI restore drill (guardrail 5):** a CI job (schedule + manual dispatch + PR-touching-migrations trigger) that spins fresh postgres → runs migrations → seeds sample data → `pg_dump` → restores into a *second* fresh postgres → asserts table counts match. Proves dump/restore tooling continuously without any cloud secrets. (The S3-sourced variant becomes possible once the owner adds AWS secrets to the repo — note it as the upgrade.)
+6. **Tests:** migration-applies-cleanly (Vitest against ephemeral postgres via testcontainers or compose service in CI), schema constraint spot-checks (FK cascades, unique constraints, channel-scoping uniqueness like one command name per channel), ETL transform unit tests on synthetic fixture data (never the real dump in tests).
 
 ### Exit criteria
 
-- Suite green; new tests as specified; task-2 test demonstrably catches the P0-1 class.
-- No production changes outside the scope guard.
-- Completion report: per-task summary, the model-string grep results, how the contract test was validated against the old bug, and any flagged-not-fixed discoveries.
+- Fresh compose + migrate = full v2 schema; ETL executed locally against the real dump with per-table counts in the report; restore-drill job green; readyz shows the postgres probe; both suites + lint + typecheck green.
+- Completion report: schema decisions (esp. ON DELETE table), the `bot_identity` resolution with the Helix-call enumeration, any consent-scope additions, flagged-not-fixed.
+
+> **Verified by lead 2026-08-15 — reproduced from scratch:** fresh postgres → migrations applied → **86/86 server tests green including the 20 schema tests** → ETL executed against the real dump with **identical counts to the report** (idempotency implicitly re-proven — this was a second full run). Legacy 49/1222 untouched. Verdicts on the findings: the 5-scope consent list is approved (both redemption scopes — the non-superset caution is right, collapse at P1-WP6 if proven); **the dashboard-created-rewards refund risk is design-affecting and gets resolved by making "rewards are created by the app at onboarding" the flow** — which also kills reward-title routing (old register item) — verify at P1-WP6; the no-analytics-history finding is surfaced to the owner. The `bot_identity`-as-consent-record resolution is accepted with its evidence table; `channel_tokens` justified by Update-Redemption-Status's user-token-only requirement. Drizzle enum-is-TypeScript-only → CHECK constraints is exactly the WP-7.1 lesson correctly generalized. Flags routed: app-role switch → deliberate task in P1-WP6; S3-sourced restore drill → after owner adds AWS secrets; prod compose override (unpublish 5432) → VPS provisioning; DEPENDENCIES.md count drift → P1-WP4 cosmetic task.
 
 ---
 
-## WP-3 — Database layer  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15, incl. WP-2.1]
+## P1-WP4 — ChannelSession core + first domain ports  [STATUS: ISSUED 2026-08-15]
 
-> Lead verification: 38 suites / 989 tests, exit 0; read the new dbManager in full (pool + probe, `withTransaction` with release-in-finally and non-masking rollback — correct), both queueManager scopes migrated (their hand-rolled rollback blocks — one of them itself buggy — deleted), zero raw transaction strings in `src/`, WP-2.1 fix confirmed at the top of `handleSessionWelcome` with its interleaving test validated by fix-removal. The `config.js` scope-guard deviation is approved — task 1 explicitly named the knob; that was the lead's spec error, handled correctly. Flagged items routed: batch-insert-in-transaction → WP-7; MAX+1 race noted as trivially fixable → WP-6/P1-8; schema validation still open → WP-6 owner decision; **debugDbSetup pool-alignment check → added to the pre-smoke checklist** (it runs on every `npm run debug`).
+**Goal:** the multi-tenant heart starts beating: a `ChannelSession` with Phase-0-grade lifecycle discipline runs the chat pipeline for N channels against the v2 schema — commands, emotes, quotes, permissions — fed by a fake transport. The remaining domains (AI, songs/Spotify, analytics/viewers) are explicitly OUT — they arrive as P1-WP4.1/4.2/4.3 follow-ups; this package builds the chassis they'll drop into.
 
-**Goal:** eliminate P0-3. The single shared `mysql.createConnection` becomes a pool; transactions run on dedicated connections via a `withTransaction` helper; a dropped connection no longer bricks the bot; concurrent queries can no longer interleave into (or be destroyed by) someone else's transaction.
+**Scope guard:** `server/`, `shared/`, compose dev-override, docs. No real transport (P1-WP5), no Claude client, no Spotify, no analytics pipeline — interfaces/stubs only where the pipeline needs a seam. Legacy untouched at 49/1222.
 
-**Scope guard:** `src/database/dbManager.js`, `src/redemptions/songs/queueManager.js` (transaction migration only), `tests/__mocks__/mockDbManager.js`, and tests. Do NOT touch `dbBackupManager` (WP-6), `debugDbSetup`, or any other consumer — `query()` keeps its exact signature and return shape so every existing call site works unchanged.
+**Lead architecture calls (locked):**
+- **Redis:** ioredis client in the chassis, `/readyz` probe, all keys `ch:{channelId}:…`. Cache manager port keeps the Phase-0 sentinel-miss discipline and the Redis-down fallback guarantee (fallback tests are house law here).
+- **Repositories:** Drizzle-backed data access per aggregate (`commands`, `emotes`, `quotes`, `channelSettings`, `channelRoles`) — typed, channel-scoped by constructor, no raw SQL in domain code.
+- **Domain ports (TS, Vitest, house validation standard):** permission model (WP-7.1 rank semantics, `channel_roles`-backed), commandManager (registry + declarative handler levels), emoteManager, quoteManager, settings (incl. `aiEnabled` with the fail-closed semantics from WP-6).
+- **ChannelSession:** start/stop idempotent, teardown-resilient (runTeardownStep pattern), owns per-channel state only; a `SessionManager` maps channelId → session and boots sessions for all active channels.
+- **Chat pipeline:** dedup (from P1-WP1 facts: EventSub message-id) → own-message skip → command dispatch (`!` wins) → emote match → AI-trigger *detection only* (behind an `AiService` interface stub) → analytics *hook* (no-op stub). Fed by a `Transport` interface with a `FakeTransport` test implementation — synthetic EventSub-shaped events drive end-to-end pipeline tests for two channels concurrently, proving tenant isolation (channel A's commands never fire in channel B).
+- **Test porting rule:** as each legacy module's behavior is absorbed, port the *behaviors* its legacy tests pinned (not the test files wholesale) into Vitest, and note the mapping in the report. Legacy tests keep running until their module is deleted (later package).
 
 ### Tasks
 
-1. **Pool.** `dbManager.connect()` creates a `mysql2/promise` pool (`connectionLimit` ~10, `waitForConnections: true` — add a `config.database.connectionLimit` knob defaulting to 10 rather than hardcoding). `query()` becomes a pool passthrough preserving its current signature/return; the `START TRANSACTION`/`COMMIT`/`ROLLBACK` special-case detection is deleted (see task 3). `close()` → `pool.end()`. Keep the current logging shape.
-2. **`withTransaction(fn)`.** Acquires a dedicated connection, `beginTransaction()`, invokes `fn(connection)` where the connection exposes the same `query`-style call the callback needs, commits on resolve, rolls back on throw (rethrowing the original error), and releases the connection in a `finally` — including when rollback itself fails. No nesting support needed; document that.
-3. **Migrate the two transaction scopes** in `src/redemptions/songs/queueManager.js` (`:51` and `:131` regions) onto `withTransaction`. After migration, grep `src/` for any remaining raw `START TRANSACTION`/`COMMIT`/`ROLLBACK` strings — there must be none.
-4. **Align the mock.** `tests/__mocks__/mockDbManager.js` currently advertises an interface the real class never had. Make it mirror the NEW real interface exactly: `connect`, `query`, `withTransaction`, `close` (drop or rewire `getConnection`/`beginTransaction`/`commit`/`rollback`/`connected` — nothing real exposes them; check test usages of `createTransactionalDbManager` and update accordingly). The mock's `withTransaction` should execute the callback and surface commit/rollback behavior so queueManager tests can assert rollback-on-throw.
-5. **Tests.** New dbManager tests (mock `mysql2/promise` at module level): pool created with config values; `query` delegates; `withTransaction` commits on success, rolls back and rethrows on callback throw, releases in both cases and when rollback throws. Updated queueManager tests: priority-queue insert commits; a mid-transaction failure rolls back and the queue is untouched.
+1. Redis client + probe + channel-scoped cache manager (with fallback-mode tests).
+2. Repositories + migrations-backed integration tests (TEST_DATABASE_URL pattern from WP3).
+3. Domain ports listed above with their Vitest suites.
+4. ChannelSession + SessionManager + chat pipeline + FakeTransport, with the two-channel isolation test as the package centerpiece.
+5. Compose dev-override (`compose.override.yml`: bind-mount + `tsx watch`) — the WP2 flag lands now; document the dev loop in README.
+6. Cosmetic: fix `docs/DEPENDENCIES.md` stale test count (make it non-numeric so it can't drift again).
 
 ### Exit criteria
 
-- Suite green; no raw transaction strings left in `src/`; mock and reality expose the same interface.
-- WP-2.1 amendment applied and its test present (reported together with this package).
-- Completion report: per-task summary, any call sites whose behavior changed observably, flagged-not-fixed discoveries.
-
----
-
-## WP-4 — Runtime teardown  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15]
-
-> Lead verification: 40 suites / 1042 tests, exit 0; read the SpotifyManager lifecycle, apiServer settled-flag/handle-management, and bot.js teardown diffs — all correct. Reuse-over-rebuild decision approved with its rationale (state preservation, structural leak-impossibility). Keep-API-up-between-streams decision approved (loopback-only; removes the collision window; lets the Stream Deck work between streams). Both fix-removal validations (P0-4 → 8 failures; abandon-on-throw → 5 failures) accepted. Flagged items routed: **startup rollback on partial failure → WP-4.1, folded into WP-5** (decision: a failed `startFullOperation` must stop what it started — Spotify monitors, viewer tracking, backups — using the now-idempotent stop paths, then arm the shutdown grace timer before rethrowing, so the bot retries from a clean minimal mode instead of sitting half-started); **auth-dead Spotify start gate → WP-5** (confirmed in scope); bot.js size → Phase 1; leak-test seam via `startFullOperation` accepted as documented.
-
-**Goal:** eliminate P0-4 (extended). After this package, a full online → offline → online cycle leaks nothing: no duplicate Spotify monitors racing the song queue, no dead API server, no orphaned intervals or timers, and a teardown that completes even when one of its steps throws.
-
-**Scope guard:** `src/redemptions/songs/spotifyManager.js`, `src/api/apiServer.js`, `src/bot.js` (lifecycle/teardown paths only), and tests. Do NOT touch token logic (WP-5), analytics/viewer logic (WP-6), or the queueManager beyond what monitor lifecycle requires.
-
-### Tasks
-
-1. **SpotifyManager lifecycle.** The three 3s `setInterval` loops move out of the constructor into explicit `start()`/`stop()` methods (idempotent: double-`start` doesn't stack, `stop` clears all three and is safe to call twice). `startFullOperation` starts it; `handleStreamOffline` and `gracefulShutdown` stop it. Decide and document whether the instance is reused across cycles or rebuilt-per-cycle-with-guaranteed-stop; either is acceptable if provably leak-free.
-2. **`is_playing` gate.** `monitorCurrentTrack` must not advance the queue when playback is paused (`is_playing` false) — kills the paused-near-track-end queue drain.
-3. **API server across cycles.** `handleStreamOffline` currently never stops it and `startFullOperation` builds a new one → cycle two dies with EADDRINUSE via the settled-promise `reject` (P1-12) and the bot silently runs API-less. Fix all three: stop (or reuse) the server across cycles; `start()` must not reject after it has resolved (post-settle errors get logged, not rejected); a failed start is loudly logged but non-fatal (current behavior preserved).
-4. **Resilient offline teardown.** `handleStreamOffline`'s catch currently abandons teardown mid-way (intervals keep running, shutdown timer never armed — the half-torn-down state Opus found in WP-1). Restructure so interval/timer cleanup, `isStreaming=false`, and `startShutdownTimer()` are guaranteed (finally or step-isolated try/catches), regardless of which step throws.
-5. **Track the shutdown-warning timers.** `startShutdownTimer`'s three warning `setTimeout`s get stored and cleared when the shutdown is cancelled or replaced.
-6. **Reuse-branch subscription review** (carried from WP-2): document why the incremental chat/points subscribe in `startFullOperation`'s reuse branch stays separate from `resubscribeAll` (it's an add to a live session, not a rebuild) — a comment at the site naming the distinction is sufficient; consolidate only if you find an actual defect.
-7. **Tests.** The centerpiece: a two-full-cycle test (online → offline → online → offline) asserting no interval/timer/server leaks — count active fake timers and assert monitor singletons; SpotifyManager start/stop idempotency; `is_playing` gate; API server stop/restart across cycles without EADDRINUSE; post-settle server error does not reject; teardown-with-throwing-step still clears intervals and arms the shutdown timer; warning timers cleared on cancel.
-
-### Exit criteria
-
-- Suite green; the two-cycle leak test passes; no production changes outside the scope guard.
-- Completion report: per-task summary, the reuse-vs-rebuild decision and rationale, flagged-not-fixed discoveries.
-
----
-
-## WP-5 — Token lifecycle  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15, incl. WP-4.1]
-
-> Lead verification: 40 suites / 1096 tests, exit 0; read `needsRefresh`, `checkAndRefreshTokens`, `validateToken`, `fetchIdentity`, and the atomic `refreshToken` in full — all correct, including memory-moves-only-after-commit and per-type failure isolation. No stray scratch files in the repo. The `tokenRefreshSafetyMargin` config knob deviation is approved (same reasoning as WP-3's). Migration note accepted and recorded: first boot after deploy performs a one-time unconditional refresh of both tokens (atomic, safe on crash); same applies after any restore of the S3 dump. Latent `updateToken` bare-UPDATE bug (silent no-op on missing key) fixed via upsert — good catch. Flagged items routed to WP-7 with lead decisions attached: **Redis token mirror → DELETE** (write-only, duplicates live credentials, no remaining rationale); **`getConfig()` → DELETE** (dead tmi.js relic); **`validateToken` → lean DELETE unless WP-7 finds a boot-health-check use** (no production callers); **`expires_in` sanity floor → ADD** (one line); dual Spotify auth guards accepted as defense-in-depth with the manager-level guard as the documented authority.
-
-**Goal:** eliminate P0-5, P1-11, and P1-15, plus the two WP-4 carry-overs. After this package: tokens refresh only when they need to, a crash can't strand the bot with a dead refresh token, every outbound chat message stops costing a Twitch API call plus a DB write, and a partially-failed startup cleans up after itself.
-
-**Scope guard:** `src/tokens/tokenManager.js`, `src/tokens/twitchAPI.js` (dead-method removal only), `src/messages/messageSender.js`, `src/redemptions/songs/spotifyManager.js` (auth-gate only), `src/bot.js` (startup-rollback path only), and tests. `src/tokens/redemptionCreation.js` is NOT in scope — it is broken and unused; WP-7 decides delete-vs-repair. Schema: no ALTERs — expiry metadata goes in the existing `tokens` key/value table as new rows.
-
-### Tasks
-
-1. **Expiry-based refresh (P0-5a).** Twitch token responses carry `expires_in`. Persist `<token>ExpiresAt` alongside each token (new key/value rows). `checkAndRefreshTokens` refreshes a token only when it is within a safety margin of expiry (15 min; make it a config knob) or when expiry is unknown (first run after migration). The 5-minute interval stays as the *check* cadence — the refresh rate drops from ~288/day to ~6/day per token.
-2. **Atomic persist (P0-5b).** A refresh writes access token, refresh token, and expiry in ONE `withTransaction` — the crash window that could persist a new access token while losing the rotated refresh token must be gone. Update the in-memory map only after commit. A refresh failure with an *invalid-refresh-token* error is logged at error level with an explicit "manual re-authorization required" message — loud, not swallowed.
-3. **Fix the revalidation branch (P1-11).** After refreshing the broadcaster token, validate THE BROADCASTER token and persist its id to `userId`; after refreshing the bot token, validate the bot token → `botId`. No cross-wiring. While here: `refreshToken`'s string rejections become real `Error` objects (fixes the `undefined` error logs).
-4. **Stop per-message validation (P1-15).** `messageSender.sendMessage` drops its `validateToken` preflight (the Helix `/validate` + DB write per chat line). Trust the refresh cycle; on a 401 from the send itself, refresh once via tokenManager and retry the send once. No retry loops.
-5. **Auth-dead Spotify gate (WP-4 carry-over).** When Spotify auth is known-dead (refresh failed, no valid token), `spotifyManager.start()` logs one loud warning and does not start monitors, instead of starting pollers that fail every 3s forever. `authenticate()` returns a success boolean the caller can check; wire `startFullOperation` accordingly (song-request redemptions should still refund gracefully — verify that path doesn't throw uncaught).
-6. **Startup rollback (WP-4.1).** `startFullOperation`'s catch stops what already started before rethrowing — Spotify monitors, viewer tracking interval, backup interval, in-flight subscription state — reusing the idempotent stop paths from WP-4, then arms the shutdown grace timer so the bot returns to a clean minimal-mode wait instead of a half-started limbo. Add a teardown-style test: fail startup at three different steps, assert nothing stays running and the bot can go online again cleanly afterward.
-7. **Delete `twitchAPI.getChannelId`** — it reads token keys that have never existed (`tokens.AccessToken`/`.ClientID`), cannot work, and has no callers. Grep to confirm zero callers first.
-8. **Tests.** Expiry-based skip/refresh decision matrix (fresh, near-expiry, unknown-expiry); atomic persist (all three values in one transaction; failure mid-transaction leaves old values in memory AND db); revalidation branch hits the right token/id per type; messageSender no longer calls validate per send, 401-retry-once behavior (and only once); Spotify auth-dead gate; the three-step startup-rollback matrix.
-
-### Exit criteria
-
-- Suite green; refresh cadence provably expiry-driven; no per-message validation; startup rollback proven by the three-step failure matrix.
-- Completion report: per-task summary, migration note for the new expiry rows (first run after deploy refreshes once because expiry is unknown — say so explicitly), flagged-not-fixed discoveries.
-
----
-
-## WP-6 — P1 correctness sweep  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15]
-
-> Lead verification: 43 suites / 1163 tests, exit 0; spot-read the fail-closed change, the backup `execFile`/`MYSQL_PWD`/`--result-file`/verification implementation, and confirmed no scratch files remain. All twelve defect-reintroduction validations accepted — special credit for the P1-12 methodology note (validation caught that the tests weren't actually load-bearing; that's the process working). Both behavior changes (fail-closed AI, verification-gated rotation) accepted as specced; the shutdown-drain latency note and the S3 over-retention trade-off recorded. Flagged items routed: **InnoDB explicit ENGINE declaration → WP-7 schema task** (a correctness fix now depends on it); `!command add` level syntax → Phase 2 (confirmed); per-instance dedup memory → Phase 1 note; `handleGameCommand` coverage gap → WP-7 test debt; **`tests/wp6/correctness.test.js` → WP-7 relocates into the mirrored tree**.
-
-**Goal:** clear the P1 register. Each numbered task is independently verifiable; if one turns out to be deeper than specced, flag it and move on rather than stalling the package. NO new features: no cooldowns, no new chat syntax, no reward-ID routing (multi-tenant phase).
-
-**Scope guard:** `src/analytics/`, `src/messages/`, `src/ai/aiManager.js` (trigger logic only), `src/commands/` (permission unification only), `src/commands/handlers/ai.js`, `src/redis/queueManager.js` (drain reporting only), `src/redemptions/songs/queueManager.js` (P1-8 only), `src/redemptions/redemptionManager.js`, `src/database/dbBackupManager.js`, `src/bot.js` (backup ordering only), tests.
-
-### Tasks
-
-1. **Role-flag wipe (P1-1).** The 60s viewer poll must stop resetting `is_moderator/is_vip/is_subscriber/is_broadcaster`. Split `ensureUserExists` so the upsert only updates role columns when roles were actually provided (chat path) and never from the poll path. Remove the contradictory `INSERT IGNORE` + `ON DUPLICATE KEY UPDATE` combination.
-2. **`userId = username` fallback (P1-4).** When userId is missing, log at error and skip the write — never pollute the numeric-id column with a username.
-3. **Dual-queue partial failure (P1-2).** If the chat-message queue push succeeds and the totals push fails (or vice versa), fall back ONLY for the failed write — never replay the succeeded one. Restructure per-write with per-write fallback.
-4. **Unique-chatter inflation (P1-3).** The `COUNT(*)` first-message check races the 5s batch flush. Fix with an in-memory per-stream `Set` of seen user ids as the primary check (cleared on stream end), retaining the DB check only as the cold-start seed for the set. Document the restart-during-stream edge (worst case: one extra increment per user after a crash — acceptable).
-5. **AI trigger hijack (P1-5, as restated in the addendum).** Messages starting with `!` never enter the AI-mention path — command dispatch wins. Mentions only trigger AI on non-command messages. Also delete the dead `startsWith` clause (aiManager.js:124) and make `extractPrompt` use `config.aiTriggers` instead of its own hardcoded regexes.
-6. **`!ai off` latency + fail direction (P1-6).** The toggle handler invalidates `cache:settings:aiEnabled` on write. `isAIEnabled` fails CLOSED on error (a DB outage silences the AI rather than re-enabling it) — this is a deliberate behavior change; note it in the report.
-7. **EventSub dedup (P1-7).** Track recently-seen EventSub `message_id`s (metadata-level, covers all notification types) in a bounded structure (e.g. Set + FIFO eviction at ~1000 entries) in the WebSocketManager; duplicates are logged and dropped before dispatch. Twitch explicitly documents at-least-once delivery — cite the doc in the code comment.
-8. **Queue-position race (P1-8).** `addToPendingQueue`'s MAX+1 read-then-insert goes inside `withTransaction`.
-9. **Permission unification (P1-9, minimal form).** Handler modules declare their required level declaratively (e.g. exported metadata per handler function); `commandManager` enforces exactly once, from the DB `user_level` for static commands and the declared level for handler commands (the DB row for a handler command is updated at load if it disagrees — the DB stops lying). The scattered inline mod-checks inside handlers are deleted. No new chat syntax for `!command add` (Phase 2).
-10. **Backup hardening (P1-10).** `dbBackupManager`: switch `exec` + interpolated password + shell redirection to `execFile` with `MYSQL_PWD` in env and `--result-file` (also fixes the PowerShell UTF-16 hazard). Verify the dump before upload AND before rotation: non-trivial size (floor, e.g. 1KB) and contains the `-- Dump completed` marker; a failed verification uploads nothing and never rotates old backups. In `gracefulShutdown`, move the final backup AFTER the Redis queue drain.
-11. **Drain honesty (P1-12 remainder).** `getQueueLength` errors must not read as `0`/drained: `drainQueues` treats a length-check failure as "unknown", keeps trying until timeout, and reports failure — never a false success.
-12. **`updateRedemptionStatus` array lie.** It accepts `redemptionIds` but PATCHes only the first. All callers pass a single id — change the signature to a single `redemptionId` and update callers.
-
-### Exit criteria
-
-- Suite green; every task has tests including the failure/race cases; behavior changes (fail-closed AI, backup verification gating rotation) called out explicitly in the report.
-- Completion report: per-task summary with validation methodology where a race/bug was reproduced, flagged-not-fixed discoveries.
-
-**Held for owner at this gate:** real-database schema-validation testing (testcontainers-style). Lead recommendation: defer to Phase 1 — schema v2 lands there anyway and would immediately invalidate the harness; revisit when the multi-tenant schema is designed.
-
----
-
-## WP-7 — Hygiene  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15 — one amendment (WP-7.1) open]
-
-> Lead verification: 49 suites / 1204 tests, exit 0 (independently re-run); package.json confirmed at 9 runtime deps incl. the newly-declared `ws` (an undeclared direct dependency the repo had been shipping on transitively — the single most valuable find of the package); all four dead files confirmed gone; zero stale references; 11 explicit InnoDB declarations; `tests/wp6/` relocated. README, MIGRATION_NOTES, and SMOKE_TEST read in full as deliverables — all three approved; the smoke test's pass criteria and "report, don't work around" framing are exactly right. The `validateToken` KEEP decision is approved with its rationale (out-of-band revocation detection at boot beats silent mid-stream failure; ≤2 calls per process start). maxWorkers removal approved on the 3×-green + ~25% evidence.
->
-> **WP-7.1 (small amendment, lead decision on the vip flag):** the `'vip'` enum value without a `hasPermission` tier is a trap (a manually-set vip row would resolve to unrestricted). Close it: add the vip tier to `hasPermission` — ordering `everyone < vip < mod < broadcaster`, i.e. a vip-level command runs for vip, mod, and broadcaster — with tests including the trap case (row set to `vip`, plain viewer blocked). No chat syntax to set it (still Phase 2). Report standalone.
->
-> Remaining flags recorded for Phase 1: `debugDbSetup` pool migration (smoke test §1 watches it); per-instance dedup memory; `api_usage.api_type` single-value ENUM. Owner post-smoke actions: decide fate of the local recovered dump; consider rotating the Claude/Twitch/Spotify secrets it contains.
-
-**PHASE 0 CODE-COMPLETE — CLOSED 2026-08-15 (owner decision: live gate deferred).** The owner will not stream or run live tests in the foreseeable future, so Phase 0 closes on static verification alone: 910 → 1204 tests, 79.2% → 86.3% statement coverage, 15 → 9 runtime dependencies, all 5 P0s and 12 P1s fixed and validated by defect reintroduction. `docs/SMOKE_TEST.md` is retitled in role, not content: it is now the **pre-first-live checklist**, to be run once before the bot is ever used in anger (likely when the desktop-app UI is mature). Debug mode (`npm run debug` — forced full operation against `<DB_NAME>_debug`, real DB untouched) remains the owner's offline "am-I-live" test switch.
-
----
-
-> **WP-7.1 verified by lead 2026-08-15:** 49 suites / 1220 tests, exit 0; rank-based `hasPermission` + `rankOf` read correct; the `context.vip` gap catch was necessary and right (the tier would have been silently useless without it). Fail-open-on-unknown-level accepted with Opus's rationale — the DB path is ENUM-constrained, so unknown levels can only come from code, and disabling commands on a typo is the worse failure; recorded here so the decision isn't relitigated.
-
----
-
-**OWNER DECISIONS 2026-08-15 (recorded):**
-1. **Architecture: Option B — client-server.** The bot remains/becomes a hosted multi-tenant service; the Windows desktop app is a client that users download, install, and receive real version upgrades through. Decided on product grounds (a legit installable product for the second user, not a hand-me-down local script). Consequence: the Phase 1 multi-tenant redesign is back in full scope (schema v2, per-channel tokens, Redis key scoping, config split, client-server auth, hosted deployment). The lead's architecture decision doc becomes a **Phase 1 design doc for the client-server system**.
-2. **Pre-commit hooks: removed entirely.** They were a learning exercise; CI is the correct home for enforcement. The CI design must be built from modern first principles — explicitly NOT shaped by what the hooks happened to do.
-
----
-
-## WP-8 — CI pipeline & dependency management  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15]
-
-> Lead verification: 49 suites / 1220 tests green post-sweep; all 101 headers stripped with zero grep hits; pre-commit artifacts gone; eslint.config.js in place with `.eslintrc.json` deleted; exact pins confirmed; `.nvmrc`=24; renovate.json automerge-off confirmed. Judgment calls approved: preserving accurate history in BASELINE_REVIEW with a superseded marker (correct — the review is a dated record, not live guidance); pinning ESLint v9 per spec with v10 arriving as Renovate's first major PR (a clean first exercise of the new flow); disabling `preserve-caught-error` to honor the no-src-change guard (fix now ordered in WP-8.1). The WORK_PACKAGES duplication was the lead's paste artifact — fixed by the lead directly. CI's first live run happens on the owner's push; Windows→Linux seams (loopback-port test, CRLF) are noted and WP-8.1 addresses the line-ending one structurally.
-
----
-
-## WP-8.1 — Micro-cleanup  [STATUS: COMPLETE — VERIFIED BY LEAD 2026-08-15 — PHASE 0 FULLY CLOSED]
-
-> Lead verification: 49 suites / 1220 tests green; rule explicitly enabled at `eslint.config.js:30` and the `{ cause }` fix confirmed at `tokenManager.js:105`; `baseline-browser-mapping` gone from package.json (remaining lockfile entries are legitimately transitive); `.gitattributes` in place with a correct explanatory comment; 124 entries fully staged, zero unstaged. The `preserve-caught-error` self-correction — discovering the WP-8 sighting came from the transient `@eslint/js@10`/`eslint@9` mismatch and refusing to report an inert fix as done — is the standout of the entire engagement and exactly the standard this process was built for. The `@eslint/js`-must-move-with-`eslint` caveat is recorded in DEPENDENCIES lore via this note.
->
-> **Engagement closed.** Everything is staged for the owner's Phase 0 landing commit. Owner actions: review → commit → push (first CI run) → enable Actions if prompted → install Renovate app → merge its onboarding PR. Engineer stands down until the Phase 1 client-server design document is implementation-ready.
->
-> **2026-08-15 later:** Owner committed and pushed; **first CI run green in 27s** (after the lead removed the orphaned `.git/hooks/pre-commit` script the old `pre-commit install` had left in local git state — unreachable from the repo, so no package could have caught it).
+- Two-channel isolation test green; all suites (legacy 49/1222, server incl. schema tests) + lint + typecheck + image build green; dev-override loop documented and working.
+- Completion report: per-task summary, legacy-behavior→Vitest mapping table, flagged-not-fixed.
 
 ---
 
@@ -260,3 +158,34 @@ Three small items, one package, standalone report:
 
 - Suite green locally after pinning; workflow + renovate config lint-valid (`npx renovate-config-validator` if available offline, else state it needs the app's first run to validate).
 - Completion report: per-task summary, the exact owner-action list, flagged-not-fixed discoveries.
+
+> **Verified by lead 2026-08-15:** legacy 49/1222; server **206/206** including schema/repo suites against live postgres (first runs exposed cold-start races — the DB container being absent/warming produced 2 suite failures that vanish once postgres is ready; routed to P1-WP5 as a test-bootstrap readiness wait). Lint 0, typecheck clean. The channel-bound-repository pattern (isolation as a property of the type) and the two-routing-checks belt-and-braces are endorsed; the FOR-UPDATE-with-aggregate catch is a real find proving the concurrency tests earn their keep; the fail-open rationale carried forward in comments is exactly how decided-questions travel. Flags routed: composition-root wiring + Redis probe → P1-WP5 (as designed); quote/emote unit depth + silent unknown-handler no-op (upgrade to error-level log w/ channel context) → P1-WP4.2; touchPresence caller → P1-WP4.3.
+
+---
+
+## P1-WP5 — EventSub webhook transport + composition root  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** the server hears Twitch. Webhook ingest lands (HMAC, challenge, dedup, enqueue-and-ack), the composition root wires config → postgres → redis → SessionManager → transport into a bootable whole, and dev-mode eventing is solved — with the Twitch CLI investigation deciding whether a second transport ever exists.
+
+**Scope guard:** `server/`, `shared/`, compose/Caddy, CI, docs. No OAuth flows and no live Twitch calls (P1-WP6 brings tokens; everything here is testable with signed synthetic payloads). Legacy untouched at 49/1222.
+
+**Lead calls (locked):**
+- **Webhook handler per P1-WP1 facts:** raw-body preservation (`express.json({verify})`) for HMAC-SHA256 over id+timestamp+body with timing-safe compare; challenge echo; 10s-timestamp-skew rejection (replay guard); **enqueue-and-ack** — handler returns 2xx immediately, an in-process queue worker dispatches to SessionManager; revocation messages handled (mark channel state, loud log).
+- **Subscription manager v2 (interface + dry-run):** reconciliation model — desired subs per active channel vs actual (list), create-missing/delete-orphaned — implemented against a `HelixClient` interface with a fake; the real client activates in P1-WP6 when tokens exist.
+- **Outbound seam:** a `ChatSink` interface (the pipeline's reply path); implementation is a structured-logging fake until P1-WP6's Helix sender.
+- **Dev-mode decision (the P1-WP1 flag):** investigate the Twitch CLI (`twitch event`) — if it can deliver signed synthetic events to the local webhook (it documents exactly this), it becomes the dev loop, documented in README, and **no websocket transport is ever built for the new server** (the legacy WS manager dies with the legacy bot). If the CLI proves inadequate, report back with evidence before building anything.
+- **Composition root:** index.ts boots config → db (+migrate check) → redis → SessionManager (bootstrapping all active channels from `channels`) → transport → readyz probes for postgres AND redis; graceful shutdown drains the ingest queue, stops sessions (Phase-0 ordering discipline).
+- **Test-bootstrap readiness:** DB-dependent Vitest suites wait/retry for postgres readiness (bounded) instead of failing on cold stacks — kills the race the lead hit during WP4 verification.
+
+### Tasks
+1. Webhook endpoint + HMAC/challenge/skew/dedup + enqueue-and-ack + revocation handling, with a signed-payload test helper (shared with the CLI dev loop).
+2. In-process ingest queue with drain-on-shutdown and per-event error isolation (one bad event never stalls the queue).
+3. Subscription reconciler against fake HelixClient (create/delete/diff matrix tests).
+4. ChatSink seam + logging implementation; pipeline replies flow to it end-to-end.
+5. Composition root wiring + readyz (postgres+redis) + boot-from-DB channel bootstrapping + shutdown ordering tests.
+6. Twitch CLI investigation → README dev-loop docs (or evidence-backed alternative proposal).
+7. Test-bootstrap DB readiness wait.
+
+### Exit criteria
+- `docker compose up` boots the full wired server; a signed synthetic `channel.chat.message` posted to the webhook produces a command response at the ChatSink (logged), end-to-end, for two channels; suites/lint/typecheck/image green; dev loop documented.
+- Completion report: per-task, the CLI verdict with evidence, flagged-not-fixed.

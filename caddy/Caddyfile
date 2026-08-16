@@ -1,0 +1,16 @@
+# Placeholder reverse proxy.
+#
+# Local: serves plain HTTP on :80 so `docker compose up` works with no
+# certificates and no public DNS.
+#
+# On the VPS this becomes the real site block - replace with the DuckDNS
+# hostname and Caddy obtains a Let's Encrypt certificate automatically, which is
+# what satisfies Twitch's TLS-on-443 requirement for EventSub callbacks:
+#
+#   bot.example.duckdns.org {
+#       reverse_proxy server:3000
+#   }
+
+:80 {
+	reverse_proxy server:3000
+}

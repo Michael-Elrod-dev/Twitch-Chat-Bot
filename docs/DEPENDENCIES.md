@@ -24,13 +24,13 @@ Upgrades are not made by hand. Renovate proposes them.
 ## The update flow
 
 ```
-Renovate opens a PR  →  CI runs lint + 1220 tests against the bump  →  owner merges when green
+Renovate opens a PR  →  CI runs lint, typecheck and the full test suites  →  owner merges when green
 ```
 
 1. **Renovate opens a PR.** Mondays before 9am. All non-major updates are grouped
    into a single PR; each major gets its own.
-2. **CI runs automatically** on that PR — ESLint and the full suite, on the Node
-   version in `.nvmrc`. A separate job runs `npm audit --audit-level=high`.
+2. **CI runs automatically** on that PR — ESLint, typecheck, and both test suites
+   (the legacy bot and the Phase-1 server), on the Node version in `.nvmrc`. A separate job runs `npm audit --audit-level=high`.
 3. **You merge it** when CI is green. Nothing automerges.
 
 A green CI run *is* the review for a patch or minor bump. Majors deserve an actual
