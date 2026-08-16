@@ -1,16 +1,37 @@
-# Placeholder reverse proxy.
+# Reverse proxy and TLS terminator.
 #
-# Local: serves plain HTTP on :80 so `docker compose up` works with no
-# certificates and no public DNS.
+# One file serves both environments through a substitution: SITE_ADDRESS is the
+# public hostname in production and unset locally, where it falls back to plain
+# `:80`. Caddy obtains and renews a Let's Encrypt certificate automatically for
+# any address that is a real hostname, and redirects HTTP to HTTPS on its own —
+# which is what satisfies Twitch's requirement that EventSub callbacks be TLS on
+# port 443.
 #
-# On the VPS this becomes the real site block - replace with the DuckDNS
-# hostname and Caddy obtains a Let's Encrypt certificate automatically, which is
-# what satisfies Twitch's TLS-on-443 requirement for EventSub callbacks:
-#
-#   bot.example.duckdns.org {
-#       reverse_proxy server:3000
-#   }
+#   local : SITE_ADDRESS unset          -> http://localhost:8080
+#   prod  : SITE_ADDRESS=almosthadai... -> https://almosthadai.duckdns.org
 
-:80 {
-	reverse_proxy server:3000
+{$SITE_ADDRESS::80} {
+	# The webhook is the only unauthenticated public surface; its own HMAC check
+	# is the security boundary, so nothing is filtered here.
+	reverse_proxy server:3000 {
+		# Caddy sets X-Forwarded-* by default. The app does not currently trust
+		# them for anything security-relevant, which is the safe default while
+		# it sits behind exactly one proxy.
+		#
+		# Active health checking starts an upstream marked DOWN until the first
+		# probe succeeds, so this interval is also the outage window after every
+		# deploy and every Caddy restart. At 30s that was a visible half-minute
+		# of 503s; 5s keeps the check useful without making the deploy look
+		# broken while it is merely starting.
+		health_uri /healthz
+		health_interval 5s
+		health_timeout 2s
+	}
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+	}
 }

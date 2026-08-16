@@ -145,7 +145,16 @@ export class ChannelSession {
 
         case 'chat_message':
             if (this.state !== 'running') {
-                this.logger.debug({ channelId: this.channelId }, 'Ignoring chat - session not running');
+                // WARN, not debug. This is a real viewer's message being
+                // dropped, and it should be rare by construction: the manager
+                // unsubscribes before it stops a session, so the only way here
+                // is an event already in the queue when the session stopped.
+                // Rare-by-construction is exactly what must be visible when it
+                // stops being rare - at debug, production would never show it.
+                this.logger.warn(
+                    { channelId: this.channelId, state: this.state },
+                    'Dropping chat for a session that is not running'
+                );
                 return null;
             }
             return this.pipeline.handle(event satisfies ChatMessageEvent);

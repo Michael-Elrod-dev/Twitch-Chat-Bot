@@ -65,7 +65,13 @@ export class HelixChatSink implements ChatSink {
                 return;
             }
 
-            logger.debug({ channelId, broadcasterTwitchId }, 'Chat message sent');
+            // INFO, not debug. Production runs at info, and this is the one
+            // line that proves the entire path worked: event received, verified,
+            // queued, routed, dispatched, answered. Without it a bot that has
+            // gone silent is indistinguishable from one nobody has talked to,
+            // because only failures would ever appear. The volume is bounded by
+            // how often the bot actually speaks, which is the right budget.
+            logger.info({ channelId, broadcasterTwitchId }, 'Chat message sent');
         } catch (err) {
             // A failed send must never propagate into the pipeline: one channel
             // being unable to speak is not a reason to stop processing its

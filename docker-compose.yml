@@ -49,6 +49,10 @@ services:
       POSTGRES_USER: almosthadai
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: almosthadai
+      # Read by the init script, which refuses to create the role without it.
+      # Production supplies a real value; development falls back so a fresh
+      # `docker compose up` still works with no configuration.
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-devpassword}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
@@ -71,11 +75,16 @@ services:
       timeout: 3s
       retries: 10
 
-  # Placeholder until the VPS exists. Terminates TLS and fronts the server;
-  # the EventSub webhook callback will need this on :443 with a real hostname.
+  # Terminates TLS and fronts the server. In production SITE_ADDRESS is the real
+  # hostname, which is what makes Caddy obtain a Let's Encrypt certificate and
+  # satisfy Twitch's TLS-on-443 requirement for EventSub callbacks.
   caddy:
     image: caddy:2-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-}
     ports:
+      # Production sets these to 80 and 443; locally they stay out of the way of
+      # anything already using the privileged ports.
       - "${HTTP_PORT:-8080}:80"
       - "${HTTPS_PORT:-8443}:443"
     volumes:
@@ -87,7 +96,22 @@ services:
     restart: unless-stopped
 
 volumes:
+  # EXTERNAL ON PURPOSE. Compose will not delete a volume it does not manage, so
+  # `docker compose down -v` cannot destroy the database — which is the only
+  # mechanism that actually works, having twice destroyed real data by relying
+  # on remembering not to.
+  #
+  # Create it once per machine:
+  #   docker volume create almosthadai-postgres-data
+  #
+  # And to genuinely discard it, which is now a deliberate act:
+  #   docker volume rm almosthadai-postgres-data
   postgres-data:
+    external: true
+    name: almosthadai-postgres-data
+
+  # These hold cache and certificates. Losing them costs a re-fetch, so they
+  # stay disposable.
   redis-data:
   caddy-data:
   caddy-config:
