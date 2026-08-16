@@ -6,8 +6,10 @@
 # dots. That is expected, not a hang.
 #
 # Usage:
-#   scripts/set-secret.sh anthropic     Anthropic API key  (box only)
-#   scripts/set-secret.sh twitch        Twitch client secret (box + local .env)
+#   scripts/set-secret.sh anthropic       Anthropic API key      (box only)
+#   scripts/set-secret.sh twitch          Twitch client secret   (box + local .env)
+#   scripts/set-secret.sh spotify-id      Spotify client id      (box only)
+#   scripts/set-secret.sh spotify-secret  Spotify client secret  (box only)
 set -uo pipefail
 
 HOST="${DEPLOY_HOST:-root@almosthadai.duckdns.org}"
@@ -26,8 +28,18 @@ twitch)
     ALSO_LOCAL=1
     HINT="From https://dev.twitch.tv/console/apps - click 'New Secret' first"
     ;;
+spotify-id)
+    VAR=SPOTIFY_CLIENT_ID
+    ALSO_LOCAL=0
+    HINT="From https://developer.spotify.com/dashboard - your app's Settings page"
+    ;;
+spotify-secret)
+    VAR=SPOTIFY_CLIENT_SECRET
+    ALSO_LOCAL=0
+    HINT="Same page - click 'View client secret'"
+    ;;
 *)
-    echo "Usage: $0 {anthropic|twitch}" >&2
+    echo "Usage: $0 {anthropic|twitch|spotify-id|spotify-secret}" >&2
     exit 2
     ;;
 esac

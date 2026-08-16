@@ -30,6 +30,14 @@ const offlineSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSub
     condition: { broadcaster_user_id: broadcasterId }
 });
 
+/** Joined DESIRED_SUBSCRIPTIONS in P1-WP4.2, alongside its handler. */
+const redemptionSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSubscription, 'id'> => ({
+    type: SUBSCRIPTION_TYPES.redemptionAdd,
+    version: '1',
+    status,
+    condition: { broadcaster_user_id: broadcasterId }
+});
+
 describe('SubscriptionReconciler', () => {
     let client: FakeHelixClient;
     let reconciler: SubscriptionReconciler;
@@ -53,13 +61,14 @@ describe('SubscriptionReconciler', () => {
         });
 
         it('creates nothing when everything already exists', () => {
-            const actual = [chatSub('1001'), onlineSub('1001'), offlineSub('1001')].map((s) => client.seed(s));
+            const actual = [chatSub('1001'), onlineSub('1001'), offlineSub('1001'), redemptionSub('1001')]
+                .map((s) => client.seed(s));
 
             const plan = reconciler.plan(['1001'], actual);
 
             expect(plan.create).toHaveLength(0);
             expect(plan.remove).toHaveLength(0);
-            expect(plan.keep).toHaveLength(3);
+            expect(plan.keep).toHaveLength(DESIRED_SUBSCRIPTIONS.length);
         });
 
         it('removes subscriptions for a channel that is no longer active', () => {

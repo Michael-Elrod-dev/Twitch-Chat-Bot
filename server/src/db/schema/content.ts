@@ -188,3 +188,45 @@ export const apiUsage = pgTable(
         )
     ]
 );
+
+/**
+ * Channel-point rewards this application manages.
+ *
+ * The P1-WP3 policy made concrete: redemptions route by **reward id**, never by
+ * title. Phase 0 matched on the title string, which meant renaming a reward in
+ * the Twitch dashboard silently broke it, and two rewards with similar names
+ * were a coin flip.
+ *
+ * A reward only appears here if the app created it or adopted it, and adoption
+ * requires `only_manageable_rewards` to have returned it — so a reward the
+ * broadcaster made by hand is never in this table and is never touched. Those
+ * are explicitly none of our business.
+ */
+export const channelRewards = pgTable(
+    'channel_rewards',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        channelId: uuid('channel_id')
+            .notNull()
+            .references(() => channels.id, { onDelete: 'cascade' }),
+        /** What the bot does when this reward is redeemed. */
+        kind: text('kind', { enum: ['song_request', 'skip_queue', 'add_quote'] }).notNull(),
+        /** Twitch's reward id - the routing key. */
+        rewardId: text('reward_id').notNull(),
+        /** Display only, for logs and the dashboard. Never used for routing. */
+        title: text('title').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        // One reward per kind per channel: a channel cannot have two "song
+        // request" rewards, which would make routing ambiguous.
+        uniqueIndex('channel_rewards_channel_kind_key').on(table.channelId, table.kind),
+        // And one kind per reward: the same reward cannot mean two things.
+        uniqueIndex('channel_rewards_channel_reward_key').on(table.channelId, table.rewardId),
+        check(
+            'channel_rewards_kind_check',
+            sql`${table.kind} in ('song_request', 'skip_queue', 'add_quote')`
+        )
+    ]
+);

@@ -39,4 +39,31 @@ export interface StreamOfflineEvent {
     broadcasterTwitchId: string;
 }
 
-export type TransportEvent = ChatMessageEvent | StreamOnlineEvent | StreamOfflineEvent;
+/**
+ * A channel-point redemption.
+ *
+ * `rewardId` is the routing key — never the title. A reward renamed in the
+ * Twitch dashboard keeps working; two rewards with similar names stay distinct.
+ */
+export interface RedemptionEvent {
+    kind: 'redemption';
+    messageId: string;
+    broadcasterTwitchId: string;
+    /** Twitch's redemption id, needed to fulfil or refund it. */
+    redemptionId: string;
+    rewardId: string;
+    rewardTitle: string;
+    /** What the viewer typed, when the reward takes input. */
+    userInput: string;
+    redeemer: {
+        twitchUserId: string;
+        login: string;
+        displayName: string;
+    };
+}
+
+export type TransportEvent =
+    | ChatMessageEvent
+    | StreamOnlineEvent
+    | StreamOfflineEvent
+    | RedemptionEvent;

@@ -3,6 +3,7 @@ import type { Logger } from '../logger.js';
 import type { ChatPipeline, PipelineOutcome } from './chatPipeline.js';
 import type { CommandManager } from '../domain/commandManager.js';
 import type { EmoteManager } from '../domain/emoteManager.js';
+import type { RedemptionPipeline } from './redemptionPipeline.js';
 
 /** Bounded dedup history. Twitch documents EventSub as at-least-once. */
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -14,6 +15,8 @@ export interface ChannelSessionOptions {
     pipeline: ChatPipeline;
     commands: CommandManager;
     emotes: EmoteManager;
+    /** Absent means redemptions are acknowledged and ignored. */
+    redemptions?: RedemptionPipeline;
 }
 
 export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
@@ -35,6 +38,7 @@ export class ChannelSession {
     private readonly pipeline: ChatPipeline;
     private readonly commands: CommandManager;
     private readonly emotes: EmoteManager;
+    private readonly redemptions: RedemptionPipeline | undefined;
 
     private state: SessionState = 'stopped';
     private live = false;
@@ -49,6 +53,7 @@ export class ChannelSession {
         this.pipeline = options.pipeline;
         this.commands = options.commands;
         this.emotes = options.emotes;
+        this.redemptions = options.redemptions;
     }
 
     getState(): SessionState {
@@ -141,6 +146,19 @@ export class ChannelSession {
         case 'stream_offline':
             this.live = false;
             this.logger.info({ channelId: this.channelId }, 'Stream offline');
+            return null;
+
+        case 'redemption':
+            if (this.state !== 'running') {
+                this.logger.warn(
+                    { channelId: this.channelId, rewardId: event.rewardId },
+                    'Dropping redemption for a session that is not running'
+                );
+                return null;
+            }
+            // Redemptions cost real channel points, so an unhandled one is a
+            // debt rather than a no-op. The pipeline refunds what it cannot do.
+            await this.redemptions?.handle(event);
             return null;
 
         case 'chat_message':

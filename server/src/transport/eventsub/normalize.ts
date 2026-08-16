@@ -79,9 +79,41 @@ export function normalizeEvent(
             broadcasterTwitchId: asString(payload['broadcaster_user_id'])
         };
 
+    case SUBSCRIPTION_TYPES.redemptionAdd:
+        return normalizeRedemption(payload, messageId);
+
     default:
         return null;
     }
+}
+
+function normalizeRedemption(payload: Record<string, unknown>, messageId: string): TransportEvent | null {
+    const broadcasterTwitchId = asString(payload['broadcaster_user_id']);
+    const redemptionId = asString(payload['id']);
+    if (broadcasterTwitchId === '' || redemptionId === '') return null;
+
+    const reward = payload['reward'];
+    const rewardObject = typeof reward === 'object' && reward !== null
+        ? (reward as Record<string, unknown>)
+        : {};
+
+    const rewardId = asString(rewardObject['id']);
+    if (rewardId === '') return null;
+
+    return {
+        kind: 'redemption',
+        messageId,
+        broadcasterTwitchId,
+        redemptionId,
+        rewardId,
+        rewardTitle: asString(rewardObject['title']),
+        userInput: asString(payload['user_input']),
+        redeemer: {
+            twitchUserId: asString(payload['user_id']),
+            login: asString(payload['user_login']),
+            displayName: asString(payload['user_name']) || asString(payload['user_login'])
+        }
+    };
 }
 
 function normalizeChatMessage(payload: Record<string, unknown>, messageId: string): TransportEvent | null {

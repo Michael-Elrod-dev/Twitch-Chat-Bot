@@ -34,21 +34,20 @@ export interface DesiredSubscriptionType {
  * that second field is the bot's own id, which is what makes one shared bot
  * account work across every channel (facts §2).
  *
- * **Subscribe when a consumer exists, never before.** Channel-point redemptions
- * and follows are deliberately absent: nothing normalises them yet, so Twitch
- * would deliver events the webhook acknowledges with a 204 and then discards.
- * That is the worst shape of failure available here — a viewer spends channel
- * points, Twitch records a successful delivery, and nothing happens with no
- * trace anywhere.
+ * **Subscribe when a consumer exists, never before.** The worst shape of
+ * failure available here is a viewer spending channel points, Twitch recording
+ * a successful delivery, and nothing happening with no trace anywhere — which
+ * is exactly what subscribing ahead of a handler produces.
  *
  * (An earlier version of this comment claimed the risk was revocation for
  * repeated non-delivery. That was wrong: an acknowledged event is a delivered
  * event as far as Twitch is concerned, and revocation follows failures. The
  * silent-drop argument above is the real and sufficient one.)
  *
- * They arrive as one-line additions here in P1-WP4.2 (redemptions) and
- * P1-WP4.3 (follows), alongside the handlers that consume them; the reconciler
- * then converges on the next boot with no migration and no manual step.
+ * Redemptions joined the set in P1-WP4.2, alongside the handlers that consume
+ * them — the reconciler converges on the next boot with no migration and no
+ * manual step, which is the whole point of the design. `channel.follow` is
+ * still absent and arrives in P1-WP4.3 with its consumer.
  */
 export const DESIRED_SUBSCRIPTIONS: DesiredSubscriptionType[] = [
     {
@@ -66,6 +65,13 @@ export const DESIRED_SUBSCRIPTIONS: DesiredSubscriptionType[] = [
     },
     {
         type: SUBSCRIPTION_TYPES.streamOffline,
+        version: '1',
+        condition: (broadcasterTwitchId) => ({ broadcaster_user_id: broadcasterTwitchId })
+    },
+    {
+        // Needs `channel:read:redemptions` from the broadcaster, which the
+        // onboarding consent already collects.
+        type: SUBSCRIPTION_TYPES.redemptionAdd,
         version: '1',
         condition: (broadcasterTwitchId) => ({ broadcaster_user_id: broadcasterTwitchId })
     }

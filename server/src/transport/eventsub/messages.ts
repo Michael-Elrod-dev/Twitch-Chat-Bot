@@ -53,7 +53,8 @@ export interface EventSubRevocationBody {
 export const SUBSCRIPTION_TYPES = {
     chatMessage: 'channel.chat.message',
     streamOnline: 'stream.online',
-    streamOffline: 'stream.offline'
+    streamOffline: 'stream.offline',
+    redemptionAdd: 'channel.channel_points_custom_reward_redemption.add'
 } as const;
 
 export type KnownSubscriptionType = (typeof SUBSCRIPTION_TYPES)[keyof typeof SUBSCRIPTION_TYPES];
