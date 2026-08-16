@@ -1,0 +1,34 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The narrowest set of shell permissions the app actually uses.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-title",
+    {
+      "identifier": "opener:allow-open-url",
+      "comment": "The command permission alone is NOT enough - open_url is scope-enforced, and a permission with no scope rejects every URL. Deliberately narrower than the plugin's `opener:default`, which allows all of http/https/mailto/tel: the app only ever opens the sign-in and channel-connect endpoints, so that is all it may open. Keep this list in step with the http scope below.",
+      "allow": [
+        { "url": "https://almosthadai.duckdns.org/*" },
+        { "url": "http://127.0.0.1:3000/*" },
+        { "url": "http://localhost:3000/*" }
+      ]
+    },
+    "deep-link:default",
+    "updater:default",
+    {
+      "identifier": "http:default",
+      "comment": "An allow-list of where the app may make HTTP requests, NOT a blanket grant. Requests run in Rust to sidestep the webview's origin policy, which means the browser engine is no longer limiting them and this scope is the only thing that is. Adding a deployment means adding it here as well as setting VITE_API_BASE_URL.",
+      "allow": [
+        { "url": "https://almosthadai.duckdns.org/*" },
+        { "url": "http://127.0.0.1:3000/*" },
+        { "url": "http://localhost:3000/*" }
+      ]
+    }
+  ]
+}

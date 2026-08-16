@@ -35,6 +35,19 @@
       "schedule": [
         "before 9am on monday"
       ]
+    },
+    {
+      "description": "Tauri's JS API and its Rust crates are one product split across two ecosystems - bumping one without the other is how a desktop build breaks in a way neither lockfile explains. They travel together.",
+      "matchPackageNames": [
+        "/^@tauri-apps//",
+        "/^tauri$/",
+        "/^tauri-build$/",
+        "/^tauri-plugin-/"
+      ],
+      "groupName": "tauri",
+      "schedule": [
+        "before 9am on monday"
+      ]
     }
   ],
   "lockFileMaintenance": {

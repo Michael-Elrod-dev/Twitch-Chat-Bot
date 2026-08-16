@@ -3,8 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
+    # Tags are what produce the installer artifact below. Without them here the
+    # job's `if` could never be true, because the workflow would not run at all.
+    tags: ['v*']
   pull_request:
     branches: [main]
+  # So the installer job can be proven on demand without minting a release tag
+  # that would otherwise have to be deleted afterwards.
+  workflow_dispatch:
 
 # A new push to the same branch cancels the previous run - no point finishing a
 # build for a commit that has already been superseded.
@@ -59,6 +65,8 @@ jobs:
       # tsc -b walks the project references, so shared/ is built before server/.
       - name: Typecheck
         run: npm run typecheck
+
+  test-server:
     name: Test (server)
     runs-on: ubuntu-latest
 
@@ -108,6 +116,36 @@ jobs:
 
       - name: Vitest
         run: npm run test:server
+
+  test-app:
+    name: Test (app)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The app imports @almosthadai/shared from its build output, same as the
+      # server does.
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Vitest
+        run: npm run test:app
+
+      # A front end that typechecks and tests but does not bundle is still
+      # broken; this is the cheapest way to find that out on Linux.
+      - name: Build the front end
+        run: npm run build -w @almosthadai/app
 
   docker:
     name: Docker image builds
@@ -310,6 +348,62 @@ jobs:
 
           echo "== image smoke test passed =="
           docker logs ci-server
+
+  installer:
+    name: Windows installer
+    # Tags, plus manual dispatch. A Rust release build on a Windows runner is
+    # minutes of CI on every push otherwise, and nobody installs a build of an
+    # unreleased commit — `test-app` above is what keeps the front end honest
+    # day to day. Dispatch exists so this job can be PROVEN without minting a
+    # release tag that would then have to be deleted.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    needs: [lint, typecheck, test-app]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Keyed on Cargo.lock: the Tauri dependency tree is large enough that a
+      # cold build dominates this job's runtime.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            app/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('app/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspaces
+        run: npm run build
+
+      # Unsigned, deliberately: code signing is deferred (owner decision), so
+      # SmartScreen shows a one-time warning. Tauri's own update signing is
+      # independent of Windows code signing and is configured separately at the
+      # first release.
+      - name: Build the installer
+        run: npm run tauri -w @almosthadai/app -- build --bundles nsis
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: almosthadai-windows-installer
+          path: app/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
 
   audit:
     name: Security audit

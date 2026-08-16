@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+            No font <link> here, deliberately. The two families are bundled as
+            npm packages and imported from the theme module, so a machine with
+            no internet still renders correctly and Google is never told when
+            the app opened.
+        -->
+        <!--
+            Deliberately empty. The product name lives in exactly one place —
+            APP_NAME in src/theme/tokens.ts — and the app writes it here and
+            into the Tauri window title on boot. A literal name in this file
+            would be a second copy to forget at the rebrand, and the window
+            uses custom decorations, so nothing shows an OS title anyway.
+        -->
+        <title></title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>

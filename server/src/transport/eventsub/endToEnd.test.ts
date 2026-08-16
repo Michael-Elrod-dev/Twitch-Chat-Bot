@@ -36,10 +36,10 @@ const SECRET = 'end-to-end-test-secret-value';
 const BOT_ID = 'bot-999';
 
 const ALPHA: ChannelRecord = {
-    id: 'channel-alpha', twitchBroadcasterId: '1001', twitchLogin: 'alpha', status: 'active'
+    id: 'channel-alpha', twitchBroadcasterId: '1001', twitchLogin: 'alpha', status: 'active', enabled: true
 };
 const BETA: ChannelRecord = {
-    id: 'channel-beta', twitchBroadcasterId: '2002', twitchLogin: 'beta', status: 'active'
+    id: 'channel-beta', twitchBroadcasterId: '2002', twitchLogin: 'beta', status: 'active', enabled: true
 };
 
 /** A cache that never serves anything, so every lookup exercises the real path. */

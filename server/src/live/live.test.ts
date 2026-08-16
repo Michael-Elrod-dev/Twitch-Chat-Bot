@@ -131,11 +131,11 @@ describeDb('realtime feed', () => {
 
         await manager.add(buildChannelSession(
             deps(a.id, '!hello', 'ALPHA hello'),
-            { id: a.id, twitchBroadcasterId: a.twitchBroadcasterId, twitchLogin: 'livealpha', status: 'active' }
+            { id: a.id, twitchBroadcasterId: a.twitchBroadcasterId, twitchLogin: 'livealpha', status: 'active', enabled: true }
         ));
         await manager.add(buildChannelSession(
             deps(b.id, '!hello', 'BETA hello'),
-            { id: b.id, twitchBroadcasterId: b.twitchBroadcasterId, twitchLogin: 'livebeta', status: 'active' }
+            { id: b.id, twitchBroadcasterId: b.twitchBroadcasterId, twitchLogin: 'livebeta', status: 'active', enabled: true }
         ));
 
         const app = createApp({ logger, version: 'test', rawBodyRouters: [transport.router] });

@@ -34,7 +34,12 @@ module.exports = [
             'coverage/**',
             'logs/**',
             'temp_backups/**',
-            '**/dist/**'
+            '**/dist/**',
+            // Rust build output. Tauri emits the bundled front end back into
+            // here as codegen assets, so an unignored target/ makes eslint try
+            // to parse minified JS it has already linted the source of.
+            'app/src-tauri/target/**',
+            'app/src-tauri/gen/**'
         ]
     },
 
@@ -59,7 +64,7 @@ module.exports = [
     // ---- The application: TypeScript ESM ----------------------------------
     ...tseslint.configs.recommended.map((config) => ({
         ...config,
-        files: ['server/**/*.ts', 'shared/**/*.ts']
+        files: ['server/**/*.ts', 'shared/**/*.ts', 'app/**/*.ts', 'app/**/*.tsx']
     })),
 
     {
@@ -76,6 +81,35 @@ module.exports = [
 
             // The TypeScript-aware version understands type-only imports and
             // declaration merging, so the base rule must yield to it.
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': ['warn', {
+                argsIgnorePattern: '^_',
+                caughtErrorsIgnorePattern: '^_'
+            }]
+        }
+    },
+
+    // ---- The desktop app: same house style, browser globals --------------
+    {
+        files: ['app/**/*.ts', 'app/**/*.tsx'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+            parserOptions: {
+                ecmaFeatures: { jsx: true }
+            },
+            globals: {
+                ...globals.browser
+            }
+        },
+        rules: {
+            ...houseStyle,
+
+            // JSX nests deeply enough that four-space indent fights the parser
+            // on ternaries inside attributes; the rest of the house style is
+            // unchanged, and Prettier is deliberately not in this repo.
+            indent: ['error', 4, { SwitchCase: 1, ignoredNodes: ['JSXElement *', 'JSXElement'] }],
+
             'no-unused-vars': 'off',
             '@typescript-eslint/no-unused-vars': ['warn', {
                 argsIgnorePattern: '^_',

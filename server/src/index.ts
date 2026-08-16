@@ -15,6 +15,11 @@ import { ChannelRewardRepository } from './db/repositories/channelRewardReposito
 import { RewardAdoptionService } from './services/rewardAdoption.js';
 import { UserTokenProvider } from './twitch/userTokenProvider.js';
 import { SessionManager } from './session/sessionManager.js';
+import {
+    rebuildChannelSession,
+    applyChannelEnabled as applyChannelEnabledIn,
+    type ChannelSwitchPorts
+} from './session/channelSwitch.js';
 import { EventSubWebhookTransport } from './transport/eventsub/webhookTransport.js';
 import { EVENTSUB_WEBHOOK_PATH } from './transport/eventsub/webhook.js';
 import { SubscriptionReconciler } from './transport/eventsub/subscriptionReconciler.js';
@@ -333,24 +338,22 @@ async function main(): Promise<void> {
     });
 
     /**
-     * Rebuilds one channel session in place.
+     * The seam the session-lifecycle helpers act through.
      *
-     * A session captures its capabilities at construction — the Spotify client,
-     * the playback monitor, the redemption handlers, the bot identity — so a
-     * capability acquired at **runtime** needs the session rebuilt before it
-     * takes effect. Twice now a runtime grant has been applied only at boot (the
-     * bot identity in P1-WP6.1, Spotify connect in P1-WP4.2), so every such path
-     * goes through this one function rather than reinventing it.
+     * `buildDependencies()` is called per rebuild rather than captured once, so
+     * a session rebuilt after a runtime grant picks the new capability up.
      */
-    async function rebuildSession(channelId: string): Promise<void> {
-        const channel = (await channelRepository.listActive()).find((c) => c.id === channelId);
-        if (!channel) return;
+    const switchPorts: ChannelSwitchPorts = {
+        listActive: () => channelRepository.listActive(),
+        sessions: sessionManager,
+        buildSession: (channel) => buildChannelSession(buildDependencies(), channel)
+    };
 
-        // Removed and re-added individually rather than via stopAll(), which
-        // would also stop the transport and close the ingest queue.
-        await sessionManager.remove(channelId);
-        await sessionManager.add(buildChannelSession(buildDependencies(), channel));
-    }
+    const rebuildSession = (channelId: string): Promise<void> =>
+        rebuildChannelSession(switchPorts, channelId);
+
+    const applyChannelEnabled = (channelId: string, enabled: boolean): Promise<void> =>
+        applyChannelEnabledIn(switchPorts, channelId, enabled);
 
     /**
      * Applies a newly-granted bot consent without a restart.
@@ -482,6 +485,8 @@ async function main(): Promise<void> {
     apiRouter.use(createResourceRouter({
         logger,
         repositories: (channelId) => createChannelRepositories(database.db, channelId),
+        channels: channelRepository,
+        applyChannelEnabled,
         apiKeys: apiKeyRepository,
         analytics: (channelId) => new AnalyticsRepository(database.db, channelId),
         songs: (channelId) => new SongQueueRepository(database.db, channelId),

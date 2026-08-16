@@ -30,6 +30,15 @@ export const channels = pgTable(
         status: text('status', { enum: ['active', 'suspended', 'disconnected', 'needs_reauth'] })
             .notNull()
             .default('active'),
+        /**
+         * The owner's master switch, and deliberately not a fifth `status`.
+         *
+         * `status` is what the world did to this channel; `enabled` is what its
+         * broadcaster chose. A paused bot and a revoked bot need different
+         * words and different recovery paths, so they get different columns.
+         * Defaults true: connecting a channel means wanting the bot in it.
+         */
+        enabled: boolean('enabled').notNull().default(true),
         onboardedAt: timestamp('onboarded_at', { withTimezone: true }).notNull().defaultNow(),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -39,6 +48,9 @@ export const channels = pgTable(
         // onboarding idempotent.
         uniqueIndex('channels_twitch_broadcaster_id_key').on(table.twitchBroadcasterId),
         index('channels_status_idx').on(table.status),
+        // Boot asks for "active AND enabled", so the composite is what that
+        // query actually wants.
+        index('channels_status_enabled_idx').on(table.status, table.enabled),
         // Drizzle's `{ enum: [...] }` is a TypeScript-only refinement - it emits a
         // plain text column. Without this the database accepts any string, and
         // anything writing SQL directly (the ETL, a manual fix) could store junk.

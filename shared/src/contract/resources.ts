@@ -11,7 +11,39 @@ export interface ChannelSummary {
     id: string;
     login: string;
     displayName: string | null;
+    /**
+     * What the world did to this channel. `needs_reauth` is Twitch withdrawing
+     * consent; `suspended`/`disconnected` are administrative. None of these are
+     * things the broadcaster chose from the app — see `enabled`.
+     */
     status: 'active' | 'suspended' | 'disconnected' | 'needs_reauth';
+    /**
+     * What the owner chose: the header's master switch.
+     *
+     * Deliberately a separate field from `status`, not a fifth status value.
+     * They answer different questions, and collapsing them lies to the
+     * broadcaster in both directions — a bot they paused would report itself
+     * broken, and a bot Twitch cut off would report itself merely paused. The
+     * app needs both to render the header honestly.
+     */
+    enabled: boolean;
+}
+
+/** The header master switch. */
+export const setChannelEnabledSchema = z.object({ enabled: z.boolean() });
+export type SetChannelEnabledRequest = z.infer<typeof setChannelEnabledSchema>;
+
+/**
+ * The result of flipping the switch.
+ *
+ * Carries `status` as well as `enabled` so the header updates from one round
+ * trip — and so the two stay visibly independent: turning the bot off does not
+ * change what Twitch thinks of the channel, and this response is where that is
+ * asserted rather than assumed.
+ */
+export interface ChannelEnabledResponse {
+    enabled: boolean;
+    status: ChannelSummary['status'];
 }
 
 export interface ChannelSettings {

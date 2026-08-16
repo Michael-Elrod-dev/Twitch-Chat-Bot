@@ -1,0 +1,681 @@
+/*
+ * The app's stylesheet.
+ *
+ * Every colour, radius and spacing value here is a `var(--…)` written by
+ * applyTheme() from src/theme/tokens.ts. A literal hex in this file would be a
+ * design value that cannot be changed from one place, which is exactly what the
+ * token module exists to prevent.
+ *
+ * The two font families are bundled npm packages, imported below. Nothing in
+ * this app reaches Google Fonts at runtime.
+ */
+
+@import '@fontsource/instrument-sans/400.css';
+@import '@fontsource/instrument-sans/500.css';
+@import '@fontsource/instrument-sans/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--color-app-background);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* A desktop chrome, not a document: nothing here scrolls as a page. */
+    overflow: hidden;
+    user-select: none;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+/* ---- the two keyframes, and no others ---------------------------------- */
+
+@keyframes okGlow {
+    0%, 100% { box-shadow: 0 0 7px 1px rgba(127, 156, 110, .55); }
+    50% { box-shadow: 0 0 2px 0 rgba(127, 156, 110, .15); }
+}
+
+@keyframes liveGlow {
+    0%, 100% { box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5); }
+    50% { box-shadow: 0 0 3px 0 rgba(224, 128, 90, .12); }
+}
+
+/*
+ * Reduced motion: the animation goes, the glow stays.
+ *
+ * Both the media query and the data attribute, because they answer different
+ * questions — the query is the platform preference, and the attribute is what
+ * watchReducedMotion() reflects so a change mid-session takes effect without a
+ * reload. Freezing at the lit end of the cycle keeps "healthy" legible; a dot
+ * with no glow at all would read as "off".
+ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .dot--healthy { box-shadow: 0 0 7px 1px rgba(127, 156, 110, .55); }
+    .dot--live { box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5); }
+}
+
+:root[data-reduced-motion='true'] .dot--healthy,
+:root[data-reduced-motion='true'] .dot--live {
+    animation: none;
+}
+
+:root[data-reduced-motion='true'] .dot--healthy {
+    box-shadow: 0 0 7px 1px rgba(127, 156, 110, .55);
+}
+
+:root[data-reduced-motion='true'] .dot--live {
+    box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5);
+}
+
+/* ---- app frame --------------------------------------------------------- */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.app__body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.app__content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---- title bar --------------------------------------------------------- */
+
+.titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--space-title-bar-height);
+    padding: 0 12px 0 12px;
+    background: var(--color-title-bar);
+    border-bottom: 1px solid var(--color-hairline);
+    /* Dragging the window by its chrome, as any native title bar does. */
+    -webkit-app-region: drag;
+}
+
+.titlebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.titlebar__mark {
+    width: 11px;
+    height: 11px;
+    border-radius: var(--radius-wordmark-tile);
+    background: var(--color-accent);
+}
+
+.titlebar__wordmark {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: .08em;
+    color: var(--color-text-tertiary);
+}
+
+.titlebar__controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    /* Buttons inside a draggable strip must opt back out, or they cannot be
+       clicked — only dragged. */
+    -webkit-app-region: no-drag;
+}
+
+.titlebar__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text-tertiary);
+}
+
+.titlebar__button:hover {
+    color: var(--color-text-primary);
+}
+
+/* ---- icon rail --------------------------------------------------------- */
+
+.rail {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: var(--space-rail-width);
+    padding: 16px 0;
+    background: var(--color-rail-surface);
+    border-right: 1px solid var(--color-hairline-structural);
+}
+
+.rail__spacer {
+    flex: 1;
+}
+
+.rail__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-rail-item);
+    background: none;
+    color: var(--color-text-tertiary);
+}
+
+.rail__item--active {
+    background: var(--color-accent-tint-strong);
+    color: var(--color-accent-hover);
+}
+
+/* The 3px tab bleeding off the rail's left edge. */
+.rail__item--active::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    width: 3px;
+    height: 16px;
+    border-radius: 0 3px 3px 0;
+    background: var(--color-accent);
+}
+
+.rail__tooltip {
+    position: absolute;
+    left: calc(100% + 8px);
+    z-index: 2;
+    padding: 5px 10px;
+    border: 1px solid var(--color-tooltip-border);
+    border-radius: var(--radius-tooltip);
+    background: var(--color-tooltip-surface);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.rail__avatar {
+    width: 30px;
+    height: 30px;
+    margin: 0 auto;
+    border-radius: var(--radius-avatar-small);
+    background: var(--color-placeholder-stripe);
+}
+
+/* ---- channel header ---------------------------------------------------- */
+
+.channel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--space-channel-header-height);
+    padding: 0 28px;
+    border-bottom: 1px solid var(--color-hairline-structural);
+}
+
+.channel-header__identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.channel-header__avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-avatar-small);
+    background: var(--color-placeholder-stripe);
+}
+
+.channel-header__login {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-primary);
+}
+
+/* ---- status pill ------------------------------------------------------- */
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .06em;
+}
+
+.pill--live {
+    background: var(--color-accent-tint);
+    color: var(--color-accent-hover);
+}
+
+.pill--offline,
+.pill--unknown {
+    border-color: var(--color-border-muted);
+    color: var(--color-text-secondary);
+}
+
+.pill--needs-reauth {
+    background: var(--color-accent-tint);
+    color: var(--color-accent-hover);
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+}
+
+.dot--live {
+    background: var(--color-accent);
+    animation: liveGlow var(--motion-live-glow-duration) var(--motion-easing) infinite;
+}
+
+.dot--healthy {
+    background: var(--color-success);
+    animation: okGlow var(--motion-ok-glow-duration) var(--motion-easing) infinite;
+}
+
+/* Offline: the same dot, hollow and still. */
+.dot--hollow {
+    background: none;
+    border: 1.5px solid var(--color-text-faint);
+}
+
+/* ---- master switch ----------------------------------------------------- */
+
+.master-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 6px 5px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    background: var(--color-success-tint);
+    color: var(--color-success-text);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 12.5px;
+}
+
+.master-switch--off {
+    background: none;
+    border-color: var(--color-border-muted);
+    color: var(--color-text-secondary);
+}
+
+/* Server unreachable or Twitch revoked: present, but plainly inert. */
+.master-switch--inert {
+    background: none;
+    border-color: var(--color-border-muted);
+    color: var(--color-text-tertiary);
+}
+
+.toggle {
+    position: relative;
+    width: 30px;
+    height: 17px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--color-toggle-off-track);
+    transition: background 120ms var(--motion-easing);
+}
+
+.toggle--on {
+    background: var(--color-success);
+}
+
+.toggle--inert {
+    background: var(--color-tooltip-surface);
+    cursor: not-allowed;
+}
+
+.toggle__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 13px;
+    height: 13px;
+    border-radius: var(--radius-pill);
+    background: var(--color-toggle-off-knob);
+    transition: transform 120ms var(--motion-easing);
+}
+
+.toggle--on .toggle__knob {
+    background: var(--color-app-background);
+    transform: translateX(13px);
+}
+
+.toggle--inert .toggle__knob {
+    background: #3d3934;
+}
+
+/* ---- buttons ----------------------------------------------------------- */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 14px 9px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 12.5px;
+}
+
+.button--primary {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+}
+
+.button--ghost {
+    background: none;
+    border-color: var(--color-border-strong);
+    color: var(--color-text-body);
+}
+
+.button--text {
+    padding: 9px 4px;
+    background: none;
+    color: var(--color-text-secondary);
+}
+
+.button--accent-text {
+    padding: 9px 4px;
+    background: none;
+    color: var(--color-accent-hover);
+}
+
+.button--block {
+    width: 100%;
+}
+
+.button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* ---- banners ----------------------------------------------------------- */
+
+.banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--color-border-muted);
+    border-radius: var(--radius-card);
+    background: var(--color-card-surface);
+}
+
+.banner--warning {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-border);
+}
+
+.banner__icon {
+    flex: none;
+    color: var(--color-accent-hover);
+}
+
+.banner--neutral .banner__icon {
+    color: var(--color-text-secondary);
+}
+
+.banner__text {
+    flex: 1;
+    min-width: 0;
+}
+
+.banner__title {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--color-text-primary);
+}
+
+.banner__description {
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: var(--color-text-secondary);
+    text-wrap: pretty;
+}
+
+/* ---- auth screens ------------------------------------------------------ */
+
+/*
+ * No rail, no channel header — centred on the plain body, with the version
+ * pinned 30px from the bottom.
+ */
+.auth {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-app-background);
+}
+
+.auth__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 380px;
+    text-align: center;
+}
+
+.auth__panel--wide {
+    width: 600px;
+}
+
+.auth__glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-avatar-large);
+    background: var(--color-accent-tint);
+    color: var(--color-accent-hover);
+}
+
+.auth__glyph--pulsing {
+    animation: liveGlow var(--motion-live-glow-duration) var(--motion-easing) infinite;
+}
+
+:root[data-reduced-motion='true'] .auth__glyph--pulsing {
+    animation: none;
+    box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5);
+}
+
+.auth__headline {
+    margin: 0;
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1.25;
+    letter-spacing: -.015em;
+    color: var(--color-text-primary);
+}
+
+.auth__explainer {
+    max-width: 420px;
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    text-wrap: pretty;
+}
+
+.auth__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.auth__waiting {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--color-border-muted);
+    border-radius: var(--radius-control);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+}
+
+.auth__version {
+    position: absolute;
+    bottom: 30px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-disabled);
+}
+
+.auth__error {
+    max-width: 420px;
+    padding: 10px 14px;
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-chip);
+    background: var(--color-accent-tint);
+    color: var(--color-accent-hover);
+    font-size: 12.5px;
+    text-wrap: pretty;
+}
+
+/* Reachability belongs on the sign-in screen: it is where you would first hit
+   an unreachable server. */
+.auth__reach {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border: 1px solid var(--color-border-muted);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .06em;
+}
+
+/* ---- onboarding scopes ------------------------------------------------- */
+
+.scopes {
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+
+.scopes__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--color-hairline);
+}
+
+.scopes__row:last-child {
+    border-bottom: 0;
+}
+
+.scopes__check {
+    flex: none;
+    margin-top: 1px;
+    color: var(--color-success-text);
+}
+
+.scopes__name {
+    flex: none;
+    width: 150px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+.scopes__reason {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+}
+
+.channel-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px 6px 6px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-pill);
+    background: var(--color-card-surface);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+.channel-chip__avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-avatar-small);
+    background: var(--color-placeholder-stripe);
+}
+
+/* ---- content placeholder ----------------------------------------------- */
+
+.content {
+    flex: 1;
+    min-height: 0;
+    padding: var(--space-dashboard-padding);
+    overflow: auto;
+}

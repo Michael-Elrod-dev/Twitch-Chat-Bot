@@ -8,6 +8,7 @@ import {
     createApiKeySchema,
     updateCommandSchema,
     updateSettingsSchema,
+    setChannelEnabledSchema,
     toggleSongRequestsSchema,
     paginationSchema,
     commandNameSchema,
@@ -16,6 +17,7 @@ import {
     type Emote,
     type Quote,
     type MeResponse,
+    type ChannelEnabledResponse,
     type ApiKeySummary,
     type CreatedApiKey,
     type AnalyticsSummary,
@@ -31,6 +33,7 @@ import {
     type ApiRequest
 } from './middleware.js';
 import type { ChannelRepositories } from '../../bootstrap.js';
+import type { ChannelRepository } from '../../db/repositories/channelRepository.js';
 import type { ApiKeyRepository } from '../../db/repositories/apiKeyRepository.js';
 import type { AnalyticsRepository } from '../../db/repositories/analyticsRepository.js';
 import type { SongQueueRepository } from '../../db/repositories/songQueueRepository.js';
@@ -46,11 +49,22 @@ import type { SongQueueRepository } from '../../db/repositories/songQueueReposit
 export interface ResourceOptions {
     logger: Logger;
     repositories: (channelId: string) => ChannelRepositories;
+    /** The tenancy root, for the one route that writes to the channel itself. */
+    channels: ChannelRepository;
     apiKeys: ApiKeyRepository;
     analytics: (channelId: string) => AnalyticsRepository;
     songs: (channelId: string) => SongQueueRepository;
     /** Notifies live sockets. Optional so tests can omit it. */
     publish?: (channelId: string, event: { type: string }) => void;
+    /**
+     * Starts or stops the channel's session to match the switch.
+     *
+     * A seam rather than a `SessionManager` dependency: the route's job is to
+     * record the owner's choice and then ask the running server to honour it,
+     * and the composition root is the only place that knows how a session is
+     * built. Optional so route tests can observe the call without booting one.
+     */
+    applyChannelEnabled?: (channelId: string, enabled: boolean) => Promise<void>;
 }
 
 /** Wraps an async handler so a rejection becomes a 500 envelope, not a hang. */
@@ -87,7 +101,13 @@ export function createResourceRouter(options: ResourceOptions): Router {
             twitchUserId: claims.sub,
             login: claims.login,
             channel: channel
-                ? { id: channel.id, login: channel.twitchLogin, displayName: null, status: channel.status }
+                ? {
+                    id: channel.id,
+                    login: channel.twitchLogin,
+                    displayName: null,
+                    status: channel.status,
+                    enabled: channel.enabled
+                }
                 : null,
             settings: settings
                 ? {
@@ -123,6 +143,50 @@ export function createResourceRouter(options: ResourceOptions): Router {
                 songRequestsEnabled: updated?.songRequestsEnabled ?? true,
                 discordWebhookConfigured: (updated?.discordWebhookUrl ?? null) !== null
             }));
+        })
+    );
+
+    /**
+     * The header's bot master switch.
+     *
+     * `rejectApiKey` like every other management route: a Stream Deck key is
+     * scoped to queue/skip/toggle, and one that could switch the whole bot off
+     * would be a far worse thing to have taped inside a profile.
+     *
+     * The write lands before the session is touched, so the owner's choice
+     * survives a failure to act on it — a bot recorded off but still running is
+     * momentarily wrong and self-corrects at the next boot, whereas a bot
+     * recorded on but stopped is silently dead until someone notices.
+     */
+    router.patch(
+        '/api/v1/me/channel',
+        rejectApiKey,
+        validateBody(setChannelEnabledSchema),
+        ok(async (req, res) => {
+            const channel = req.channel;
+            if (!channel) {
+                res.status(404).json(apiFailure('not_found', 'No channel is connected for this account'));
+                return;
+            }
+
+            const { enabled } = req.body as { enabled: boolean };
+            const updated = await options.channels.setEnabled(channel.id, enabled);
+            if (!updated) {
+                res.status(404).json(apiFailure('not_found', 'No channel is connected for this account'));
+                return;
+            }
+
+            // Only ever this channel's id — the route never reads one from the
+            // request, so it cannot reach another tenant's session.
+            await options.applyChannelEnabled?.(channel.id, enabled);
+
+            // Both fields, read back from the row rather than assumed: the
+            // switch must not have moved `status`, and this is where that is
+            // reported rather than hoped for.
+            res.status(200).json(apiSuccess({
+                enabled: updated.enabled,
+                status: updated.status
+            } satisfies ChannelEnabledResponse));
         })
     );
 

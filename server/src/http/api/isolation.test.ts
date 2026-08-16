@@ -80,6 +80,7 @@ describeDb('API tenant isolation', () => {
         router.use(createResourceRouter({
             logger,
             repositories: (channelId) => createChannelRepositories(handle.db, channelId),
+            channels,
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             songs: (channelId) => new SongQueueRepository(handle.db, channelId)

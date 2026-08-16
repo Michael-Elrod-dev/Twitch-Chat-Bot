@@ -312,7 +312,10 @@ describeDb('every production command row has a handler', () => {
         });
 
         const session = buildChannelSession({
-            repositories: (id) => buildRepositories(handle, id, PRODUCTION_HANDLERS),
+            // Annotated rather than inferred: the `as unknown as` below (needed
+            // because HelixApi is a class the stub cannot structurally satisfy)
+            // strips the contextual type from this whole literal.
+            repositories: (id: string) => buildRepositories(handle, id, PRODUCTION_HANDLERS),
             cache: nullCache(),
             logger: recording,
             chatSink: { send: async () => undefined },
@@ -333,7 +336,7 @@ describeDb('every production command row has a handler', () => {
             twitchOAuth: { clientId: 'id', clientSecret: 'secret' },
             spotifyOAuth: { clientId: 'sid', clientSecret: 'ssecret', redirectUri: 'https://x/cb' }
         } as unknown as ChannelDependencies, {
-            id: channelId, twitchBroadcasterId: '4242', twitchLogin: 'gatechannel', status: 'active'
+            id: channelId, twitchBroadcasterId: '4242', twitchLogin: 'gatechannel', status: 'active', enabled: true
         });
 
         await session.start();

@@ -31,7 +31,7 @@ const nullCache = (): CacheManager =>
     }) as unknown as CacheManager;
 
 const channel = (id: string, broadcasterId: string): ChannelRecord => ({
-    id, twitchBroadcasterId: broadcasterId, twitchLogin: id, status: 'active'
+    id, twitchBroadcasterId: broadcasterId, twitchLogin: id, status: 'active', enabled: true
 });
 
 function repositoriesFor(commandName: string, response: string): ChannelRepositories {
@@ -118,7 +118,12 @@ describe('buildChannelSession', () => {
                     })
                 })
             } as unknown as Database,
-            cipher: {} as unknown as ChannelDependencies['cipher'],
+            // NonNullable, not the bare indexed type: `cipher?:` makes
+            // ChannelDependencies['cipher'] include undefined, and under
+            // exactOptionalPropertyTypes an optional property may be absent or
+            // a TokenCipher — never explicitly undefined. This test does supply
+            // one, so the cast should say so.
+            cipher: {} as unknown as NonNullable<ChannelDependencies['cipher']>,
             spotifyOAuth: { clientId: 'id', clientSecret: 'secret', redirectUri: 'https://x/cb' }
         }, channel('c1', '1001'));
 
@@ -326,7 +331,7 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
         chatSink: sink,
         db: handle.db,
         cipher,
-        helix: helix as unknown as ChannelDependencies['helix'],
+        helix: helix as unknown as NonNullable<ChannelDependencies['helix']>,
         twitchOAuth: { clientId: 'id', clientSecret: 'secret' }
     });
 
@@ -384,13 +389,13 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
                     startedAt: '2026-08-16T10:00:00Z',
                     title: 'ranked climb', gameName: 'Chess'
                 })
-            } as unknown as ChannelDependencies['helix'],
+            } as unknown as NonNullable<ChannelDependencies['helix']>,
             claude: {
                 complete: async (request: { system: string; userMessage: string }) => {
                     prompts.push(`${request.system}\n${request.userMessage}`);
                     return { ok: true, text: 'answer' };
                 }
-            } as unknown as ChannelDependencies['claude'],
+            } as unknown as NonNullable<ChannelDependencies['claude']>,
             repositories: () => ({
                 commands: { listAll: async () => [], updateUserLevel: vi.fn() },
                 emotes: { listAll: async () => [] },

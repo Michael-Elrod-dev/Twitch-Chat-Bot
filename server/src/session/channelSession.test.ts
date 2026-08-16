@@ -27,6 +27,17 @@ const chatEvent = (id: string, broadcasterTwitchId = '1'): TransportEvent => ({
     text: 'hi'
 });
 
+// `streamId` is Twitch's own stream id, which every real stream.online payload
+// carries — the fixture supplies one rather than a synthetic shape the
+// normaliser could never produce.
+const streamOnlineEvent = (id: string, streamId = '48765430'): TransportEvent => ({
+    kind: 'stream_online',
+    messageId: id,
+    broadcasterTwitchId: '1',
+    streamId,
+    startedAt: '2026-08-16T18:00:00Z'
+});
+
 describe('ChannelSession', () => {
     let pipeline: ChatPipeline & { handle: ReturnType<typeof vi.fn> };
     let commands: CommandManager & { load: ReturnType<typeof vi.fn> };
@@ -90,7 +101,7 @@ describe('ChannelSession', () => {
 
         it('clears the live flag', async () => {
             await session.start();
-            await session.handleEvent({ kind: 'stream_online', messageId: 'o1', broadcasterTwitchId: '1', startedAt: '' });
+            await session.handleEvent(streamOnlineEvent('o1'));
             expect(session.isLive()).toBe(true);
 
             await session.stop();
@@ -118,7 +129,7 @@ describe('ChannelSession', () => {
         });
 
         it('tracks stream online and offline', async () => {
-            await session.handleEvent({ kind: 'stream_online', messageId: 'o', broadcasterTwitchId: '1', startedAt: '' });
+            await session.handleEvent(streamOnlineEvent('o'));
             expect(session.isLive()).toBe(true);
 
             await session.handleEvent({ kind: 'stream_offline', messageId: 'f', broadcasterTwitchId: '1' });
@@ -147,8 +158,8 @@ describe('ChannelSession', () => {
         });
 
         it('dedups across event kinds, not just chat', async () => {
-            await session.handleEvent({ kind: 'stream_online', messageId: 'x', broadcasterTwitchId: '1', startedAt: '' });
-            await session.handleEvent({ kind: 'stream_online', messageId: 'x', broadcasterTwitchId: '1', startedAt: '' });
+            await session.handleEvent(streamOnlineEvent('x'));
+            await session.handleEvent(streamOnlineEvent('x'));
 
             expect(session.isLive()).toBe(true);
         });

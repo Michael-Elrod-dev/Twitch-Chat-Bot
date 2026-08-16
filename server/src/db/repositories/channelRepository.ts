@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import { channels } from '../schema/channels.js';
 
@@ -8,8 +8,26 @@ export interface ChannelRecord {
     id: string;
     twitchBroadcasterId: string;
     twitchLogin: string;
+    /** What the world did to this channel. */
     status: ChannelStatus;
+    /** What the owner chose. Never derived from, or folded into, `status`. */
+    enabled: boolean;
 }
+
+/**
+ * The columns every read of this table returns.
+ *
+ * Written once so a new column cannot reach some callers and not others — the
+ * kind of drift that makes `enabled` look absent on exactly the code path that
+ * decides whether to start a session.
+ */
+const CHANNEL_COLUMNS = {
+    id: channels.id,
+    twitchBroadcasterId: channels.twitchBroadcasterId,
+    twitchLogin: channels.twitchLogin,
+    status: channels.status,
+    enabled: channels.enabled
+} as const;
 
 export interface ChannelUpsert {
     twitchBroadcasterId: string;
@@ -31,17 +49,19 @@ export class ChannelRepository {
         this.db = db;
     }
 
-    /** The channels the server should be listening to. */
+    /**
+     * The channels the server should be listening to.
+     *
+     * Both conditions, because both have to hold: Twitch must still permit it
+     * (`status = 'active'`) AND the owner must still want it (`enabled`).
+     * Leaving `enabled` out here would let a paused bot come back on at the next
+     * restart, which is the failure the switch exists to prevent.
+     */
     async listActive(): Promise<ChannelRecord[]> {
         const rows = await this.db
-            .select({
-                id: channels.id,
-                twitchBroadcasterId: channels.twitchBroadcasterId,
-                twitchLogin: channels.twitchLogin,
-                status: channels.status
-            })
+            .select(CHANNEL_COLUMNS)
             .from(channels)
-            .where(eq(channels.status, 'active'));
+            .where(and(eq(channels.status, 'active'), eq(channels.enabled, true)));
 
         return rows;
     }
@@ -49,12 +69,7 @@ export class ChannelRepository {
     /** By our own primary key — used when a credential already names the channel. */
     async findById(id: string): Promise<ChannelRecord | null> {
         const rows = await this.db
-            .select({
-                id: channels.id,
-                twitchBroadcasterId: channels.twitchBroadcasterId,
-                twitchLogin: channels.twitchLogin,
-                status: channels.status
-            })
+            .select(CHANNEL_COLUMNS)
             .from(channels)
             .where(eq(channels.id, id))
             .limit(1);
@@ -64,12 +79,7 @@ export class ChannelRepository {
 
     async findByBroadcasterId(twitchBroadcasterId: string): Promise<ChannelRecord | null> {
         const rows = await this.db
-            .select({
-                id: channels.id,
-                twitchBroadcasterId: channels.twitchBroadcasterId,
-                twitchLogin: channels.twitchLogin,
-                status: channels.status
-            })
+            .select(CHANNEL_COLUMNS)
             .from(channels)
             .where(eq(channels.twitchBroadcasterId, twitchBroadcasterId))
             .limit(1);
@@ -83,6 +93,11 @@ export class ChannelRepository {
      * The unique index on `twitch_broadcaster_id` is what makes re-authorizing an
      * existing channel an update rather than a duplicate tenant — and it resets
      * the status, so reconnecting is how a `needs_reauth` channel recovers.
+     *
+     * It deliberately does NOT touch `enabled`. Re-authorizing with Twitch says
+     * nothing about whether the broadcaster wants the bot running; silently
+     * flipping their switch back on because they fixed an unrelated problem
+     * would be the app overriding a choice they made on purpose.
      */
     async upsert(channel: ChannelUpsert): Promise<ChannelRecord> {
         const [row] = await this.db
@@ -102,12 +117,7 @@ export class ChannelRepository {
                     updatedAt: new Date()
                 }
             })
-            .returning({
-                id: channels.id,
-                twitchBroadcasterId: channels.twitchBroadcasterId,
-                twitchLogin: channels.twitchLogin,
-                status: channels.status
-            });
+            .returning(CHANNEL_COLUMNS);
 
         if (!row) throw new Error('channel upsert returned no row');
         return row;
@@ -122,5 +132,23 @@ export class ChannelRepository {
             .returning({ id: channels.id });
 
         return updated.length > 0;
+    }
+
+    /**
+     * Flips the owner's master switch.
+     *
+     * Writes `enabled` and nothing else — in particular not `status`, which
+     * belongs to Twitch and to administration. Returns the row as it now
+     * stands so the caller can report both fields from one round trip without
+     * assuming what the other one is.
+     */
+    async setEnabled(channelId: string, enabled: boolean): Promise<ChannelRecord | null> {
+        const updated = await this.db
+            .update(channels)
+            .set({ enabled, updatedAt: new Date() })
+            .where(eq(channels.id, channelId))
+            .returning(CHANNEL_COLUMNS);
+
+        return updated[0] ?? null;
     }
 }

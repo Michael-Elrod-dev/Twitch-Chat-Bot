@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "shared",
-    "server"
+    "server",
+    "app"
   ],
   "engines": {
     "node": ">=24"
@@ -12,10 +13,11 @@
   "scripts": {
     "build": "tsc -b",
     "dev": "npm run dev -w server",
-    "typecheck": "tsc -b --pretty && tsc -p server/tsconfig.scripts.json",
+    "typecheck": "tsc -b --pretty && tsc -p server/tsconfig.scripts.json && tsc -p app/tsconfig.json",
     "test:server": "npm run test -w server",
+    "test:app": "npm run test -w @almosthadai/app",
     "lint": "eslint .",
-    "test": "npm run test -w server"
+    "test": "npm run test -w server && npm run test -w @almosthadai/app"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
