@@ -9,8 +9,18 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: postgres://almosthadai:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/almosthadai
+      # Runtime connects as the least-privilege role (design §4.1 guardrail 3):
+      # it can read and write data but cannot create roles or databases, and does
+      # not own the tables. Migrations use the owner role below, on a connection
+      # that is opened and closed at boot.
+      DATABASE_URL: postgres://almosthadai_app:${APP_DB_PASSWORD:-devpassword}@postgres:5432/almosthadai
+      MIGRATION_DATABASE_URL: postgres://almosthadai:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/almosthadai
       REDIS_URL: redis://redis:6379
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      EVENTSUB_DRY_RUN: ${EVENTSUB_DRY_RUN:-true}
       PUBLIC_URL: ${PUBLIC_URL:-}
       # Development placeholder so `docker compose up` needs no configuration.
       # The server refuses to start on this value when NODE_ENV=production.

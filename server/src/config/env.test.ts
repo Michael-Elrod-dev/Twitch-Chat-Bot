@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import { loadEnv, isProduction, ConfigError, DEV_EVENTSUB_SECRET } from './env.js';
 
 /**
@@ -14,15 +15,18 @@ const valid = {
 } satisfies NodeJS.ProcessEnv;
 
 /**
- * Production refuses the committed development signing secret, so every
- * production case has to carry a real one. Bundling it here keeps that rule from
+ * Production refuses the committed development signing secret and refuses to
+ * run with tokens in plaintext, so every production case has to carry both a
+ * real secret and an encryption key. Bundling them here keeps those rules from
  * being restated in a dozen places.
  */
 const PRODUCTION_SECRET = 'a-genuine-production-eventsub-secret';
+const ENCRYPTION_KEY = randomBytes(32).toString('base64');
 const validProduction = {
     ...valid,
     NODE_ENV: 'production',
-    TWITCH_EVENTSUB_SECRET: PRODUCTION_SECRET
+    TWITCH_EVENTSUB_SECRET: PRODUCTION_SECRET,
+    TOKEN_ENCRYPTION_KEY: ENCRYPTION_KEY
 } satisfies NodeJS.ProcessEnv;
 
 describe('loadEnv - accepted configuration', () => {
@@ -164,8 +168,8 @@ describe('loadEnv - production cross-field rules', () => {
         expect(env.TWITCH_EVENTSUB_SECRET).toBe(DEV_EVENTSUB_SECRET);
     });
 
-    it('reports the https and secret problems together', () => {
-        // Both wrong should mean one restart, not two.
+    it('reports every production problem together', () => {
+        // Three wrong should mean one restart, not three.
         try {
             loadEnv({
                 ...valid,
@@ -175,8 +179,84 @@ describe('loadEnv - production cross-field rules', () => {
             });
             expect.unreachable('should have thrown');
         } catch (error) {
-            expect((error as ConfigError).issues).toHaveLength(2);
+            const issues = (error as ConfigError).issues;
+            expect(issues.some((i) => i.startsWith('PUBLIC_URL'))).toBe(true);
+            expect(issues.some((i) => i.startsWith('TWITCH_EVENTSUB_SECRET'))).toBe(true);
+            expect(issues.some((i) => i.startsWith('TOKEN_ENCRYPTION_KEY'))).toBe(true);
         }
+    });
+
+    it('refuses to run production with tokens in plaintext', () => {
+        // The only version of this rule that cannot be ignored.
+        const withoutKey = { ...validProduction, TOKEN_ENCRYPTION_KEY: '' };
+
+        expect(() => loadEnv(withoutKey)).toThrow(/TOKEN_ENCRYPTION_KEY/);
+    });
+
+    it('allows development to run without an encryption key', () => {
+        // Development still cannot *store* a token - the cipher refuses - but it
+        // can boot, which is what makes the rest of the server workable offline.
+        expect(loadEnv({ ...valid }).TOKEN_ENCRYPTION_KEY).toBeUndefined();
+    });
+});
+
+describe('loadEnv - token encryption key', () => {
+    it('accepts a valid 32-byte key in base64 or hex', () => {
+        const key = randomBytes(32);
+
+        expect(loadEnv({ ...valid, TOKEN_ENCRYPTION_KEY: key.toString('base64') }).TOKEN_ENCRYPTION_KEY).toBeTruthy();
+        expect(loadEnv({ ...valid, TOKEN_ENCRYPTION_KEY: key.toString('hex') }).TOKEN_ENCRYPTION_KEY).toBeTruthy();
+    });
+
+    it('rejects a key of the wrong size at boot, not at first use', () => {
+        expect(() => loadEnv({ ...valid, TOKEN_ENCRYPTION_KEY: randomBytes(16).toString('base64') }))
+            .toThrow(ConfigError);
+    });
+
+    it('never puts the key in the error message', () => {
+        const key = randomBytes(8).toString('base64');
+        try {
+            loadEnv({ ...valid, TOKEN_ENCRYPTION_KEY: key });
+            expect.unreachable('should have thrown');
+        } catch (error) {
+            expect((error as ConfigError).message).not.toContain(key);
+        }
+    });
+});
+
+describe('loadEnv - live EventSub mode', () => {
+    const live = { ...valid, EVENTSUB_DRY_RUN: 'false' };
+
+    it('defaults to a dry run', () => {
+        // A misconfigured deployment must not be able to delete a working
+        // channel's subscriptions on its first boot.
+        expect(loadEnv({ ...valid }).EVENTSUB_DRY_RUN).toBe(true);
+    });
+
+    it('requires client credentials and a public URL to go live', () => {
+        try {
+            loadEnv(live);
+            expect.unreachable('should have thrown');
+        } catch (error) {
+            const issues = (error as ConfigError).issues.join('\n');
+            expect(issues).toContain('TWITCH_CLIENT_ID');
+            expect(issues).toContain('PUBLIC_URL');
+        }
+    });
+
+    it('accepts a fully configured live setup', () => {
+        const env = loadEnv({
+            ...live,
+            TWITCH_CLIENT_ID: 'id',
+            TWITCH_CLIENT_SECRET: 'secret',
+            PUBLIC_URL: 'https://bot.example.com'
+        });
+
+        expect(env.EVENTSUB_DRY_RUN).toBe(false);
+    });
+
+    it('rejects a JWT secret that is too short to be meaningful', () => {
+        expect(() => loadEnv({ ...valid, JWT_SECRET: 'short' })).toThrow(ConfigError);
     });
 });
 

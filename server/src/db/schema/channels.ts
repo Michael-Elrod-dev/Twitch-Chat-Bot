@@ -21,7 +21,13 @@ export const channels = pgTable(
         /** Current login name. Twitch allows renames, so this is display data, not a key. */
         twitchLogin: text('twitch_login').notNull(),
         displayName: text('display_name'),
-        status: text('status', { enum: ['active', 'suspended', 'disconnected'] })
+        /**
+         * `needs_reauth` is distinct from `disconnected` on purpose: disconnected
+         * is a state we chose, needs_reauth is one Twitch imposed and only the
+         * broadcaster can clear. Collapsing them would lose the difference
+         * between "turned off" and "silently broken".
+         */
+        status: text('status', { enum: ['active', 'suspended', 'disconnected', 'needs_reauth'] })
             .notNull()
             .default('active'),
         onboardedAt: timestamp('onboarded_at', { withTimezone: true }).notNull().defaultNow(),
@@ -36,7 +42,10 @@ export const channels = pgTable(
         // Drizzle's `{ enum: [...] }` is a TypeScript-only refinement - it emits a
         // plain text column. Without this the database accepts any string, and
         // anything writing SQL directly (the ETL, a manual fix) could store junk.
-        check('channels_status_check', sql`${table.status} in ('active', 'suspended', 'disconnected')`)
+        check(
+            'channels_status_check',
+            sql`${table.status} in ('active', 'suspended', 'disconnected', 'needs_reauth')`
+        )
     ]
 );
 
@@ -111,6 +120,30 @@ export const botIdentity = pgTable('bot_identity', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+/**
+ * Refresh tokens for the app's *own* sessions — not Twitch's.
+ *
+ * Only the hash is stored, so a database leak yields no usable token. Rows are
+ * revoked by deletion or by stamping `revoked_at`, which is the whole reason
+ * refresh tokens here are opaque handles rather than self-describing JWTs.
+ */
+export const appRefreshTokens = pgTable(
+    'app_refresh_tokens',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        tokenHash: text('token_hash').notNull(),
+        twitchUserId: text('twitch_user_id').notNull(),
+        login: text('login').notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+        revokedAt: timestamp('revoked_at', { withTimezone: true }),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        uniqueIndex('app_refresh_tokens_token_hash_key').on(table.tokenHash),
+        index('app_refresh_tokens_user_idx').on(table.twitchUserId)
+    ]
+);
 
 /** Schema-prep only: no UI until a later phase (design §2.4). */
 export const editors = pgTable(

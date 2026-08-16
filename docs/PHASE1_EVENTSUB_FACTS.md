@@ -435,12 +435,75 @@ code that produced P0-1 and P0-2.
 
 ## 8. Open items for later packages
 
-| Item | Where | Why it is open |
+| Item | Where | Status |
 |---|---|---|
-| `chat:edit` vs `user:write:chat` | P1-WP6 | Two Twitch pages disagree; one live send settles it |
-| Redirect URI rules (localhost, exact match) | P1-WP6 | Undocumented; only matters if we want loopback redirects |
-| Twitch CLI EventSub mocking capability | P1-WP5 | Decides whether the dual-transport interface is needed at all |
-| `bot_identity` table shape | P1-WP3 | Depends on whether the bot's user token is ever needed off the chat path |
+| `chat:edit` vs `user:write:chat` | P1-WP6 | **Implemented as `user:write:chat`; awaiting the live send** — see §9 |
+| Redirect URI rules (localhost, exact match) | P1-WP6 | **Awaiting app registration** — see §9 |
+| Twitch CLI EventSub mocking capability | P1-WP5 | ✅ **RESOLVED** — see §9.1 |
+| `bot_identity` table shape | P1-WP3 | ✅ Resolved: consent record, not a token pair |
+
+---
+
+## 9. Empirical results
+
+Answers obtained by doing rather than reading. Anything still marked
+**PENDING** needs the live activation phase with owner-supplied credentials.
+
+### 9.1 ✅ The Twitch CLI cannot trigger `channel.chat.message` (P1-WP5)
+
+Verified against two independent sources: the
+[CLI event command docs](https://dev.twitch.tv/docs/cli/event-command) and the
+[CLI repository's `docs/event.md`](https://github.com/twitchdev/twitch-cli/blob/main/docs/event.md).
+Neither lists any chat-message event among the triggerable types.
+
+**What it does cover:** `streamup` → `stream.online`, `streamdown` →
+`stream.offline`, redemptions, `-r revoked` for revocation deliveries, and
+`verify-subscription` for the challenge check. Signing is `-s`, with the same
+10–100 ASCII secret rule the webhook enforces.
+
+**Consequence, and it is load-bearing:** the CLI is a *complement*, not the dev
+loop. `npm run dev:event -w server` signs with the same function the handler
+verifies with. Either way there is **one** ingest implementation — no websocket
+transport was ever built for the new server, and none will be.
+
+### 9.2 ⏳ PENDING — `chat:edit` vs `user:write:chat`
+
+The bot's consent requests **`user:write:chat`** and not `chat:edit`, on the
+reasoning from §4: the scopes page defines `chat:edit` as the *IRC* scope and
+`user:write:chat` as the *API* scope, the chat guides consistently use the
+latter, and requesting both speculatively risks suspension.
+
+This is settled by the first live `POST /helix/chat/messages`. If it returns 401
+with `user:write:chat` granted, the reference page is right and the scope list
+changes by one line in `server/src/twitch/oauth.ts`.
+
+**Result:** _to be filled in during live activation._
+
+### 9.3 ⏳ PENDING — redirect URI rules
+
+`http://localhost:3000/auth/twitch/callback` is what the implementation is built
+against and what the owner registers in the console. Whether Twitch accepts a
+plaintext loopback redirect is answered the moment that registration is saved
+and the first consent completes.
+
+Note the implementation needs only **one** registered URI: all three flows
+(channel connect, bot consent, app sign-in) share a single callback, with the
+flow carried in the server-issued `state`.
+
+**Result:** _to be filled in during live activation._
+
+### 9.4 ⏳ PENDING — app-created rewards and the refund path
+
+The P1-WP3 finding is that Update Redemption Status only works for rewards the
+**application itself created**, which is why onboarding creates them rather than
+adopting dashboard-made ones. `HelixApi.listCustomRewards` passes
+`only_manageable_rewards=true` so a reward we cannot manage is never presented as
+if we could.
+
+Proof requires creating one reward with the broadcaster's token and updating a
+real redemption's status.
+
+**Result:** _to be filled in during live activation._
 
 ---
 

@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "dev:event": "tsx scripts/send-test-event.ts"
+    "dev:event": "tsx scripts/send-test-event.ts",
+    "db:encrypt-tokens": "tsx scripts/encrypt-tokens.ts"
   },
   "dependencies": {
     "@almosthadai/shared": "*",

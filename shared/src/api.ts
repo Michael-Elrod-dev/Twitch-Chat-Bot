@@ -23,7 +23,10 @@ export const API_ERROR_CODES = [
     'not_found',
     'conflict',
     'rate_limited',
-    'internal'
+    'internal',
+    /** The server is running but a feature's configuration is absent - distinct
+     * from `internal`, because the fix is a deployment change and not a bug. */
+    'unavailable'
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

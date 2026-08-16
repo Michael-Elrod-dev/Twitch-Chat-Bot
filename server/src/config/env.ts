@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseEncryptionKey } from '../crypto/tokenCrypto.js';
 
 /**
  * The typed control panel. Phase 0's config.js was the developer's dashboard;
@@ -22,6 +23,17 @@ const envSchema = z.object({
 
     /** Postgres connection string. Location-agnostic by design (see PHASE1_DESIGN §4.1 guardrail 1). */
     DATABASE_URL: z.string({ error: 'a Postgres connection string is required' }).min(1),
+
+    /**
+     * Credentials used for migrations only, opened at boot and closed again.
+     *
+     * Guardrail 3 says the application connects as a least-privilege role — but
+     * ALTER TABLE requires *ownership*, which a least-privilege role must not
+     * have. Splitting the two is what lets runtime hold only DML rights while
+     * migrations still work. Unset means migrations run on DATABASE_URL, which
+     * is the right default for development where both are the same user.
+     */
+    MIGRATION_DATABASE_URL: z.string().min(1).optional(),
 
     /** Redis connection string. */
     REDIS_URL: z.string({ error: 'a Redis connection string is required' }).min(1),
@@ -63,7 +75,37 @@ const envSchema = z.object({
     BOT_TWITCH_USER_ID: z.string().min(1).optional(),
 
     /** Comma-separated names the AI answers to. Defaults to the bot's own login. */
-    AI_TRIGGERS: z.string().min(1).optional()
+    AI_TRIGGERS: z.string().min(1).optional(),
+
+    /** Twitch application credentials. Absent means every live path stays inert. */
+    TWITCH_CLIENT_ID: z.string().min(1).optional(),
+    TWITCH_CLIENT_SECRET: z.string().min(1).optional(),
+
+    /**
+     * 32 bytes, base64 or hex. Tokens are encrypted at rest with this; without
+     * it the server runs but refuses to store or read credentials, and in
+     * production refuses to boot at all.
+     */
+    TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+
+    /** Signs the app's own session JWTs. Independent of Twitch entirely. */
+    JWT_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
+
+    /** Access-token lifetime for the app's own JWTs. */
+    JWT_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+
+    /**
+     * Subscription reconciliation stays a dry run until this is explicitly
+     * false. Defaulting to "change nothing" means a misconfigured deployment
+     * cannot delete a working channel's subscriptions on its first boot.
+     */
+    EVENTSUB_DRY_RUN: z
+        .enum(['true', 'false'])
+        .default('true')
+        .transform((value) => value === 'true'),
+
+    /** Spacing between subscription creates, under Twitch's documented 100/min. */
+    EVENTSUB_CREATE_SPACING_MS: z.coerce.number().int().min(0).max(60_000).default(750)
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -129,6 +171,32 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     // anyone forge a signed event, which is the whole threat the HMAC prevents.
     if (env.NODE_ENV === 'production' && env.TWITCH_EVENTSUB_SECRET === DEV_EVENTSUB_SECRET) {
         crossFieldIssues.push('TWITCH_EVENTSUB_SECRET: the development default must not be used in production');
+    }
+
+    // Production must not run with tokens in plaintext. Refusing to boot is the
+    // only version of this rule that cannot be ignored.
+    if (env.NODE_ENV === 'production' && !env.TOKEN_ENCRYPTION_KEY) {
+        crossFieldIssues.push('TOKEN_ENCRYPTION_KEY: required in production (tokens are encrypted at rest)');
+    }
+
+    if (env.TOKEN_ENCRYPTION_KEY) {
+        try {
+            parseEncryptionKey(env.TOKEN_ENCRYPTION_KEY);
+        } catch (err) {
+            // The message describes the shape only; the key never reaches it.
+            crossFieldIssues.push(`TOKEN_ENCRYPTION_KEY: ${(err as Error).message.replace('TOKEN_ENCRYPTION_KEY ', '')}`);
+        }
+    }
+
+    // Live subscription management writes to Twitch, so it needs the credentials
+    // that let it authenticate and the callback URL it will register.
+    if (!env.EVENTSUB_DRY_RUN) {
+        if (!env.TWITCH_CLIENT_ID || !env.TWITCH_CLIENT_SECRET) {
+            crossFieldIssues.push('EVENTSUB_DRY_RUN=false: requires TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET');
+        }
+        if (!env.PUBLIC_URL) {
+            crossFieldIssues.push('EVENTSUB_DRY_RUN=false: requires PUBLIC_URL (Twitch needs a callback to deliver to)');
+        }
     }
 
     if (crossFieldIssues.length > 0) {

@@ -189,3 +189,34 @@ Three small items, one package, standalone report:
 ### Exit criteria
 - `docker compose up` boots the full wired server; a signed synthetic `channel.chat.message` posted to the webhook produces a command response at the ChatSink (logged), end-to-end, for two channels; suites/lint/typecheck/image green; dev loop documented.
 - Completion report: per-task, the CLI verdict with evidence, flagged-not-fixed.
+
+> **Verified by lead 2026-08-15:** legacy 49/1222; server **327/327 against a Postgres started 3s prior** — the advisory-lock diagnosis (concurrent Vitest workers migrating a cold DB, not warmup) is a genuinely better root cause than the readiness-wait I asked for, and fixing it in `runMigrations` protects real replica boots, not just tests. Live exit criterion reproduced by the lead personally: compose up → `/readyz` both probes green → signed synthetic `!seed` for broadcaster 900000001 → **CHAT SEND at the sink**, with unknown-broadcaster and unknown-command paths behaving correctly along the way. The 600s-skew deviation is approved (Twitch's documented figure; dedup is the replay defense — a 10s window would reject legitimate redeliveries; my spec number was wrong). The Twitch CLI verdict is accepted: no chat-message trigger → repo-local signer as primary dev loop, CLI as complement, no second transport built — the load-bearing outcome. The honesty items (timingSafeEqual unobservable by test; two tests initially green for wrong reasons, caught by reintroduction) are the standard working as designed. Flags routed: revocation recovery + subscription pacing + shared-chat routing live check → P1-WP6; persistent webhook dedup accepted (session layer is the second belt); tsx-watch SIGTERM accepted as dev-only.
+
+---
+
+## P1-WP6 — Twitch auth, tokens & live activation  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** the server talks to real Twitch. OAuth onboarding, encrypted token storage, a real HelixClient, live subscriptions, and a real chat send — ending with the bot speaking in the owner's channel from the new stack. First package with live-Twitch steps: implementation lands against mocks first; a **live activation phase** then runs with owner-supplied credentials.
+
+**Scope guard:** `server/`, `shared/`, compose/env docs. Legacy untouched (49/1222). No desktop app; no `/api/v1` resources beyond auth machinery + a `/me` stub (P1-WP7). **Never log or echo token values, client secrets, or auth codes — anywhere, including errors.**
+
+**Lead calls (locked):**
+- **Token crypto:** refresh/access tokens in `channel_tokens`/`bot_identity` encrypted at rest — AES-256-GCM (node crypto), key from `TOKEN_ENCRYPTION_KEY` (32-byte, env; documented in `.env.example`, which lands in this package). One-time upgrade script encrypts the rows the ETL imported. Key absence = boot refusal in production mode.
+- **HelixClient (real):** app-token via client-credentials (cached, single-flight refresh, 401-retry-once); user-token refresh with Phase-0 semantics ported (expiry-based, atomic persist, loud MANUAL-REAUTH error class); endpoints: send chat message, get users/streams/channel info, get chatters, custom-rewards CRUD, update redemption status, EventSub sub CRUD. Basic 429 handling (respect Ratelimit-Reset; no thundering retries). Subscription creation pacing (the WP5 flag): simple spacing under the 100/min budget.
+- **OAuth onboarding:** `/auth/twitch/connect` → consent (5 scopes from P1-WP3) → callback with `state` CSRF → upsert channel + encrypted tokens → **live per-channel reconcile**. Separate bot-identity consent route (bot's 3 global scopes). Reconciler gains live mode behind `EVENTSUB_DRY_RUN=false` + `PUBLIC_URL`-derived callback.
+- **App sign-in machinery:** same server-mediated flow with identity-only scope → our JWT (short-lived) + refresh token; JWT middleware + `/api/v1/me` stub proving it. (Full API is P1-WP7.)
+- **ChatSink (real):** Helix send-chat-message implementation; the empirical `user:write:chat` vs `chat:edit` check happens here and gets recorded in EVENTSUB_FACTS.
+- **Revocation recovery (WP5 flag):** per-subscription handling — on revocation, one delayed resubscribe attempt; on failure, channel marked needs-reauth with a loud log. Per-subscription, not per-channel.
+- **App-role switch (WP3 flag):** runtime connects as `almosthadai_app`; migrations keep the owner role. Documented.
+
+### Live activation phase (owner + engineer together, after implementation lands)
+Owner actions, in order — the report includes this as a fill-in checklist:
+1. Register a Twitch application (dev.twitch.tv console): redirect URI `http://localhost:3000/auth/twitch/callback` (this empirically settles the P1-WP1 redirect-rules unknown); obtain client id + secret → `.env` (never committed).
+2. Generate `TOKEN_ENCRYPTION_KEY` (command provided in `.env.example`).
+3. Visit the bot-consent URL logged at boot, signed in as the bot account (`almosthadai`) → grants the 3 bot scopes.
+4. Visit the channel-connect URL signed in as the owner (`aimosthadme`) → 5-scope consent → channel onboards live.
+5. Engineer verifies: live subscriptions created (list them), a real chat message sent by the bot into the owner's channel via the new stack, the scope question settled empirically, one app-created test reward + redemption-status update proving the refund path (the P1-WP3 dashboard-rewards risk), and the shared-chat routing check if feasible.
+
+### Exit criteria
+- Mocked suites green (both stacks, lint, typecheck, image); live activation executed with evidence in the report (log excerpts with secrets redacted); EVENTSUB_FACTS updated with every empirical answer; any design deltas called out.
+- Completion report: per-task, the owner checklist with what happened at each step, flagged-not-fixed.

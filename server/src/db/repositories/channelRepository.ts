@@ -2,13 +2,19 @@ import { eq } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import { channels } from '../schema/channels.js';
 
-export type ChannelStatus = 'active' | 'suspended' | 'disconnected';
+export type ChannelStatus = 'active' | 'suspended' | 'disconnected' | 'needs_reauth';
 
 export interface ChannelRecord {
     id: string;
     twitchBroadcasterId: string;
     twitchLogin: string;
     status: ChannelStatus;
+}
+
+export interface ChannelUpsert {
+    twitchBroadcasterId: string;
+    twitchLogin: string;
+    displayName: string | null;
 }
 
 /**
@@ -53,6 +59,42 @@ export class ChannelRepository {
             .limit(1);
 
         return rows[0] ?? null;
+    }
+
+    /**
+     * Onboarding, idempotently.
+     *
+     * The unique index on `twitch_broadcaster_id` is what makes re-authorizing an
+     * existing channel an update rather than a duplicate tenant — and it resets
+     * the status, so reconnecting is how a `needs_reauth` channel recovers.
+     */
+    async upsert(channel: ChannelUpsert): Promise<ChannelRecord> {
+        const [row] = await this.db
+            .insert(channels)
+            .values({
+                twitchBroadcasterId: channel.twitchBroadcasterId,
+                twitchLogin: channel.twitchLogin,
+                displayName: channel.displayName,
+                status: 'active'
+            })
+            .onConflictDoUpdate({
+                target: channels.twitchBroadcasterId,
+                set: {
+                    twitchLogin: channel.twitchLogin,
+                    displayName: channel.displayName,
+                    status: 'active',
+                    updatedAt: new Date()
+                }
+            })
+            .returning({
+                id: channels.id,
+                twitchBroadcasterId: channels.twitchBroadcasterId,
+                twitchLogin: channels.twitchLogin,
+                status: channels.status
+            });
+
+        if (!row) throw new Error('channel upsert returned no row');
+        return row;
     }
 
     /** @returns whether a row was updated. */

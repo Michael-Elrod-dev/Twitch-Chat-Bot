@@ -1,6 +1,9 @@
 # Environment and secrets
 .env
 .env.*
+# ...except the template, which holds no values and is the documentation for
+# every variable the server reads. `.env.*` above would otherwise swallow it.
+!.env.example
 *.pem
 tokens.json
 

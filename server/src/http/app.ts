@@ -17,10 +17,12 @@ export interface AppOptions {
      * than a difference in key order.
      */
     rawBodyRouters?: Router[];
+    /** Ordinary routers, mounted after the JSON parser. */
+    routers?: Router[];
 }
 
 export function createApp(options: AppOptions): Express {
-    const { logger, version, probes = [], rawBodyRouters = [] } = options;
+    const { logger, version, probes = [], rawBodyRouters = [], routers = [] } = options;
     const app = express();
 
     // Do not advertise the framework.
@@ -33,6 +35,10 @@ export function createApp(options: AppOptions): Express {
     app.use(express.json({ limit: '1mb' }));
 
     app.use(createHealthRouter({ version, probes }));
+
+    for (const router of routers) {
+        app.use(router);
+    }
 
     app.use((_req, res) => {
         res.status(404).json(apiFailure('not_found', 'Endpoint not found'));

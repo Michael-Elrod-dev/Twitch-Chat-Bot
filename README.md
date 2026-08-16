@@ -102,6 +102,49 @@ let anyone forge a signed event. Production compose runs need a real one:
 TWITCH_EVENTSUB_SECRET=... docker compose -f docker-compose.yml up -d
 ```
 
+See [`.env.example`](.env.example) for the full annotated list, including the Twitch
+application credentials, `TOKEN_ENCRYPTION_KEY` and `JWT_SECRET`.
+
+### Connecting to Twitch
+
+Three OAuth flows share **one** registered redirect URI — the flow is carried in the
+server-issued `state`, so the Twitch console needs a single callback URL:
+
+| Route | Who visits it | Grants |
+|---|---|---|
+| `/auth/bot/connect` | the shared bot account, once | `user:read:chat`, `user:write:chat`, `user:bot` |
+| `/auth/twitch/connect` | each broadcaster | `channel:bot`, `channel:read:redemptions`, `channel:manage:redemptions`, `moderator:read:followers`, `moderator:read:chatters` |
+| `/auth/app/login` | a desktop-app user | nothing — identity only |
+
+Both URLs are logged at boot. Connecting a channel stores its tokens encrypted,
+starts its session immediately, and reconciles its subscriptions — no restart.
+
+Subscription management stays a **dry run** until `EVENTSUB_DRY_RUN=false`, which
+additionally requires real client credentials and a `PUBLIC_URL`. A misconfigured
+deployment therefore cannot delete a working channel's subscriptions on its first boot.
+
+### Tokens at rest
+
+Every OAuth token in `channel_tokens` and `bot_identity` is AES-256-GCM encrypted
+under `TOKEN_ENCRYPTION_KEY`, bound to its column so a value cannot be moved between
+them. Without the key the server still boots in development but **refuses to store or
+read any credential** — it cannot silently fall back to plaintext.
+
+Rows imported by the ETL predate encryption. Upgrade them once:
+
+```bash
+npm run db:encrypt-tokens -w server -- --dry-run
+```
+
+Drop `--dry-run` to write. It is idempotent and reports counts only — never a value.
+
+### Database roles
+
+Runtime connects as `almosthadai_app`, which can read and write data but does not own
+the tables and cannot alter them. Migrations use `MIGRATION_DATABASE_URL` (the owner
+role) on a connection opened at boot and closed immediately. If the runtime credential
+leaks, the blast radius is the data it could always read — not the schema.
+
 ### Notable knobs in `config.js`
 
 | Setting | Default | Meaning |
