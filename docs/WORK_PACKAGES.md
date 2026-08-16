@@ -994,3 +994,32 @@ Postgres volume `almosthadai-postgres-data`, and the deploy path `/opt/almosthad
 carry it.
 
 > **P1-WP4.5 + P1-LR verified by lead 2026-08-16:** legacy tree confirmed gone from disk; server 766/766 on the throwaway DB; lint 0 on the shrunk config; prod healthy and **indifference proven by per-file hashing rather than asserted** (109 files, zero content differences — including chasing the Windows binary-mode false mismatch to ground instead of reporting it). Task-0 freshness check (17 rows, identical) closed the declaration-to-deletion window exactly as designed. The `@types/express` audit error was caught by the clean-`npm ci` discipline and fixed in the right place. Counter design refinements endorsed: `(last one this stream)` over `(0 left)` because "a zero reads as a refusal and this request was answered," and broadcaster suppression falling out of the unlimited rule rather than a role special-case. Committed as `3f3bb0c` (counter) and `56ac532` (retirement — the repo contains exactly one bot). **Owner decision executed next micro: waifu images reset — keep the substitute host, add a deployment salt to the hash so all prior image associations reset now and future wipes are a salt bump.** THE REPO IS CLAUDE-DESIGN-READY PENDING THE REBRAND.
+
+---
+
+# DESIGN PHASE
+
+> **Design handoff reviewed by lead 2026-08-16:** `design_handoff_bot_desktop_app/` (Claude Design) verified against `UI_FUNCTIONALITY.md` and the contract — **approved without change requests.** Full coverage of every domain and state; policies honored (write-only webhook, show-once keys, no-add-song, two-stage queue, `{{APP_NAME}}` placeholder, contract-wins rule). Three server-side 🔶 gaps the design correctly assumes, assigned to implementation: live-event outcome enrichment (chat chips), a channel bot on/off endpoint (header master switch), Spotify status/disconnect + playlist detail surfacing. **The handoff directory is working reference material: NEVER committed, and DELETED entirely when the final screens package closes.**
+
+## P1-WP8 — Desktop app shell & auth  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** the app exists: Tauri 2 + React + TS workspace, the design system as code, the persistent shell (title bar, icon rail, channel header), the full auth arc (sign-in `3g` → waiting `5d` → onboarding `3h`), session management against the real server, the WS connection state machine, and a CI-built Windows installer artifact.
+
+**Lead calls:**
+- New `app/` workspace (Vite + React + TS strict; Vitest + Testing Library; exact pins; Renovate/CI coverage). Tauri 2 shell with updater config scaffolded (release wiring finalizes at first release). Fonts bundled locally (no runtime Google Fonts). Lucide React.
+- Design tokens from the handoff README become the single theme module — colors/type/spacing/motion as constants; `prefers-reduced-motion` honored. `{{APP_NAME}}` is ONE constant.
+- Shell per README: title bar with real Tauri window controls, rail with hover tooltips + active states, channel header with the four status-pill states and the master switch (server 🔶: add the channel enable/disable endpoint + contract types — the switch drives session start/stop, reintroduction-tested server-side).
+- Auth: system-browser sign-in with the app receiving the session (finalize the fragment/deep-link handoff mechanics against the WP6 flow — smallest server addition wins if one is needed; document it), refresh, sign-out, the waiting and onboarding screens with live status reflection.
+- WS client: connect/reconnect state machine (`connecting/open/reconnecting/down`) driving pill + banners; "server unreachable" never conflated with channel status (`4b` semantics).
+- CI: app lint/typecheck/test jobs + a Windows job producing an unsigned installer artifact on tag.
+
+### Exit criteria
+- Signed-in shell runs against production; all auth screens live; installer artifact builds in CI; suites/lint green across workspaces; server additions reintroduction-tested; report with the usual honesty sections.
+
+## P1-WP9 — Screens (three tranches, each verified separately)  [STATUS: ISSUED 2026-08-16 — sequential after WP8]
+
+- **9a — Dashboard & live** (`2a`,`2b`,`4a`,`4b`): status strip, numbers, chat card with outcome chips (server 🔶: enrich `chat.message` with pipeline outcome), song-queue card, offline + failure states, uptime tick.
+- **9b — Content domains** (`2c`,`4d`,`4e`,`3a`,`3b`): commands list/editor/empty, emotes composer, quotes grid — full CRUD against the real API, validation mirroring the contract schemas.
+- **9c — Songs, analytics, settings** (`3c`,`4c`,`3d`,`3e`,`3f`,`5a`,`5b`,`5c`): songs page with playlist controls (server 🔶: settings fields + Spotify status/disconnect + playlist count), analytics, all settings sub-pages incl. per-role limit editing (server 🔶), rewards status (server 🔶), API keys with the show-once modal, account + danger zone.
+
+Rules for all tranches: server 🔶 additions ride WITH the tranche that needs them (contract-first: types in `shared/`, server implementation, then UI), each lands with tests + reintroduction validation on the server side and component tests on the app side, and the design README's interaction rules are the acceptance spec. **On 9c's close: delete `design_handoff_bot_desktop_app/` entirely (exit criterion), re-verify the repo contains no handoff remnants.**
