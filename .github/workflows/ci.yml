@@ -175,23 +175,74 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Boots the real composition root against real dependencies, then drives a
+      # Boots the real composition root against real dependencies and drives a
       # signed synthetic EventSub delivery at it. A green run means migrations,
       # Redis, the webhook and its HMAC all work in the built image - not merely
       # that the process starts.
+      #
+      # The image sets NODE_ENV=production, so it is subject to the production
+      # config rules. That is the point: this job exists to catch an image that
+      # compiles but cannot boot, and supplying less than production requires
+      # would be testing something nobody deploys.
       - name: Smoke-test the image
         env:
           EVENTSUB_SECRET: ci-smoke-test-eventsub-secret
         run: |
-          docker run --rm -d --name ci-server --network host \
+          set -uo pipefail
+
+          # Generated per run rather than committed: a test key in the repo is
+          # still a key in the repo.
+          TOKEN_KEY=$(openssl rand -base64 32)
+          JWT_KEY=$(openssl rand -base64 48 | tr -d '\n')
+
+          # The negative first. Production's boot refusal is a security control,
+          # and a control that is never exercised is one nobody knows is broken.
+          # It also documents why the key below is required.
+          echo "== the image must REFUSE to boot in production with no encryption key =="
+          if docker run --rm --name ci-refusal \
+              -e DATABASE_URL=postgres://test:test@127.0.0.1:5432/test \
+              -e REDIS_URL=redis://127.0.0.1:6379 \
+              -e TWITCH_EVENTSUB_SECRET="$EVENTSUB_SECRET" \
+              almosthadai-server:ci > /tmp/refusal.log 2>&1; then
+            echo "::error::Image booted in production without TOKEN_ENCRYPTION_KEY"
+            exit 1
+          fi
+
+          if ! grep -q 'TOKEN_ENCRYPTION_KEY' /tmp/refusal.log; then
+            echo "::error::Image failed to boot, but not for the expected reason:"
+            cat /tmp/refusal.log
+            exit 1
+          fi
+          echo "refused as designed"
+
+          # No --rm here: a container that dies takes its logs with it, which is
+          # how a boot refusal previously surfaced as nothing but curl: (7).
+          echo "== booting properly configured =="
+          docker run -d --name ci-server --network host \
             -e DATABASE_URL=postgres://test:test@127.0.0.1:5432/test \
             -e REDIS_URL=redis://127.0.0.1:6379 \
             -e TWITCH_EVENTSUB_SECRET="$EVENTSUB_SECRET" \
+            -e TOKEN_ENCRYPTION_KEY="$TOKEN_KEY" \
+            -e JWT_SECRET="$JWT_KEY" \
             almosthadai-server:ci
+
+          cleanup() { docker rm -f ci-server >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
 
           ready=false
           for i in $(seq 1 20); do
-            if curl -fsS http://localhost:3000/readyz > /dev/null; then
+            # Liveness of the CONTAINER before polling the port. A process that
+            # has exited will never answer, and spending 40s discovering that
+            # buries the exit reason under a wall of connection refusals.
+            running=$(docker inspect -f '{{.State.Running}}' ci-server 2>/dev/null || echo false)
+            if [ "$running" != "true" ]; then
+              code=$(docker inspect -f '{{.State.ExitCode}}' ci-server 2>/dev/null || echo '?')
+              echo "::error::Container exited during startup (exit code $code)"
+              docker logs ci-server
+              exit 1
+            fi
+
+            if curl -fsS --max-time 5 http://localhost:3000/readyz > /dev/null 2>&1; then
               ready=true
               break
             fi
@@ -199,15 +250,23 @@ jobs:
           done
 
           if [ "$ready" != "true" ]; then
-            echo "Server never became ready"
+            echo "::error::Server never became ready"
             docker logs ci-server
-            docker rm -f ci-server
             exit 1
           fi
 
-          echo "readyz:"; curl -fsS http://localhost:3000/readyz; echo
+          echo "readyz: $(curl -fsS http://localhost:3000/readyz)"
 
-          # An unsigned request must be refused, and a signed one accepted.
+          # The API must refuse an unauthenticated caller.
+          me=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/v1/me)
+          if [ "$me" != "401" ]; then
+            echo "::error::/api/v1/me should be 401 unauthenticated, got $me"
+            docker logs ci-server
+            exit 1
+          fi
+          echo "unauthenticated /api/v1/me -> 401"
+
+          # An unsigned webhook delivery must be refused.
           forged=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
             http://localhost:3000/eventsub/webhook \
             -H 'content-type: application/json' \
@@ -218,15 +277,14 @@ jobs:
             -d '{}')
 
           if [ "$forged" != "403" ]; then
-            echo "Unsigned webhook delivery was not refused (got $forged)"
+            echo "::error::Unsigned webhook delivery was not refused (got $forged)"
             docker logs ci-server
-            docker rm -f ci-server
             exit 1
           fi
-          echo "Unsigned delivery correctly refused with 403"
+          echo "unsigned webhook delivery -> 403"
 
-          # Signed with node builtins only, so this job needs no npm install.
-          # Same scheme as server/scripts/send-test-event.ts.
+          # And a correctly-signed one must be accepted. Signed with node
+          # builtins only, so this job needs no npm install.
           node - <<'NODE'
           const { createHmac, randomUUID } = require('node:crypto');
 
@@ -266,8 +324,8 @@ jobs:
           })();
           NODE
 
+          echo "== image smoke test passed =="
           docker logs ci-server
-          docker rm -f ci-server
 
   audit:
     name: Security audit

@@ -7,6 +7,16 @@ export interface AiRequest {
     channelId: string;
     prompt: string;
     chatter: { twitchUserId: string; displayName: string };
+    /**
+     * The chatter's roles in THIS channel, so the rate limiter can rank them.
+     * Optional because the pipeline supplies them and the stub ignores them.
+     */
+    roles?: {
+        isModerator: boolean;
+        isVip: boolean;
+        isSubscriber: boolean;
+        isBroadcaster: boolean;
+    };
 }
 
 export interface AiResult {

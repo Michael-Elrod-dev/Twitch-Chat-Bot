@@ -19,6 +19,7 @@ import { RevocationRecovery } from './transport/eventsub/revocationRecovery.js';
 import { LoggingChatSink, type ChatSink } from './services/chatSink.js';
 import { HelixChatSink } from './services/helixChatSink.js';
 import { StubAiService } from './services/aiService.js';
+import { AnthropicClaudeClient, UnconfiguredClaudeClient, type ClaudeClient } from './ai/claudeClient.js';
 import { NoopAnalyticsSink } from './services/analytics.js';
 import { HelixApi } from './twitch/helixApi.js';
 import { AppTokenProvider } from './twitch/appTokenProvider.js';
@@ -203,6 +204,14 @@ async function main(): Promise<void> {
     // one otherwise, so the pipeline is exercised either way.
     // Chosen on whether a real Helix client exists, NOT on whether a bot identity
     // does - consent can arrive later, and the sink reads the id per send.
+    // One client for the whole process: the Anthropic key is a server secret,
+    // never per-channel. Absent means every AI request answers with the
+    // channel's fallback, exactly as a real outage does.
+    const claude: ClaudeClient = env.ANTHROPIC_API_KEY
+        ? new AnthropicClaudeClient({ apiKey: env.ANTHROPIC_API_KEY, model: env.AI_MODEL, logger })
+        : (logger.warn('ANTHROPIC_API_KEY is not set - AI replies will use each channel fallback'),
+        new UnconfiguredClaudeClient());
+
     const chatSink: ChatSink = helix
         ? new HelixChatSink({ helix, botUserId: () => botIdentity.twitchUserId, logger })
         : new LoggingChatSink(logger);
@@ -219,7 +228,9 @@ async function main(): Promise<void> {
         ai: new StubAiService(),
         analytics: new NoopAnalyticsSink(),
         bot: botIdentity,
-        bus
+        bus,
+        claude,
+        db: database.db
     });
 
     // One reconciliation after every channel is registered, rather than one per

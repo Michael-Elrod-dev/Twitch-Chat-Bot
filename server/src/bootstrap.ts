@@ -7,6 +7,11 @@ import type { AiService } from './services/aiService.js';
 import type { AnalyticsSink } from './services/analytics.js';
 import type { HandlerRegistry } from './domain/handlers.js';
 import type { EventBus } from './live/eventBus.js';
+import type { ClaudeClient } from './ai/claudeClient.js';
+import { ChannelAiService } from './ai/aiService.js';
+import { AiRateLimiter } from './ai/rateLimiter.js';
+import { ChatHistoryRepository } from './db/repositories/chatHistoryRepository.js';
+import { createAiHandlers } from './domain/aiHandlers.js';
 import type { ChannelRecord } from './db/repositories/channelRepository.js';
 import { BotIdentityRepository } from './db/repositories/botIdentityRepository.js';
 import { CommandRepository } from './db/repositories/commandRepository.js';
@@ -38,6 +43,7 @@ export interface BotIdentity {
 /** The four channel-scoped repositories a session needs. */
 export interface ChannelRepositories {
     commands: CommandRepository;
+    history?: ChatHistoryRepository;
     emotes: EmoteRepository;
     settings: ChannelSettingsRepository;
     roles: ChannelRoleRepository;
@@ -51,7 +57,8 @@ export function createChannelRepositories(db: Database, channelId: string): Chan
         emotes: new EmoteRepository(db, channelId),
         settings: new ChannelSettingsRepository(db, channelId),
         roles: new ChannelRoleRepository(db, channelId),
-        quotes: new QuoteRepository(db, channelId)
+        quotes: new QuoteRepository(db, channelId),
+        history: new ChatHistoryRepository(db, channelId)
     };
 }
 
@@ -74,29 +81,63 @@ export interface ChannelDependencies {
     handlers?: HandlerRegistry;
     /** Realtime fan-out. Omitted means nothing is watching. */
     bus?: EventBus;
+    /**
+     * The Claude client, shared across channels — the API key is a server
+     * secret, so there is exactly one. Per-channel state (limits, history,
+     * settings) is built around it below.
+     */
+    claude?: ClaudeClient;
+    /** Database handle, needed to build the per-channel AI rate limiter. */
+    db?: import('./db/client.js').Database;
 }
 
 export function buildChannelSession(deps: ChannelDependencies, channel: ChannelRecord): ChannelSession {
-    const { cache, logger, chatSink, ai, analytics, bot, handlers } = deps;
+    const { cache, logger, chatSink, analytics, bot, handlers } = deps;
+    const ai_fallback = deps.ai;
     const channelId = channel.id;
     const repositories = deps.repositories(channelId);
 
     const channelLogger = logger.child({ channelId, login: channel.twitchLogin });
 
-    const commands = new CommandManager({
-        channelId,
-        repository: repositories.commands,
-        cache,
-        logger: channelLogger,
-        ...(handlers ? { handlers } : {})
-    });
-    const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
     const settings = new SettingsService({
         channelId,
         repository: repositories.settings,
         cache,
         logger: channelLogger
     });
+
+    const commands = new CommandManager({
+        channelId,
+        repository: repositories.commands,
+        cache,
+        logger: channelLogger,
+        // The AI toggle is always available; a channel-specific registry adds
+        // to it rather than replacing it.
+        handlers: { ...createAiHandlers({ settings, logger: channelLogger }), ...(handlers ?? {}) }
+    });
+    const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
+
+    /*
+     * The real AI when a client and a database are available, the injected stub
+     * otherwise. Everything per-channel - the budget, the history, the settings -
+     * is constructed here around the single shared client, which is what keeps
+     * one channel's usage from touching another's.
+     */
+    const ai = (deps.claude && deps.db)
+        ? new ChannelAiService({
+            channelId,
+            client: deps.claude,
+            settings,
+            history: new ChatHistoryRepository(deps.db, channelId),
+            rateLimiter: new AiRateLimiter({ db: deps.db, channelId }),
+            logger: channelLogger,
+            // Stream-scoped buckets arrive with the analytics pipeline; until
+            // then everything shares the offline bucket, which the limiter
+            // handles explicitly.
+            currentStreamId: () => null,
+            broadcasterLogin: channel.twitchLogin
+        })
+        : ai_fallback;
 
     const pipeline = new ChatPipeline({
         channelId,
@@ -109,6 +150,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         ai,
         analytics,
         logger: channelLogger,
+        ...(repositories.history ? { history: repositories.history } : {}),
         ...(deps.bus ? { bus: deps.bus } : {}),
         // The pipeline knows only "say this"; where it goes is the sink's problem.
         sendMessage: async (text: string) => {

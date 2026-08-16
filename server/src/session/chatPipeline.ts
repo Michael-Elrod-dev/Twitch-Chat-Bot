@@ -8,6 +8,7 @@ import type { AiService } from '../services/aiService.js';
 import type { AnalyticsSink, InteractionType } from '../services/analytics.js';
 import type { ChatterRoles } from '../domain/permissions.js';
 import type { EventBus } from '../live/eventBus.js';
+import type { ChatHistoryRepository } from '../db/repositories/chatHistoryRepository.js';
 import { NULL_EVENT_BUS } from '../live/eventBus.js';
 
 /** What the pipeline decided to do with a message. Returned for tests and tracing. */
@@ -37,6 +38,13 @@ export interface ChatPipelineOptions {
      * working unchanged.
      */
     bus?: EventBus;
+    /**
+     * Chat persistence for AI context. Omitted means no history is kept — the
+     * AI then works from stream context alone.
+     */
+    history?: ChatHistoryRepository;
+    /** Buckets history and rate limits per stream. */
+    currentStreamId?: () => string | null;
 }
 
 /**
@@ -93,6 +101,10 @@ export class ChatPipeline {
         // allowed to write them (P1-1: the poll path must not).
         await this.recordRoles(event, roles);
 
+        // Persisted AFTER the roles upsert, never before: chat_messages
+        // references viewers with RESTRICT, so the viewer has to exist first.
+        await this.recordHistory(event);
+
         const text = event.text.trim();
 
         // A command is a command even when it names the bot. Phase 0 WP-6 task 5:
@@ -115,14 +127,21 @@ export class ChatPipeline {
             // Detection only in this package; the model call arrives with the
             // AI domain. The enabled check still runs, and still fails closed.
             if (await o.settings.isAiEnabled()) {
-                await o.ai.handleTextRequest({
+                const result = await o.ai.handleTextRequest({
                     channelId: o.channelId,
                     prompt,
                     chatter: {
                         twitchUserId: event.chatter.twitchUserId,
                         displayName: event.chatter.displayName
-                    }
+                    },
+                    roles
                 });
+
+                // A refusal still speaks: the rate-limit notice and the
+                // fallback both arrive as `message`, and silence would look
+                // like the bot being broken rather than being out of budget.
+                const reply = result.ok ? result.response : result.message;
+                if (reply) await o.sendMessage(reply);
             }
             await this.record(event, 'message');
             return { action: 'ai', prompt };
@@ -203,6 +222,31 @@ export class ChatPipeline {
         prompt = prompt.replace(/@/g, ' ').replace(/\s+/g, ' ').trim();
 
         return prompt === '' ? null : prompt;
+    }
+
+    /**
+     * Records the message for AI context.
+     *
+     * Best-effort by design: bookkeeping must never stop the bot answering,
+     * which is the same rule the roles write follows.
+     */
+    private async recordHistory(event: ChatMessageEvent): Promise<void> {
+        const history = this.options.history;
+        if (!history) return;
+
+        try {
+            await history.record({
+                twitchUserId: event.chatter.twitchUserId,
+                content: event.text,
+                messageType: event.text.trim().startsWith('!') ? 'command' : 'message',
+                streamId: this.options.currentStreamId?.() ?? null
+            });
+        } catch (err) {
+            this.options.logger.warn(
+                { channelId: this.options.channelId, err: (err as Error).message },
+                'Could not record chat history'
+            );
+        }
     }
 
     private publish(event: ChatMessageEvent, outcome: PipelineOutcome): void {

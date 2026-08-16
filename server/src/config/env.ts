@@ -115,7 +115,21 @@ const envSchema = z.object({
      * to ration normal use.
      */
     API_RATE_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
-    API_RATE_MAX: z.coerce.number().int().min(1).max(100_000).default(300)
+    API_RATE_MAX: z.coerce.number().int().min(1).max(100_000).default(300),
+
+    /**
+     * Claude credentials.
+     *
+     * A SERVER secret: one key for the whole deployment, never per-channel,
+     * never stored in the database, never logged. A channel connecting to the
+     * bot does not bring its own and cannot see ours.
+     *
+     * Absent means the AI path answers with each channel's fallback message,
+     * exactly as a real outage does - the server still boots and everything
+     * else keeps working.
+     */
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    AI_MODEL: z.string().min(1).default('claude-sonnet-5')
 });
 
 export type Env = z.infer<typeof envSchema>;
