@@ -37,11 +37,28 @@ const WAIFU_SEED_MIN = 1;
 const WAIFU_SEED_MAX = 100_000;
 
 /**
+ * The current salt era.
+ *
+ * Every image association is `hash(salt + ':' + username)`, so bumping the salt
+ * reassigns everyone at once and nothing else has to change. That is the whole
+ * mechanism: **a wipe is a salt bump**, and it takes effect on the next deploy.
+ *
+ * Within an era the mapping is fixed — same person, same picture, for as long
+ * as the salt holds — because "yours is yours" is the point of the command.
+ * Across eras it deliberately is not.
+ *
+ * Overridable with `IMAGE_SEED_SALT` so a reset does not require a code change;
+ * this constant is the default and is bumped when the default should move.
+ */
+export const DEFAULT_IMAGE_SEED_SALT = '2026-08-16a';
+
+/**
  * Phase 0's hash, kept exactly.
  *
- * Changing it would reassign everyone's picture, and the whole point of the
- * command is that yours is yours. `Math.abs` on the result is load-bearing:
- * the shift keeps it a signed 32-bit int, so it can be negative.
+ * The salt is mixed into its INPUT rather than changing the algorithm: the
+ * function's distribution is known-good, and a bump should reshuffle the
+ * mapping without altering how it is computed. `Math.abs` on the result is
+ * load-bearing — the shift keeps it a signed 32-bit int, so it can be negative.
  */
 function hashCode(value: string): number {
     let hash = 0;
@@ -52,9 +69,12 @@ function hashCode(value: string): number {
     return hash;
 }
 
-function seedFor(username: string, min: number, max: number): string {
+export function seedFor(username: string, min: number, max: number, salt: string): string {
     const range = max - min;
-    return String(min + (Math.abs(hashCode(username)) % range)).padStart(5, '0');
+    // Lowercased so `@Name` and `@name` are one person, as the lookups elsewhere
+    // already treat them.
+    const keyed = `${salt}:${username.toLowerCase()}`;
+    return String(min + (Math.abs(hashCode(keyed)) % range)).padStart(5, '0');
 }
 
 /** `!fursona @name`, or the caller. */
@@ -63,14 +83,21 @@ function targetOf(context: HandlerContext): string {
     return requested === '' ? context.chatter.displayName : requested;
 }
 
-export function createThirdPartyHandlers(): HandlerRegistry {
+export interface ThirdPartyHandlerDeps {
+    /** The salt era. Defaults to the constant above. */
+    salt?: string;
+}
+
+export function createThirdPartyHandlers(deps: ThirdPartyHandlerDeps = {}): HandlerRegistry {
+    const salt = deps.salt ?? DEFAULT_IMAGE_SEED_SALT;
+
     return {
         /* Handler names match the rows already in the owner's database. */
         fursona: {
             level: 'everyone',
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = targetOf(context);
-                const seed = seedFor(target, FURSONA_SEED_MIN, FURSONA_SEED_MAX);
+                const seed = seedFor(target, FURSONA_SEED_MIN, FURSONA_SEED_MAX, salt);
 
                 await context.reply(
                     `@${target}, here is your fursona `
@@ -84,7 +111,7 @@ export function createThirdPartyHandlers(): HandlerRegistry {
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = targetOf(context);
                 // Not padded: TWDNE's filenames are example-1, not example-00001.
-                const seed = Number(seedFor(target, WAIFU_SEED_MIN, WAIFU_SEED_MAX));
+                const seed = Number(seedFor(target, WAIFU_SEED_MIN, WAIFU_SEED_MAX, salt));
 
                 await context.reply(
                     `@${target}, here is your waifu `

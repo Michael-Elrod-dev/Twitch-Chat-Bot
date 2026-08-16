@@ -5,7 +5,7 @@ import { ChannelRepository } from '../db/repositories/channelRepository.js';
 import { ChannelRoleRepository } from '../db/repositories/channelRoleRepository.js';
 import { AnalyticsRepository } from '../db/repositories/analyticsRepository.js';
 import { createStatsHandlers } from './statsHandlers.js';
-import { createThirdPartyHandlers } from './thirdPartyHandlers.js';
+import { createThirdPartyHandlers, seedFor, DEFAULT_IMAGE_SEED_SALT } from './thirdPartyHandlers.js';
 import type { HandlerContext } from './handlers.js';
 import { pino } from 'pino';
 import { buildChannelSession, type ChannelDependencies } from '../bootstrap.js';
@@ -42,9 +42,10 @@ function contextFor(args: string[], login: string, replies: string[]): HandlerCo
 describe('!fursona and !waifu', () => {
     const handlers = createThirdPartyHandlers();
 
-    const run = async (name: string, args: string[], login: string): Promise<string> => {
+    const run = async (name: string, args: string[], login: string, salt?: string): Promise<string> => {
         const replies: string[] = [];
-        await handlers[name]?.handler(contextFor(args, login, replies));
+        const registry = salt === undefined ? handlers : createThirdPartyHandlers({ salt });
+        await registry[name]?.handler(contextFor(args, login, replies));
         return replies[0] ?? '';
     };
 
@@ -81,6 +82,65 @@ describe('!fursona and !waifu', () => {
 
         expect(reply).not.toContain('arfa.dev');
         expect(reply).toMatch(/https:\/\/www\.thiswaifudoesnotexist\.net\/example-\d+\.jpg/);
+    });
+
+    describe('salt eras', () => {
+        /*
+         * The owner asked for a reset: everyone's picture reassigned, once.
+         * Rather than a one-off shuffle, the assignment is keyed on a salt, so
+         * a wipe is a salt bump and the next one costs an env change.
+         */
+        it('gives the same person a different picture in a different era', async () => {
+            const before = await run('waifu', [], 'someviewer', 'era-one');
+            const after = await run('waifu', [], 'someviewer', 'era-two');
+
+            expect(before).not.toBe(after);
+        });
+
+        it('resets fursona and waifu together', async () => {
+            // One salt covers both commands, so a wipe is genuinely a wipe.
+            expect(await run('fursona', [], 'someviewer', 'era-one'))
+                .not.toBe(await run('fursona', [], 'someviewer', 'era-two'));
+        });
+
+        it('holds the mapping steady within one era', async () => {
+            // "Yours is yours" has to survive every restart until a bump.
+            const first = await run('waifu', [], 'someviewer', 'era-one');
+            const second = await run('waifu', [], 'someviewer', 'era-one');
+
+            expect(first).toBe(second);
+        });
+
+        it('moves everyone, not a lucky few', async () => {
+            /*
+             * A salt that only reshuffled some names would leave viewers
+             * wondering why theirs did not change. Checked across a spread of
+             * logins rather than one, which a single sample could pass by luck.
+             */
+            const names = ['aaa', 'bob', 'charlie', 'dee', 'eve', 'frank', 'grace', 'heidi'];
+            const moved = names.filter((n) =>
+                seedFor(n, 1, 100_000, 'era-one') !== seedFor(n, 1, 100_000, 'era-two'));
+
+            expect(moved).toEqual(names);
+        });
+
+        it('resets against the era that shipped before the salt existed', async () => {
+            // The pre-salt seed was hash(username) with no prefix at all; the
+            // reset is only real if the new default moves off it.
+            const preSalt = seedFor('someviewer', 1, 100_000, '').replace(/^:/, '');
+            const current = seedFor('someviewer', 1, 100_000, DEFAULT_IMAGE_SEED_SALT);
+
+            expect(current).not.toBe(preSalt);
+        });
+
+        it('treats @Name and @name as the same person', async () => {
+            // The IMAGE must match; the greeting deliberately echoes back the
+            // capitalisation the viewer typed.
+            const url = (reply: string) => /(https:\S+)/.exec(reply)?.[1];
+
+            expect(url(await run('waifu', ['@SomeViewer'], 'caller')))
+                .toBe(url(await run('waifu', ['@someviewer'], 'caller')));
+        });
     });
 
     it('keeps the waifu seed inside the range the host serves', async () => {

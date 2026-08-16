@@ -790,6 +790,60 @@ settings screen, so a streamer who wants the old running count can have it.
 `(1/5)` prefix in four places; the format deliberately changed, so each now asserts the new
 contract — including that a first request is silent, which is the point of the redesign.
 
+### Completion report — P1-WP4.6 image-seed salt (engineer, 2026-08-16)
+
+**Status:** complete and deployed. Server **772/772** (45 files); lint 0; typecheck clean.
+
+Image assignment is now `hash(salt + ':' + username.toLowerCase())`. **A wipe is a salt
+bump** — no code change, no one-off shuffle script, and the next reset costs an env edit.
+Within an era the mapping is fixed, because "yours is yours" is the point of the command;
+across eras it deliberately is not.
+
+- **Default:** `DEFAULT_IMAGE_SEED_SALT = '2026-08-16a'` — a fresh era, so every prior
+  association is reset by this deploy.
+- **Override:** `IMAGE_SEED_SALT`, so a future wipe needs no release.
+- **Salt mixed into the hash's INPUT**, not into the algorithm: the distribution is
+  known-good and a bump should reshuffle the mapping without changing how it is computed.
+- **Lowercased**, so `@Name` and `@name` are one person — matching how every other lookup
+  in the codebase already treats logins.
+
+**One salt covers both commands, so `!fursona` resets too.** The directive said "the
+username hash" and "every prior image association resets", and the two commands share one
+hash — so this is read as intended. Flagging it explicitly because it is a viewer-visible
+change beyond the `!waifu` decision that prompted it: if only waifu was meant to move,
+splitting into two salts is a small change and I will do it on request.
+
+#### Live confirmation
+
+Computed against the shipped derivation for the owner's login, then fetched:
+
+```
+aimosthadme
+  waifu   before  example-46439.jpg      after  example-39597.jpg
+  fursona before  seed46439.jpg          after  seed39597.jpg
+
+  new waifu URL    HTTP 200  image/jpeg  135,460 bytes
+  new fursona URL  HTTP 200  image/jpeg  112,668 bytes
+```
+
+Both associations moved and both new URLs serve real images. The deployed
+`thirdPartyHandlers.ts` on the box carries `2026-08-16a`; `/healthz` green.
+
+#### Reintroduction validation
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 33 | Salt ignored — no reset at all | four era tests |
+| 34 | Default salt reverted to the pre-salt era | pre-salt-era test |
+| 35 | Seed randomised — determinism within an era lost | stability tests |
+
+The "moves everyone, not a lucky few" test checks eight logins rather than one: a single
+sample could pass on luck while most viewers kept their picture.
+
+**One test honesty item:** the case-insensitivity test first compared whole replies and
+failed — correctly. The greeting deliberately echoes the capitalisation the viewer typed;
+only the *image* must match. Narrowed to compare the URL, which is the actual claim.
+
 ---
 
 ## P1-LR — Legacy Retirement  [STATUS: ISSUED 2026-08-16]

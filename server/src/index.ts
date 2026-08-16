@@ -241,6 +241,7 @@ async function main(): Promise<void> {
         db: database.db,
         cipher,
         counterThreshold: env.AI_COUNTER_THRESHOLD,
+        ...(env.IMAGE_SEED_SALT === undefined ? {} : { imageSeedSalt: env.IMAGE_SEED_SALT }),
         ...(helix ? { helix } : {}),
         ...(twitchConfigured ? {
             twitchOAuth: {

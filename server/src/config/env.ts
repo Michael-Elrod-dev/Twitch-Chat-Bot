@@ -140,6 +140,15 @@ const envSchema = z.object({
     AI_COUNTER_THRESHOLD: z.coerce.number().int().min(0).default(3),
 
     /**
+     * Salt era for `!fursona` / `!waifu` image assignments.
+     *
+     * Bumping it reassigns everyone's picture on the next deploy; within an era
+     * the mapping is fixed. Omit to use the default compiled in beside the
+     * handlers.
+     */
+    IMAGE_SEED_SALT: z.string().min(1).optional(),
+
+    /**
      * Spotify application credentials.
      *
      * A server secret like the others: one application, per-channel user

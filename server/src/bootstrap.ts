@@ -125,6 +125,8 @@ export interface ChannelDependencies {
     cipher?: TokenCipher;
     /** AI_COUNTER_THRESHOLD — how few requests left before the viewer is told. */
     counterThreshold?: number;
+    /** IMAGE_SEED_SALT — bumping it resets every fursona/waifu association. */
+    imageSeedSalt?: string;
 }
 
 export function buildChannelSession(deps: ChannelDependencies, channel: ChannelRecord): ChannelSession {
@@ -329,7 +331,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                 })
                 : {}),
             // No database and no network: these only need a username.
-            ...createThirdPartyHandlers(),
+            ...createThirdPartyHandlers(deps.imageSeedSalt === undefined ? {} : { salt: deps.imageSeedSalt }),
             ...createQuoteHandlers({
                 quotes: new QuoteManager({ repository: repositories.quotes }),
                 commands: () => managerRef.current as CommandManager,
