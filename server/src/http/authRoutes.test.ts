@@ -2,13 +2,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { pino } from 'pino';
 import { createApp } from './app.js';
+import { Router } from 'express';
 import { createAuthRouter, AUTH_CALLBACK_PATH } from './authRoutes.js';
-import { createApiRouter } from './apiRoutes.js';
+import { createResourceRouter } from './api/resources.js';
+import {
+    createRequireJwt,
+    createRequireChannelExceptMe,
+    requireAnyCredential
+} from './api/middleware.js';
 import { createStateStore, type StateStore } from '../auth/stateStore.js';
 import { TwitchOAuthClient, CHANNEL_SCOPES, BOT_SCOPES } from '../twitch/oauth.js';
 import type { OnboardingService } from '../auth/onboarding.js';
 import type { AppSessionRepository, AppSession } from '../db/repositories/appSessionRepository.js';
 import type { ChannelRepository } from '../db/repositories/channelRepository.js';
+import type { ChannelRepositories } from '../bootstrap.js';
 import type { CacheManager } from '../cache/cacheManager.js';
 import { signJwt, hashRefreshToken } from '../auth/jwt.js';
 
@@ -109,9 +116,17 @@ function buildHarness(overrides: {
         revoke: async (token: string) => sessions.delete(hashRefreshToken(token))
     } as unknown as AppSessionRepository;
 
+    // A full ChannelRecord: `enabled` is part of the shape `/me` reports, and
+    // a fixture missing it is how the old stub's answer drifted from the real
+    // one without anything noticing.
     const channels = {
         findByBroadcasterId: async (id: string) =>
-            (id === '1001' ? { id: 'c1', twitchLogin: 'aimosthadme', status: 'active' } : null)
+            (id === '1001'
+                ? {
+                    id: 'c1', twitchBroadcasterId: '1001', twitchLogin: 'aimosthadme',
+                    status: 'active', enabled: true
+                }
+                : null)
     } as unknown as ChannelRepository;
 
     const authRouter = createAuthRouter({
@@ -132,11 +147,32 @@ function buildHarness(overrides: {
         }
     });
 
-    const apiRouter = createApiRouter({
+    /*
+     * The REAL API router, not a stand-in.
+     *
+     * These tests are about the auth chain — a forged token, an expired one, a
+     * server with no signing key — but the thing the chain is protecting has to
+     * be the thing production actually serves, or the test proves the guard on
+     * a door nobody uses. The WP6 stub that used to sit here had already
+     * drifted from `/me`'s real shape by the time it was removed.
+     */
+    const apiRouter = Router();
+    apiRouter.use('/api/v1', createRequireJwt(
+        'jwtSecret' in overrides ? overrides.jwtSecret : JWT_SECRET,
+        logger
+    ));
+    apiRouter.use('/api/v1', requireAnyCredential);
+    apiRouter.use(createRequireChannelExceptMe(channels));
+    apiRouter.use(createResourceRouter({
         logger,
-        jwtSecret: 'jwtSecret' in overrides ? overrides.jwtSecret : JWT_SECRET,
-        channels
-    });
+        repositories: () => ({
+            settings: { get: async () => null }
+        }) as unknown as ChannelRepositories,
+        channels,
+        apiKeys: {} as never,
+        analytics: () => ({}) as never,
+        songs: () => ({}) as never
+    }));
 
     return {
         app: createApp({ logger, version: 'test', routers: [authRouter, apiRouter] }),

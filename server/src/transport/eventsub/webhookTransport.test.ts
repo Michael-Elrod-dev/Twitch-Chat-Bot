@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import { pino } from 'pino';
 import type { TransportEvent } from '@almosthadai/shared';
@@ -173,5 +173,146 @@ describe('EventSubWebhookTransport', () => {
 
             expect(transport.stats.failed).toBe(0);
         });
+    });
+});
+
+/**
+ * The background convergence pass.
+ *
+ * The hole this closes, stated once: reconciliation is otherwise event-driven,
+ * and `reconcile()` isolates per-subscription failures rather than throwing. So
+ * a channel registered while Twitch is refusing creates ends up with a running
+ * session and no subscriptions — on, and silent — with nothing to retry it
+ * until the next membership change or a restart. The desktop master switch made
+ * that reachable by the broadcaster at will, which is what turned it from a
+ * theoretical gap into a scheduled task.
+ */
+describe('periodic subscription reconciliation', () => {
+    const INTERVAL = 60_000;
+
+    const build = (intervalMs: number, sink?: string[]): {
+        transport: EventSubWebhookTransport;
+        helix: FakeHelixClient;
+    } => {
+        const helix = new FakeHelixClient();
+        const log = sink
+            ? pino({ level: 'info' }, { write: (line: string) => { sink.push(JSON.parse(line).msg as string); } })
+            : logger;
+
+        return {
+            helix,
+            transport: new EventSubWebhookTransport({
+                secret: SECRET,
+                logger: log,
+                maxSkewMs: 600_000,
+                reconciler: new SubscriptionReconciler({
+                    client: helix, logger: log, callbackUrl: 'https://x.test/eventsub/webhook',
+                    secret: SECRET, botUserId: 'bot-1'
+                }),
+                dryRunSubscriptions: false,
+                reconcileIntervalMs: intervalMs
+            })
+        };
+    };
+
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('heals a channel that was enabled while every create failed', async () => {
+        const { transport, helix } = build(INTERVAL);
+        await transport.start(async () => undefined);
+
+        // Twitch refuses all four creates - a rate limit, or a transient 5xx.
+        helix.failCreate = 4;
+        await transport.subscribe('1001');
+
+        // The damage: the transport believes it wants this broadcaster, the
+        // session is running, and Twitch has nothing to deliver against.
+        expect(transport.subscribedBroadcasters).toEqual(['1001']);
+        expect(await helix.listEventSubSubscriptions()).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(INTERVAL);
+
+        const live = await helix.listEventSubSubscriptions();
+        expect(live).toHaveLength(4);
+        expect(live.every((s) => s.condition['broadcaster_user_id'] === '1001')).toBe(true);
+
+        await transport.stop();
+    });
+
+    it('keeps converging across ticks when failures persist', async () => {
+        const { transport, helix } = build(INTERVAL);
+        await transport.start(async () => undefined);
+
+        // Enough failures to survive the subscribe AND the first tick.
+        helix.failCreate = 8;
+        await transport.subscribe('1001');
+
+        await vi.advanceTimersByTimeAsync(INTERVAL);
+        expect(await helix.listEventSubSubscriptions()).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(INTERVAL);
+        expect(await helix.listEventSubSubscriptions()).toHaveLength(4);
+
+        await transport.stop();
+    });
+
+    it('says nothing on a tick that changed nothing', async () => {
+        const lines: string[] = [];
+        const { transport } = build(INTERVAL, lines);
+        await transport.start(async () => undefined);
+        await transport.subscribe('1001');
+
+        lines.length = 0;
+        await vi.advanceTimersByTimeAsync(INTERVAL * 3);
+
+        // Three quiet ticks. A summary line every interval would be ~96 a day
+        // and would train a reader to skip the line that reports real drift.
+        expect(lines).toEqual([]);
+
+        await transport.stop();
+    });
+
+    it('does speak up when a tick finds drift', async () => {
+        const lines: string[] = [];
+        const { transport, helix } = build(INTERVAL, lines);
+        await transport.start(async () => undefined);
+
+        helix.failCreate = 4;
+        await transport.subscribe('1001');
+        lines.length = 0;
+
+        await vi.advanceTimersByTimeAsync(INTERVAL);
+
+        expect(lines).toContain('EventSub subscription reconciliation');
+        expect(lines).toContain('Created subscription');
+
+        await transport.stop();
+    });
+
+    it('stops ticking once the transport stops', async () => {
+        const { transport, helix } = build(INTERVAL);
+        await transport.start(async () => undefined);
+        helix.failCreate = 4;
+        await transport.subscribe('1001');
+
+        await transport.stop();
+        await vi.advanceTimersByTimeAsync(INTERVAL * 5);
+
+        // A timer outliving its transport would reconcile for a server that is
+        // no longer serving anything.
+        expect(await helix.listEventSubSubscriptions()).toHaveLength(0);
+    });
+
+    it('is off when the interval is zero', async () => {
+        const { transport, helix } = build(0);
+        await transport.start(async () => undefined);
+        helix.failCreate = 4;
+        await transport.subscribe('1001');
+
+        await vi.advanceTimersByTimeAsync(60_000 * 60);
+
+        expect(await helix.listEventSubSubscriptions()).toHaveLength(0);
+        await transport.stop();
     });
 });

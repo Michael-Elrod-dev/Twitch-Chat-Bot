@@ -17,6 +17,22 @@ export interface WebhookTransportOptions {
     dryRunSubscriptions?: boolean;
     onRevocation?: (subscription: EventSubSubscriptionInfo) => void;
     maxQueueDepth?: number;
+    /**
+     * How often to reconcile subscriptions in the background. 0 disables it.
+     *
+     * Reconciliation is otherwise event-driven — it runs when a channel is
+     * registered or removed — which leaves a real hole: if the creates fail
+     * (Twitch rate limit, a transient 5xx), `reconcile()` isolates the failure
+     * per subscription and carries on, so the channel ends up enabled, with a
+     * running session, and no subscriptions. The bot looks on and answers
+     * nothing, and nothing retries until the next membership change or a
+     * restart. Since the desktop master switch made that path reachable by the
+     * broadcaster at will, "someday" stopped being an acceptable answer.
+     *
+     * It also converges drift nobody triggered: a revocation we missed, a
+     * subscription deleted by hand in the Twitch console.
+     */
+    reconcileIntervalMs?: number;
 }
 
 /**
@@ -41,10 +57,14 @@ export class EventSubWebhookTransport implements Transport {
     private started = false;
     private autoReconcile = true;
 
+    private readonly reconcileIntervalMs: number;
+    private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+
     constructor(options: WebhookTransportOptions) {
         this.logger = options.logger;
         this.reconciler = options.reconciler;
         this.dryRunSubscriptions = options.dryRunSubscriptions ?? true;
+        this.reconcileIntervalMs = options.reconcileIntervalMs ?? 0;
 
         this.queue = new IngestQueue<TransportEvent>({
             logger: options.logger,
@@ -83,16 +103,48 @@ export class EventSubWebhookTransport implements Transport {
         if (this.started) return;
         this.handler = handler;
         this.started = true;
+        this.startPeriodicReconcile();
         this.logger.info({ path: EVENTSUB_WEBHOOK_PATH }, 'EventSub webhook transport started');
     }
 
     /** Drains before detaching: an acknowledged event must still be processed. */
     async stop(): Promise<void> {
         if (!this.started) return;
+        this.stopPeriodicReconcile();
         await this.queue.close();
         this.handler = null;
         this.started = false;
         this.logger.info('EventSub webhook transport stopped');
+    }
+
+    /**
+     * The background convergence pass.
+     *
+     * Lives in the transport's own lifecycle so it cannot outlive the thing it
+     * reconciles for, and is `unref`'d so a pending tick never holds the
+     * process open during shutdown.
+     */
+    private startPeriodicReconcile(): void {
+        if (this.reconcileIntervalMs <= 0 || !this.reconciler) return;
+
+        this.reconcileTimer = setInterval(() => {
+            // Deliberately not awaited: a tick that runs long must not stack up
+            // behind the next one, and reconcile() already isolates its own
+            // failures rather than throwing.
+            void this.reconcile({ quietWhenUnchanged: true });
+        }, this.reconcileIntervalMs);
+
+        this.reconcileTimer.unref?.();
+        this.logger.info(
+            { intervalMs: this.reconcileIntervalMs },
+            'Periodic subscription reconciliation scheduled'
+        );
+    }
+
+    private stopPeriodicReconcile(): void {
+        if (!this.reconcileTimer) return;
+        clearInterval(this.reconcileTimer);
+        this.reconcileTimer = null;
     }
 
     /**
@@ -119,11 +171,15 @@ export class EventSubWebhookTransport implements Transport {
     }
 
     /** Always reconciles, regardless of the toggle: boot calls this once at the end. */
-    async reconcile(): Promise<void> {
+    async reconcile(options: { quietWhenUnchanged?: boolean } = {}): Promise<void> {
         if (!this.reconciler) return;
 
         try {
-            await this.reconciler.reconcile([...this.broadcasterIds], this.dryRunSubscriptions);
+            await this.reconciler.reconcile(
+                [...this.broadcasterIds],
+                this.dryRunSubscriptions,
+                options
+            );
         } catch (err) {
             // Reconciliation is convergent: a failure now is retried by the next
             // run, so it must never propagate into channel registration.

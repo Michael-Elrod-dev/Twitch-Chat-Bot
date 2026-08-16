@@ -108,6 +108,17 @@ const envSchema = z.object({
     EVENTSUB_CREATE_SPACING_MS: z.coerce.number().int().min(0).max(60_000).default(750),
 
     /**
+     * How often subscriptions are reconciled in the background. 0 disables it.
+     *
+     * Reconciliation is otherwise only event-driven, which leaves the enable
+     * path with no retry: if the creates fail, the channel is left running with
+     * no subscriptions — on, and silent — until something else changes. Fifteen
+     * minutes is slow enough to be free (one list call per tick) and fast
+     * enough that nobody sits through a broken bot for long.
+     */
+    EVENTSUB_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(0).max(86_400_000).default(900_000),
+
+    /**
      * API rate limit, per authenticated principal.
      *
      * Generous by design: this is a single-user desktop app talking to its own

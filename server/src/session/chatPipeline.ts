@@ -258,7 +258,12 @@ export class ChatPipeline {
             at: new Date().toISOString(),
             chatter: { login: event.chatter.login, displayName: event.chatter.displayName },
             text: event.text,
-            outcome: outcome.action
+            outcome: outcome.action,
+            // Taken from the reason the pipeline actually recorded, not
+            // re-derived from the ids: `skipped` covers reward-attached viewer
+            // messages too, and marking one of those as the bot's would put the
+            // bot's wash on a viewer's line.
+            fromBot: outcome.action === 'skipped' && outcome.reason === 'own_message'
         });
     }
 

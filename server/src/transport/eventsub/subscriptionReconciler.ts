@@ -176,22 +176,33 @@ export class SubscriptionReconciler {
      * app access token: the diff is visible in the logs from day one, and the
      * day it goes live it is executing a plan that has already been observed.
      */
-    async reconcile(broadcasterIds: string[], dryRun = false): Promise<ReconcileResult> {
+    async reconcile(
+        broadcasterIds: string[],
+        dryRun = false,
+        // The background pass runs on a timer whether or not anything has
+        // drifted. Logging a summary every tick would write ~96 identical lines
+        // a day and train anyone reading the logs to skip them — which is
+        // exactly the wrong reflex for the line that reports drift.
+        options: { quietWhenUnchanged?: boolean } = {}
+    ): Promise<ReconcileResult> {
         const { client, logger } = this.options;
 
         const actual = await client.listEventSubSubscriptions();
         const plan = this.plan(broadcasterIds, actual);
 
-        logger.info(
-            {
-                dryRun,
-                broadcasters: new Set(broadcasterIds).size,
-                create: plan.create.length,
-                remove: plan.remove.length,
-                keep: plan.keep.length
-            },
-            'EventSub subscription reconciliation'
-        );
+        const unchanged = plan.create.length === 0 && plan.remove.length === 0;
+        if (!(options.quietWhenUnchanged && unchanged)) {
+            logger.info(
+                {
+                    dryRun,
+                    broadcasters: new Set(broadcasterIds).size,
+                    create: plan.create.length,
+                    remove: plan.remove.length,
+                    keep: plan.keep.length
+                },
+                'EventSub subscription reconciliation'
+            );
+        }
 
         if (dryRun) {
             for (const input of plan.create) {

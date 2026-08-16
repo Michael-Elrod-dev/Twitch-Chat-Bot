@@ -205,6 +205,7 @@ async function main(): Promise<void> {
         maxSkewMs: env.EVENTSUB_MAX_SKEW_SECONDS * 1_000,
         reconciler,
         dryRunSubscriptions,
+        reconcileIntervalMs: env.EVENTSUB_RECONCILE_INTERVAL_MS,
         // Returns immediately: the webhook has already answered Twitch and the
         // recovery must not be able to delay that.
         onRevocation: (subscription) => revocationRecovery.handle(subscription)

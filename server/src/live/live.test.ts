@@ -183,8 +183,12 @@ describeDb('realtime feed', () => {
         return collector;
     };
 
-    const deliver = async (broadcasterId: string, text: string): Promise<void> => {
-        const delivery = chatMessageDelivery(SECRET, { broadcasterUserId: broadcasterId, text });
+    const deliver = async (broadcasterId: string, text: string, chatterUserId?: string): Promise<void> => {
+        const delivery = chatMessageDelivery(SECRET, {
+            broadcasterUserId: broadcasterId,
+            text,
+            ...(chatterUserId === undefined ? {} : { chatterUserId })
+        });
         await request(httpServer).post(EVENTSUB_WEBHOOK_PATH).set(delivery.headers).send(delivery.body).expect(204);
         await transport.drain();
     };
@@ -215,6 +219,57 @@ describeDb('realtime feed', () => {
             await deliver(alpha.broadcasterId, 'just chatting');
 
             expect(await client.waitFor('chat.message')).toMatchObject({ outcome: 'none' });
+        });
+
+        it('marks the bot own reply so the UI can wash that row', async () => {
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            // The bot's replies come back to us as ordinary chat deliveries.
+            await deliver(alpha.broadcasterId, 'ALPHA hello', BOT_ID);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                fromBot: true,
+                outcome: 'skipped'
+            });
+        });
+
+        it('does not mark a viewer line as the bot', async () => {
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliver(alpha.broadcasterId, '!hello');
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                fromBot: false,
+                outcome: 'command'
+            });
+        });
+
+        it('does not mark a reward-attached viewer line as the bot', async () => {
+            /*
+             * The distinction `fromBot` exists for. A reward-attached message
+             * is `skipped` too — it arrives again as a redemption, so the chat
+             * path declines it — but it is a VIEWER's line. Deriving the marker
+             * from `skipped` alone would put the bot's wash on it and tell the
+             * broadcaster their viewer was the bot.
+             */
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            const delivery = chatMessageDelivery(SECRET, {
+                broadcasterUserId: alpha.broadcasterId,
+                text: 'a song please',
+                rewardId: 'reward-song-request'
+            });
+            await request(httpServer).post(EVENTSUB_WEBHOOK_PATH)
+                .set(delivery.headers).send(delivery.body).expect(204);
+            await transport.drain();
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                outcome: 'skipped',
+                fromBot: false
+            });
         });
 
         it('greets a new client immediately rather than making it wait for chat', async () => {
@@ -255,6 +310,56 @@ describeDb('realtime feed', () => {
             expect(betaClient.of('chat.message')).toHaveLength(5);
             for (const e of alphaClient.of('chat.message')) expect(e.channelId).toBe(alpha.id);
             for (const e of betaClient.of('chat.message')) expect(e.channelId).toBe(beta.id);
+        });
+
+        /**
+         * THE ENRICHMENT CENTREPIECE.
+         *
+         * The two channels are given deliberately DIFFERENT fates in the same
+         * moment, so a leak is visible in the payload rather than only in the
+         * count: alpha runs a command, beta just chats. If an event crossed,
+         * beta's dashboard would put a `CMD` chip on a line its viewer never
+         * sent — a wrong story about someone else's channel, which is worse
+         * than a missing line.
+         */
+        it('never carries one channel outcome onto another channel feed', async () => {
+            const alphaClient = await connect(alpha.token);
+            const betaClient = await connect(beta.token);
+            await alphaClient.waitFor('hello');
+            await betaClient.waitFor('hello');
+
+            await deliver(alpha.broadcasterId, '!hello');
+            await deliver(beta.broadcasterId, 'just chatting');
+            await new Promise((r) => setTimeout(r, 200));
+
+            const alphaEvents = alphaClient.of('chat.message');
+            const betaEvents = betaClient.of('chat.message');
+
+            expect(alphaEvents).toHaveLength(1);
+            expect(betaEvents).toHaveLength(1);
+            expect(alphaEvents[0]).toMatchObject({ channelId: alpha.id, outcome: 'command' });
+            expect(betaEvents[0]).toMatchObject({ channelId: beta.id, outcome: 'none' });
+
+            // Stated as its own assertion because it is the actual failure
+            // mode: not "beta got extra events" but "beta got alpha's verdict".
+            expect(betaEvents.some((e) => 'outcome' in e && e.outcome === 'command')).toBe(false);
+            expect(alphaEvents.some((e) => 'outcome' in e && e.outcome === 'none')).toBe(false);
+        });
+
+        it('never carries one channel bot-reply marker onto another feed', async () => {
+            const alphaClient = await connect(alpha.token);
+            const betaClient = await connect(beta.token);
+            await alphaClient.waitFor('hello');
+            await betaClient.waitFor('hello');
+
+            await deliver(alpha.broadcasterId, 'ALPHA hello', BOT_ID);
+            await deliver(beta.broadcasterId, 'just chatting');
+            await new Promise((r) => setTimeout(r, 200));
+
+            const betaEvents = betaClient.of('chat.message');
+            expect(betaEvents).toHaveLength(1);
+            // A leaked wash would tell beta's broadcaster their viewer is the bot.
+            expect(betaEvents.some((e) => 'fromBot' in e && e.fromBot === true)).toBe(false);
         });
 
         it('delivers to every socket a channel has open', async () => {

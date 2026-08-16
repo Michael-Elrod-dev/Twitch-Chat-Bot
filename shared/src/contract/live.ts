@@ -17,8 +17,28 @@ export interface LiveChatMessage {
     at: string;
     chatter: { login: string; displayName: string };
     text: string;
-    /** What the pipeline decided, so the UI can show why the bot did or did not answer. */
+    /**
+     * What the pipeline decided, so the UI can show why the bot did or did not
+     * answer. Drives the outcome chip: `command` → CMD, `emote` → EMOTE,
+     * `ai` → AI; `none` and `skipped` render no chip at all.
+     *
+     * `skipped` is retained rather than folded into `none` because they are
+     * different facts — `none` means nothing matched, `skipped` means the
+     * pipeline deliberately declined (the bot's own message, or one already
+     * arriving as a redemption). The UI treats them the same today; the log
+     * and any future debugging surface should not have to guess.
+     */
     outcome: 'command' | 'emote' | 'ai' | 'none' | 'skipped';
+    /**
+     * True when this line is the bot's own message coming back to us.
+     *
+     * The bot's replies arrive as ordinary `channel.chat.message` deliveries,
+     * so the feed sees them like any other line. The design gives those rows a
+     * background wash, which needs a marker `outcome` cannot supply: `skipped`
+     * also covers reward-attached viewer messages, and washing one of those
+     * would tell the broadcaster their viewer was the bot.
+     */
+    fromBot: boolean;
 }
 
 export interface LiveSongQueueUpdated {
