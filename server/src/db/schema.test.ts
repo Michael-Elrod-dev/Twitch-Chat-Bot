@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
-import { createDb, type DbHandle } from './client.js';
+import type { DbHandle } from './client.js';
 import { runMigrations } from './migrate.js';
+import { connectTestDatabase } from './testing.js';
 
 /**
  * Schema constraint checks against a real Postgres.
@@ -19,9 +20,9 @@ describeDb('schema v2 against a real Postgres', () => {
     let sql: postgres.Sql;
 
     beforeAll(async () => {
-        handle = createDb({ DATABASE_URL: TEST_DATABASE_URL as string, DATABASE_POOL_MAX: 4 });
+        // Waits for a warming Postgres rather than failing on a cold stack.
+        handle = await connectTestDatabase(TEST_DATABASE_URL as string);
         sql = handle.sql;
-        await runMigrations(handle);
     }, 60_000);
 
     afterAll(async () => {

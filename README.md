@@ -76,6 +76,32 @@ the intended place to tune the bot.
 Twitch and Spotify credentials are **not** environment variables — they live in the
 `tokens` table in MySQL, which the bot reads at startup and updates as tokens rotate.
 
+### Environment — the Phase-1 server
+
+Separate from the legacy bot's variables above. Validated at boot by
+`server/src/config/env.ts`, which reports **every** problem at once and exits 78.
+
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | yes | Postgres connection string |
+| `REDIS_URL` | yes | Redis connection string |
+| `DATABASE_POOL_MAX` | no | Pool size, default 10 |
+| `PORT`, `LOG_LEVEL`, `NODE_ENV` | no | Default 3000 / `info` / `development` |
+| `PUBLIC_URL` | for webhooks | The public origin; **must be https** in production |
+| `TWITCH_EVENTSUB_SECRET` | **in production** | Webhook signing secret, 10–100 ASCII characters |
+| `EVENTSUB_MAX_SKEW_SECONDS` | no | Replay window, default 600 (Twitch's documented 10 minutes) |
+| `BOT_TWITCH_USER_ID` | no | Overrides `bot_identity` before onboarding exists |
+| `AI_TRIGGERS` | no | Comma-separated names the AI answers to; defaults to the bot's login |
+
+`TWITCH_EVENTSUB_SECRET` defaults to a placeholder so `docker compose up` needs no
+configuration, and the server **refuses to start on that placeholder when
+`NODE_ENV=production`** — it is committed and therefore public, so shipping it would
+let anyone forge a signed event. Production compose runs need a real one:
+
+```bash
+TWITCH_EVENTSUB_SECRET=... docker compose -f docker-compose.yml up -d
+```
+
 ### Notable knobs in `config.js`
 
 | Setting | Default | Meaning |
@@ -178,7 +204,73 @@ npm run test:server    # Vitest
 ```
 
 Schema and repository tests need a Postgres; they self-skip without
-`TEST_DATABASE_URL` and CI always supplies one.
+`TEST_DATABASE_URL` and CI always supplies one. They wait for a warming database
+rather than failing on a cold stack, so `docker compose up && npm run test:server`
+works without a pause in between.
+
+### Feeding the bot events locally
+
+Twitch delivers events by POSTing to a public HTTPS callback, which a laptop does
+not have. Rather than run a second transport for development, the same webhook
+endpoint is driven with correctly-signed synthetic deliveries:
+
+```bash
+npm run dev:event -w server -- --kind chat --broadcaster 1001 --text "!discord"
+```
+
+The response appears in the server log as a `CHAT SEND` line — but only for a
+channel the server is running, since it bootstraps from `channels` at boot. Two
+channels with deliberately colliding command names:
+
+```bash
+docker compose exec -T postgres psql -U almosthadai -d almosthadai <<'SQL'
+insert into channels (twitch_broadcaster_id, twitch_login) values ('1001','alpha'), ('2002','beta')
+  on conflict (twitch_broadcaster_id) do nothing;
+insert into commands (channel_id, name, response_text, user_level)
+select id, '!discord', 'ALPHA discord link', 'everyone' from channels where twitch_broadcaster_id='1001'
+union all select id, '!discord', 'BETA discord link', 'everyone' from channels where twitch_broadcaster_id='2002'
+union all select id, '!mods', 'beta mods only', 'mod' from channels where twitch_broadcaster_id='2002';
+SQL
+docker compose restart server
+```
+
+Then `--broadcaster 1001` and `--broadcaster 2002` with the same `!discord` produce
+different responses, and `!mods` in beta is refused without `--mod`.
+
+Other kinds:
+
+```bash
+npm run dev:event -w server -- --kind online  --broadcaster 1001
+npm run dev:event -w server -- --kind verify  --broadcaster 1001
+npm run dev:event -w server -- --kind revoke  --broadcaster 1001
+```
+
+Flags: `--url` (default `http://localhost:3000/eventsub/webhook`), `--secret`
+(default `$TWITCH_EVENTSUB_SECRET`, falling back to the development placeholder),
+`--chatter`, `--mod`.
+
+This signs with the same function the webhook verifies with, so it exercises the
+real HMAC path — a broken signature scheme fails here exactly as it would against
+Twitch.
+
+#### The Twitch CLI
+
+The [Twitch CLI](https://dev.twitch.tv/docs/cli/event-command) can forward signed
+mock events to a local address, and it is worth having:
+
+```bash
+twitch event trigger streamup -F http://localhost:3000/eventsub/webhook -s dev-only-eventsub-secret-change-me
+twitch event verify-subscription streamup -F http://localhost:3000/eventsub/webhook -s dev-only-eventsub-secret-change-me
+```
+
+It covers `stream.online` (`streamup`), `stream.offline` (`streamdown`),
+redemptions, and the challenge-response check — and `-r revoked` produces a
+revocation delivery.
+
+**It cannot trigger `channel.chat.message`**, which is the event nearly every
+feature depends on, so it complements the script above rather than replacing it.
+Either way there is only **one** ingest implementation: both paths POST to the
+same endpoint through the same signature check.
 
 ### CI
 
@@ -197,14 +289,13 @@ npx eslint src/ tests/
 
 ## Documentation
 
-- [`docs/BASELINE_REVIEW.md`](docs/BASELINE_REVIEW.md) — architectural review and
-  findings register
-- [`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) — the Phase 0 stabilisation plan
-  and its results
-- [`docs/MIGRATION_NOTES.md`](docs/MIGRATION_NOTES.md) — **read before deploying
-  against an existing database**
-- [`docs/SMOKE_TEST.md`](docs/SMOKE_TEST.md) — manual verification script
+- [`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) — the Phase 1 plan and its results
+- [`docs/PHASE1_DESIGN.md`](docs/PHASE1_DESIGN.md) — the client-server architecture
+- [`docs/PHASE1_EVENTSUB_FACTS.md`](docs/PHASE1_EVENTSUB_FACTS.md) — sourced EventSub
+  and auth facts the transport is built on
 - [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — pinning policy and the update flow
+- [`docs/archive/`](docs/archive) — Phase 0's baseline review, package log, migration
+  notes and smoke-test script
 
 ## Status
 

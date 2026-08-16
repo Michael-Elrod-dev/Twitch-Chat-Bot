@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadEnv, isProduction, ConfigError } from './env.js';
+import { loadEnv, isProduction, ConfigError, DEV_EVENTSUB_SECRET } from './env.js';
 
 /**
  * The config module's whole job is to fail loudly and completely at boot rather
@@ -11,6 +11,18 @@ import { loadEnv, isProduction, ConfigError } from './env.js';
 const valid = {
     DATABASE_URL: 'postgres://user:pass@localhost:5432/almosthadai',
     REDIS_URL: 'redis://localhost:6379'
+} satisfies NodeJS.ProcessEnv;
+
+/**
+ * Production refuses the committed development signing secret, so every
+ * production case has to carry a real one. Bundling it here keeps that rule from
+ * being restated in a dozen places.
+ */
+const PRODUCTION_SECRET = 'a-genuine-production-eventsub-secret';
+const validProduction = {
+    ...valid,
+    NODE_ENV: 'production',
+    TWITCH_EVENTSUB_SECRET: PRODUCTION_SECRET
 } satisfies NodeJS.ProcessEnv;
 
 describe('loadEnv - accepted configuration', () => {
@@ -39,7 +51,7 @@ describe('loadEnv - accepted configuration', () => {
 
     it('accepts each valid NODE_ENV', () => {
         for (const nodeEnv of ['development', 'test', 'production'] as const) {
-            const env = loadEnv({ ...valid, NODE_ENV: nodeEnv, PUBLIC_URL: 'https://bot.example.com' });
+            const env = loadEnv({ ...validProduction, NODE_ENV: nodeEnv, PUBLIC_URL: 'https://bot.example.com' });
             expect(env.NODE_ENV).toBe(nodeEnv);
         }
     });
@@ -121,12 +133,12 @@ describe('loadEnv - production cross-field rules', () => {
         // Twitch will not deliver EventSub webhooks to a non-TLS callback, so this
         // configuration is broken in a way that would only surface as silence.
         expect(() =>
-            loadEnv({ ...valid, NODE_ENV: 'production', PUBLIC_URL: 'http://bot.example.com' })
+            loadEnv({ ...validProduction, PUBLIC_URL: 'http://bot.example.com' })
         ).toThrow(/https/);
     });
 
     it('accepts an https PUBLIC_URL in production', () => {
-        const env = loadEnv({ ...valid, NODE_ENV: 'production', PUBLIC_URL: 'https://bot.example.com' });
+        const env = loadEnv({ ...validProduction, PUBLIC_URL: 'https://bot.example.com' });
 
         expect(env.PUBLIC_URL).toBe('https://bot.example.com');
     });
@@ -136,11 +148,73 @@ describe('loadEnv - production cross-field rules', () => {
 
         expect(env.PUBLIC_URL).toBe('http://localhost:3000');
     });
+
+    it('refuses to start production on the committed development secret', () => {
+        // The dev default is in the repository and therefore public: shipping it
+        // would let anyone forge a signed event, which is the entire threat the
+        // HMAC exists to prevent.
+        expect(() =>
+            loadEnv({ ...valid, NODE_ENV: 'production', TWITCH_EVENTSUB_SECRET: DEV_EVENTSUB_SECRET })
+        ).toThrow(/development default/);
+    });
+
+    it('allows the development secret outside production', () => {
+        const env = loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: DEV_EVENTSUB_SECRET });
+
+        expect(env.TWITCH_EVENTSUB_SECRET).toBe(DEV_EVENTSUB_SECRET);
+    });
+
+    it('reports the https and secret problems together', () => {
+        // Both wrong should mean one restart, not two.
+        try {
+            loadEnv({
+                ...valid,
+                NODE_ENV: 'production',
+                PUBLIC_URL: 'http://bot.example.com',
+                TWITCH_EVENTSUB_SECRET: DEV_EVENTSUB_SECRET
+            });
+            expect.unreachable('should have thrown');
+        } catch (error) {
+            expect((error as ConfigError).issues).toHaveLength(2);
+        }
+    });
+});
+
+describe('loadEnv - EventSub settings', () => {
+    it('defaults the signing secret to the development placeholder', () => {
+        expect(loadEnv({ ...valid }).TWITCH_EVENTSUB_SECRET).toBe(DEV_EVENTSUB_SECRET);
+    });
+
+    it('enforces the length Twitch requires', () => {
+        // Twitch rejects a secret outside 10-100 characters at subscription
+        // time; failing at boot is a considerably better place to find out.
+        expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'short' })).toThrow(ConfigError);
+        expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'x'.repeat(101) })).toThrow(ConfigError);
+        expect(loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'x'.repeat(100) }).TWITCH_EVENTSUB_SECRET).toHaveLength(100);
+    });
+
+    it('rejects a non-ASCII secret', () => {
+        expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'sécret-with-accents' })).toThrow(ConfigError);
+    });
+
+    it('defaults the replay window to the ten minutes Twitch documents', () => {
+        // Not a lazy default: a retry carries the original timestamp, so a
+        // tighter window would reject exactly the redeliveries it should accept.
+        expect(loadEnv({ ...valid }).EVENTSUB_MAX_SKEW_SECONDS).toBe(600);
+    });
+
+    it('coerces an overridden replay window', () => {
+        expect(loadEnv({ ...valid, EVENTSUB_MAX_SKEW_SECONDS: '120' }).EVENTSUB_MAX_SKEW_SECONDS).toBe(120);
+    });
+
+    it('splits nothing itself - AI_TRIGGERS stays a raw string here', () => {
+        expect(loadEnv({ ...valid, AI_TRIGGERS: 'bot,buddy' }).AI_TRIGGERS).toBe('bot,buddy');
+    });
 });
 
 describe('isProduction', () => {
     it('is true only for production', () => {
-        expect(isProduction(loadEnv({ ...valid, NODE_ENV: 'production' }))).toBe(true);
+        expect(isProduction(loadEnv({ ...validProduction }))).toBe(true);
         expect(isProduction(loadEnv({ ...valid, NODE_ENV: 'development' }))).toBe(false);
         expect(isProduction(loadEnv({ ...valid, NODE_ENV: 'test' }))).toBe(false);
     });
@@ -170,7 +244,7 @@ describe('loadEnv - empty-string variables', () => {
     });
 
     it('does not let an empty PUBLIC_URL trip the production https rule', () => {
-        const env = loadEnv({ ...valid, NODE_ENV: 'production', PUBLIC_URL: '' });
+        const env = loadEnv({ ...validProduction, PUBLIC_URL: '' });
 
         expect(env.PUBLIC_URL).toBeUndefined();
     });

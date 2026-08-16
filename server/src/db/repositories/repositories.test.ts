@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
-import { createDb, type DbHandle } from '../client.js';
-import { runMigrations } from '../migrate.js';
+import type { DbHandle } from '../client.js';
+import { connectTestDatabase } from '../testing.js';
 import { CommandRepository } from './commandRepository.js';
 import { EmoteRepository } from './emoteRepository.js';
 import { QuoteRepository } from './quoteRepository.js';
@@ -26,9 +26,9 @@ describeDb('repositories', () => {
     let channelB: string;
 
     beforeAll(async () => {
-        handle = createDb({ DATABASE_URL: TEST_DATABASE_URL as string, DATABASE_POOL_MAX: 4 });
+        // Waits for a warming Postgres rather than failing on a cold stack.
+        handle = await connectTestDatabase(TEST_DATABASE_URL as string);
         sql = handle.sql;
-        await runMigrations(handle);
 
         const stamp = Date.now();
         const [a] = await sql<{ id: string }[]>`

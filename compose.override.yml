@@ -28,4 +28,6 @@ services:
       # which may have been installed for a different platform.
       - /app/node_modules
     ports:
+      # Published so the local dev loop can POST signed synthetic events
+      # straight at the webhook without going through Caddy.
       - "127.0.0.1:${SERVER_PORT:-3000}:3000"

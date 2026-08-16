@@ -12,6 +12,10 @@ services:
       DATABASE_URL: postgres://almosthadai:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/almosthadai
       REDIS_URL: redis://redis:6379
       PUBLIC_URL: ${PUBLIC_URL:-}
+      # Development placeholder so `docker compose up` needs no configuration.
+      # The server refuses to start on this value when NODE_ENV=production.
+      TWITCH_EVENTSUB_SECRET: ${TWITCH_EVENTSUB_SECRET:-dev-only-eventsub-secret-change-me}
+      BOT_TWITCH_USER_ID: ${BOT_TWITCH_USER_ID:-}
     depends_on:
       postgres:
         condition: service_healthy

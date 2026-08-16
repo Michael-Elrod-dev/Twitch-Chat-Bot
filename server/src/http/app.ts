@@ -1,4 +1,4 @@
-import express, { type Express } from 'express';
+import express, { type Express, type Router } from 'express';
 import { apiFailure } from '@almosthadai/shared';
 import type { Logger } from '../logger.js';
 import { createHealthRouter, type ReadinessProbe } from './health.js';
@@ -7,14 +7,28 @@ export interface AppOptions {
     logger: Logger;
     version: string;
     probes?: ReadinessProbe[];
+    /**
+     * Routers that need the unparsed request body — today, only the EventSub
+     * webhook, whose HMAC covers the exact bytes Twitch sent.
+     *
+     * They mount *before* the global JSON parser deliberately. Once
+     * `express.json()` has consumed the stream, the raw bytes are gone, and a
+     * signature check against a re-serialised parse would fail on nothing worse
+     * than a difference in key order.
+     */
+    rawBodyRouters?: Router[];
 }
 
 export function createApp(options: AppOptions): Express {
-    const { logger, version, probes = [] } = options;
+    const { logger, version, probes = [], rawBodyRouters = [] } = options;
     const app = express();
 
     // Do not advertise the framework.
     app.disable('x-powered-by');
+
+    for (const router of rawBodyRouters) {
+        app.use(router);
+    }
 
     app.use(express.json({ limit: '1mb' }));
 

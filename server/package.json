@@ -14,7 +14,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "dev:event": "tsx scripts/send-test-event.ts"
   },
   "dependencies": {
     "@almosthadai/shared": "*",

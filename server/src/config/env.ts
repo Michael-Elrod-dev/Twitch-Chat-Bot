@@ -8,6 +8,12 @@ import { z } from 'zod';
 
 const port = z.coerce.number().int().min(1).max(65535);
 
+/**
+ * A deliberately obvious placeholder so `docker compose up` works with no
+ * configuration at all. Production refuses to start on it — see loadEnv.
+ */
+export const DEV_EVENTSUB_SECRET = 'dev-only-eventsub-secret-change-me';
+
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -30,7 +36,34 @@ const envSchema = z.object({
      * webhook callback URL. Must be HTTPS in production: Twitch requires TLS on
      * port 443 for webhook callbacks.
      */
-    PUBLIC_URL: z.string().url().optional()
+    PUBLIC_URL: z.string().url().optional(),
+
+    /**
+     * Shared secret Twitch signs webhook deliveries with. Twitch requires
+     * 10-100 ASCII characters, so anything outside that range would be rejected
+     * at subscription time rather than here - fail at boot instead.
+     */
+    TWITCH_EVENTSUB_SECRET: z
+        .string({ error: 'a webhook signing secret is required' })
+        .min(10, 'must be at least 10 characters (Twitch requirement)')
+        .max(100, 'must be at most 100 characters (Twitch requirement)')
+        .regex(/^[\x20-\x7E]+$/, 'must be printable ASCII (Twitch requirement)')
+        .default(DEV_EVENTSUB_SECRET),
+
+    /**
+     * How stale a delivery may be before it is refused as a replay.
+     *
+     * Twitch's own guidance is 10 minutes, and that is not a lazy default: a
+     * retried delivery carries the *original* timestamp, so a tight window would
+     * reject exactly the redeliveries the retry policy exists to make.
+     */
+    EVENTSUB_MAX_SKEW_SECONDS: z.coerce.number().int().min(1).max(3600).default(600),
+
+    /** Twitch user id of the shared bot account, when the DB has no bot_identity row yet. */
+    BOT_TWITCH_USER_ID: z.string().min(1).optional(),
+
+    /** Comma-separated names the AI answers to. Defaults to the bot's own login. */
+    AI_TRIGGERS: z.string().min(1).optional()
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -84,10 +117,22 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
     const env = parsed.data;
 
+    const crossFieldIssues: string[] = [];
+
     // Cross-field rule: Twitch will not deliver webhooks to a non-TLS callback,
     // so a production deployment advertising http:// is misconfigured.
     if (env.NODE_ENV === 'production' && env.PUBLIC_URL && !env.PUBLIC_URL.startsWith('https://')) {
-        throw new ConfigError(['PUBLIC_URL: must be https:// in production (Twitch requires TLS for EventSub callbacks)']);
+        crossFieldIssues.push('PUBLIC_URL: must be https:// in production (Twitch requires TLS for EventSub callbacks)');
+    }
+
+    // The dev secret is committed and therefore public. Shipping it would let
+    // anyone forge a signed event, which is the whole threat the HMAC prevents.
+    if (env.NODE_ENV === 'production' && env.TWITCH_EVENTSUB_SECRET === DEV_EVENTSUB_SECRET) {
+        crossFieldIssues.push('TWITCH_EVENTSUB_SECRET: the development default must not be used in production');
+    }
+
+    if (crossFieldIssues.length > 0) {
+        throw new ConfigError(crossFieldIssues);
     }
 
     return env;

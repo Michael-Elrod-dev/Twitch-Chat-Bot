@@ -129,6 +129,33 @@ jobs:
     name: Docker image builds
     runs-on: ubuntu-latest
 
+    # The composition root migrates at boot and bootstraps channels from the
+    # database, so the smoke test needs real dependencies to be a real test.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v5
@@ -148,28 +175,99 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Boots the real composition root against real dependencies, then drives a
+      # signed synthetic EventSub delivery at it. A green run means migrations,
+      # Redis, the webhook and its HMAC all work in the built image - not merely
+      # that the process starts.
       - name: Smoke-test the image
+        env:
+          EVENTSUB_SECRET: ci-smoke-test-eventsub-secret
         run: |
-          docker run --rm -d --name ci-server \
-            -e DATABASE_URL=postgres://u:p@localhost:5432/db \
-            -e REDIS_URL=redis://localhost:6379 \
-            -p 3000:3000 \
+          docker run --rm -d --name ci-server --network host \
+            -e DATABASE_URL=postgres://test:test@127.0.0.1:5432/test \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
+            -e TWITCH_EVENTSUB_SECRET="$EVENTSUB_SECRET" \
             almosthadai-server:ci
 
-          for i in $(seq 1 15); do
-            if curl -fsS http://localhost:3000/healthz > /dev/null; then
-              echo "Server healthy"
-              curl -fsS http://localhost:3000/healthz
-              docker rm -f ci-server
-              exit 0
+          ready=false
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:3000/readyz > /dev/null; then
+              ready=true
+              break
             fi
             sleep 2
           done
 
-          echo "Server never became healthy"
+          if [ "$ready" != "true" ]; then
+            echo "Server never became ready"
+            docker logs ci-server
+            docker rm -f ci-server
+            exit 1
+          fi
+
+          echo "readyz:"; curl -fsS http://localhost:3000/readyz; echo
+
+          # An unsigned request must be refused, and a signed one accepted.
+          forged=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:3000/eventsub/webhook \
+            -H 'content-type: application/json' \
+            -H 'twitch-eventsub-message-id: forged' \
+            -H 'twitch-eventsub-message-type: notification' \
+            -H "twitch-eventsub-message-timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -H 'twitch-eventsub-message-signature: sha256=0000' \
+            -d '{}')
+
+          if [ "$forged" != "403" ]; then
+            echo "Unsigned webhook delivery was not refused (got $forged)"
+            docker logs ci-server
+            docker rm -f ci-server
+            exit 1
+          fi
+          echo "Unsigned delivery correctly refused with 403"
+
+          # Signed with node builtins only, so this job needs no npm install.
+          # Same scheme as server/scripts/send-test-event.ts.
+          node - <<'NODE'
+          const { createHmac, randomUUID } = require('node:crypto');
+
+          const secret = process.env.EVENTSUB_SECRET;
+          const id = randomUUID();
+          const timestamp = new Date().toISOString();
+          const body = JSON.stringify({
+            subscription: {
+              id: randomUUID(), type: 'channel.chat.message', version: '1', status: 'enabled',
+              condition: { broadcaster_user_id: '1001', user_id: 'bot' }
+            },
+            event: {
+              broadcaster_user_id: '1001', broadcaster_user_login: 'alpha', broadcaster_user_name: 'Alpha',
+              chatter_user_id: '55555', chatter_user_login: 'viewer', chatter_user_name: 'Viewer',
+              message_id: randomUUID(), message: { text: '!discord' }, badges: [],
+              channel_points_custom_reward_id: null
+            }
+          });
+          const signature = 'sha256=' + createHmac('sha256', secret).update(id + timestamp).update(body).digest('hex');
+
+          // stdin runs as CommonJS, which has no top-level await.
+          (async () => {
+            const response = await fetch('http://localhost:3000/eventsub/webhook', {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'twitch-eventsub-message-id': id,
+                'twitch-eventsub-message-type': 'notification',
+                'twitch-eventsub-message-timestamp': timestamp,
+                'twitch-eventsub-message-signature': signature
+              },
+              body
+            });
+
+            console.log('signed delivery ->', response.status);
+            if (!response.ok) process.exit(1);
+          })();
+          NODE
+
           docker logs ci-server
           docker rm -f ci-server
-          exit 1
 
   audit:
     name: Security audit
