@@ -60,8 +60,17 @@ EXCLUDE_ANYWHERE=(
     '.git' '.github' 'node_modules' 'dist' '*.tsbuildinfo'
     'coverage' 'logs' 'temp_backups' '.claude'
 )
+# Anchored to the transfer root: root-level names, plus specific nested paths
+# that must not be matched by name alone.
+#
+# The Rust build output is the reason this list now has paths in it. It is 2.6GB
+# and ~9600 files of compiled artifacts for a WINDOWS desktop client, on the way
+# to a 40GB Linux box that never builds or runs it — the image copies only
+# shared/ and server/. Excluding by the bare name `target` would be a footgun
+# waiting for the first unrelated directory called that, so it is named in full.
 EXCLUDE_ROOT_ONLY=(
     '.env' '.env.*' 'compose.override.yml'
+    'app/src-tauri/target' 'app/src-tauri/gen'
 )
 
 if command -v rsync >/dev/null 2>&1; then
