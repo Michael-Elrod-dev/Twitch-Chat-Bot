@@ -31,4 +31,29 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
                 set: { aiEnabled: enabled, updatedAt: new Date() }
             });
     }
+
+    /**
+     * Partial update.
+     *
+     * Only keys actually present are written, so a PATCH that mentions one
+     * setting cannot silently reset the others to their defaults - the failure
+     * mode of building an update from a fully-defaulted object.
+     */
+    async update(patch: Partial<ChannelSettingsRecord>): Promise<void> {
+        const changes: Record<string, unknown> = {};
+        if (patch.aiEnabled !== undefined) changes['aiEnabled'] = patch.aiEnabled;
+        if (patch.songRequestsEnabled !== undefined) changes['songRequestsEnabled'] = patch.songRequestsEnabled;
+        if (patch.discordWebhookUrl !== undefined) changes['discordWebhookUrl'] = patch.discordWebhookUrl;
+
+        if (Object.keys(changes).length === 0) return;
+
+        await this.db
+            .insert(channelSettings)
+            .values({ channelId: this.channelId, ...changes })
+            .onConflictDoUpdate({
+                target: channelSettings.channelId,
+                set: { ...changes, updatedAt: new Date() }
+            });
+    }
+
 }

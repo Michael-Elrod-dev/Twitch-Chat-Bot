@@ -46,6 +46,22 @@ export class ChannelRepository {
         return rows;
     }
 
+    /** By our own primary key — used when a credential already names the channel. */
+    async findById(id: string): Promise<ChannelRecord | null> {
+        const rows = await this.db
+            .select({
+                id: channels.id,
+                twitchBroadcasterId: channels.twitchBroadcasterId,
+                twitchLogin: channels.twitchLogin,
+                status: channels.status
+            })
+            .from(channels)
+            .where(eq(channels.id, id))
+            .limit(1);
+
+        return rows[0] ?? null;
+    }
+
     async findByBroadcasterId(twitchBroadcasterId: string): Promise<ChannelRecord | null> {
         const rows = await this.db
             .select({

@@ -330,6 +330,101 @@ Lint locally with:
 npx eslint src/ tests/
 ```
 
+## API v1
+
+JWT-guarded REST plus a channel-scoped realtime feed. The typed contract —
+request schemas and response types — lives in `@almosthadai/shared`, so the
+desktop client and the server are compiled against the same definitions.
+
+### The tenant rule
+
+**No endpoint accepts a channel identifier.** The credential selects the tenant:
+a token issued for channel A resolves to channel A and there is no field,
+header, or path segment that can say otherwise. Isolation is a property of the
+routing table rather than of every handler remembering a `WHERE` clause.
+
+### Authentication
+
+| Mode | Header | Reaches |
+|---|---|---|
+| Session JWT | `Authorization: Bearer <token>` | everything |
+| API key | `X-Api-Key: ahai_…` | **songs endpoints only** |
+
+Sign in at `/auth/app/login`; the access token lasts `JWT_TTL_SECONDS` (15
+minutes by default) and is renewed at `/auth/app/refresh`, which rotates the
+refresh token on every use.
+
+API keys are for a Stream Deck. They are deliberately narrow: a button needs to
+skip a track, and a key that could also rewrite commands or read analytics would
+be a far worse thing to have taped inside a profile. A key is shown once at
+creation and only its hash is stored — there is no recovery endpoint.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/me` | caller, channel, settings — the only route valid with no channel |
+| PATCH | `/api/v1/me/settings` | `aiEnabled`, `songRequestsEnabled`, `discordWebhookUrl` |
+| GET | `/api/v1/commands` | list (`?limit=&offset=`) |
+| POST | `/api/v1/commands` | create |
+| PATCH | `/api/v1/commands/:name` | update response and/or level |
+| DELETE | `/api/v1/commands/:name` | delete |
+| GET | `/api/v1/emotes` | list |
+| POST | `/api/v1/emotes` | create |
+| DELETE | `/api/v1/emotes/:trigger` | delete |
+| GET | `/api/v1/quotes` | list, newest first |
+| GET | `/api/v1/quotes/random` | one at random |
+| GET | `/api/v1/quotes/:number` | by number |
+| POST | `/api/v1/quotes` | add |
+| DELETE | `/api/v1/quotes/:number` | delete |
+| GET | `/api/v1/songs` | queue **(key ok)** |
+| DELETE | `/api/v1/songs/head` | skip the current track **(key ok)** |
+| POST | `/api/v1/songs/toggle` | enable/disable requests **(key ok)** |
+| GET | `/api/v1/analytics/summary` | totals and top chatters |
+| GET | `/api/v1/api-keys` | list keys (never the key itself) |
+| POST | `/api/v1/api-keys` | create — returns the key **once** |
+| DELETE | `/api/v1/api-keys/:id` | revoke |
+
+Every response uses the standard envelope: `{ok: true, data}` or
+`{ok: false, error: {code, message}}`. Codes are `bad_request`, `unauthorized`,
+`forbidden`, `not_found`, `conflict`, `rate_limited`, `internal`, `unavailable`.
+
+Quote numbers are never reissued after a delete — a quote is referred to by
+number in chat and in clips, so renumbering would silently change what an old
+reference points at.
+
+### Realtime
+
+```
+wss://<host>/api/v1/live?access_token=<jwt>
+```
+
+Authentication happens at the upgrade, before the socket exists, and binds it to
+one channel. There is no subscribe message and no way to ask for a different
+channel.
+
+| Event | When |
+|---|---|
+| `hello` | on connect, so a client can render immediately |
+| `chat.message` | every chat message, with the pipeline's `outcome` |
+| `song_queue.updated` | queue changed |
+| `channel.status` | live/offline and session state |
+
+The server pings every 30 s and reaps a socket that has not ponged by the next
+sweep. Browsers cannot set headers on a WebSocket handshake, so the token
+travels as a query parameter — acceptable because these are our own short-lived
+tokens, never Twitch's.
+
+### Rate limiting
+
+Per authenticated principal (user or API key), sliding window, `API_RATE_MAX`
+requests per `API_RATE_WINDOW_MS` — 300/minute by default. Responses carry
+`RateLimit-Limit` and `RateLimit-Remaining`; a 429 carries `Retry-After`.
+
+Keyed on the credential rather than the IP address, because behind Caddy every
+request shares one source address: an IP-keyed limiter would either throttle the
+whole tenancy at once or trust a header the client controls.
+
 ## Documentation
 
 - [`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) — the Phase 1 plan and its results

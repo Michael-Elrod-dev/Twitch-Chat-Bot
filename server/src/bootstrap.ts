@@ -6,12 +6,14 @@ import type { ChatSink } from './services/chatSink.js';
 import type { AiService } from './services/aiService.js';
 import type { AnalyticsSink } from './services/analytics.js';
 import type { HandlerRegistry } from './domain/handlers.js';
+import type { EventBus } from './live/eventBus.js';
 import type { ChannelRecord } from './db/repositories/channelRepository.js';
 import { BotIdentityRepository } from './db/repositories/botIdentityRepository.js';
 import { CommandRepository } from './db/repositories/commandRepository.js';
 import { EmoteRepository } from './db/repositories/emoteRepository.js';
 import { ChannelSettingsRepository } from './db/repositories/channelSettingsRepository.js';
 import { ChannelRoleRepository } from './db/repositories/channelRoleRepository.js';
+import { QuoteRepository } from './db/repositories/quoteRepository.js';
 import { CommandManager } from './domain/commandManager.js';
 import { EmoteManager } from './domain/emoteManager.js';
 import { SettingsService } from './domain/settings.js';
@@ -39,6 +41,7 @@ export interface ChannelRepositories {
     emotes: EmoteRepository;
     settings: ChannelSettingsRepository;
     roles: ChannelRoleRepository;
+    quotes: QuoteRepository;
 }
 
 export function createChannelRepositories(db: Database, channelId: string): ChannelRepositories {
@@ -47,7 +50,8 @@ export function createChannelRepositories(db: Database, channelId: string): Chan
         commands: new CommandRepository(db, channelId),
         emotes: new EmoteRepository(db, channelId),
         settings: new ChannelSettingsRepository(db, channelId),
-        roles: new ChannelRoleRepository(db, channelId)
+        roles: new ChannelRoleRepository(db, channelId),
+        quotes: new QuoteRepository(db, channelId)
     };
 }
 
@@ -68,6 +72,8 @@ export interface ChannelDependencies {
     analytics: AnalyticsSink;
     bot: BotIdentity;
     handlers?: HandlerRegistry;
+    /** Realtime fan-out. Omitted means nothing is watching. */
+    bus?: EventBus;
 }
 
 export function buildChannelSession(deps: ChannelDependencies, channel: ChannelRecord): ChannelSession {
@@ -103,6 +109,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         ai,
         analytics,
         logger: channelLogger,
+        ...(deps.bus ? { bus: deps.bus } : {}),
         // The pipeline knows only "say this"; where it goes is the sink's problem.
         sendMessage: async (text: string) => {
             await chatSink.send({

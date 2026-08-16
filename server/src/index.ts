@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { Router } from 'express';
 import { loadEnv, ConfigError, type Env } from './config/env.js';
 import { createLogger, type Logger } from './logger.js';
 import { createApp } from './http/app.js';
@@ -26,7 +27,19 @@ import { createTokenCipher, createDisabledTokenCipher, type TokenCipher } from '
 import { createStateStore } from './auth/stateStore.js';
 import { OnboardingService } from './auth/onboarding.js';
 import { createAuthRouter, AUTH_CALLBACK_PATH } from './http/authRoutes.js';
-import { createApiRouter } from './http/apiRoutes.js';
+import { createResourceRouter } from './http/api/resources.js';
+import {
+    createRequireJwt,
+    createApiKeyAuth,
+    createRequireChannelExceptMe,
+    requireAnyCredential
+} from './http/api/middleware.js';
+import { createRateLimit } from './http/api/rateLimit.js';
+import { ApiKeyRepository } from './db/repositories/apiKeyRepository.js';
+import { AnalyticsRepository } from './db/repositories/analyticsRepository.js';
+import { SongQueueRepository } from './db/repositories/songQueueRepository.js';
+import { createEventBus } from './live/eventBus.js';
+import { LiveServer } from './live/liveServer.js';
 import {
     bootstrapChannels,
     buildChannelSession,
@@ -194,6 +207,10 @@ async function main(): Promise<void> {
         ? new HelixChatSink({ helix, botUserId: () => botIdentity.twitchUserId, logger })
         : new LoggingChatSink(logger);
 
+    // One bus for the whole process; the live server filters by channel on the
+    // way out, so a session never needs to know whether anyone is watching.
+    const bus = createEventBus((err) => logger.warn({ err: err.message }, 'Live listener failed'));
+
     const buildDependencies = (): ChannelDependencies => ({
         repositories: (channelId) => createChannelRepositories(database.db, channelId),
         cache,
@@ -201,7 +218,8 @@ async function main(): Promise<void> {
         chatSink,
         ai: new StubAiService(),
         analytics: new NoopAnalyticsSink(),
-        bot: botIdentity
+        bot: botIdentity,
+        bus
     });
 
     // One reconciliation after every channel is registered, rather than one per
@@ -279,17 +297,58 @@ async function main(): Promise<void> {
         configured: twitchConfigured
     });
 
+    // The v1 API. Order is the security contract: credentials resolve first,
+    // then the tenant, then the rate limit, then the handlers. A handler is
+    // never reached without a channel already bound to the request.
+    const apiKeyRepository = new ApiKeyRepository(database.db);
+
+    const apiRouter = Router();
+    apiRouter.use('/api/v1', createApiKeyAuth(apiKeyRepository, channelRepository));
+    apiRouter.use('/api/v1', (req, res, next) => {
+        // /me is reachable without a channel; everything else is not. Running
+        // JWT auth here keeps the two paths on one middleware chain.
+        createRequireJwt(env.JWT_SECRET, logger)(req, res, (err?: unknown) => {
+            if (err) { next(err); return; }
+            next();
+        });
+    });
+    apiRouter.use('/api/v1', requireAnyCredential);
+    apiRouter.use('/api/v1', createRateLimit({
+        windowMs: env.API_RATE_WINDOW_MS,
+        max: env.API_RATE_MAX,
+        bucket: 'api'
+    }));
+    apiRouter.use(createRequireChannelExceptMe(channelRepository));
+    apiRouter.use(createResourceRouter({
+        logger,
+        repositories: (channelId) => createChannelRepositories(database.db, channelId),
+        apiKeys: apiKeyRepository,
+        analytics: (channelId) => new AnalyticsRepository(database.db, channelId),
+        songs: (channelId) => new SongQueueRepository(database.db, channelId),
+        publish: (channelId, event) => bus.publish(channelId, {
+            ...event, channelId, at: new Date().toISOString()
+        } as never)
+    }));
+
     const app = createApp({
         logger,
         version: VERSION,
         rawBodyRouters: [transport.router],
-        routers: [authRouter, createApiRouter({ logger, jwtSecret: env.JWT_SECRET, channels: channelRepository })],
+        routers: [authRouter, apiRouter],
         probes: [
             { name: 'postgres', check: database.ping },
             { name: 'redis', check: redis.ping }
         ]
     });
     const server = createServer(app);
+
+    const live = new LiveServer({
+        server,
+        bus,
+        channels: channelRepository,
+        logger,
+        jwtSecret: env.JWT_SECRET
+    });
 
     const shutdown = createShutdownHandler({
         server,
@@ -299,6 +358,9 @@ async function main(): Promise<void> {
         // — dropping those would lose events Twitch believes were accepted;
         // then sessions stop; then the connections they used close.
         closeables: [
+            // Sockets first: a client that reconnects during shutdown would
+            // otherwise attach to a server that is already tearing down.
+            { name: 'live-sockets', close: () => live.close() },
             { name: 'ingest-queue', close: () => transport.drain() },
             { name: 'sessions', close: () => sessionManager.stopAll() },
             { name: 'redis', close: redis.close },

@@ -15,6 +15,13 @@
       "when": 1786845251555,
       "tag": "0001_auth_and_reauth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786856008212,
+      "tag": "0002_api_keys",
+      "breakpoints": true
     }
   ]
 }

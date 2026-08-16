@@ -161,3 +161,33 @@ export const editors = pgTable(
         check('editors_role_check', sql`${table.role} in ('owner', 'editor')`)
     ]
 );
+
+/**
+ * Stream Deck API keys.
+ *
+ * Hashed at rest for the same reason as app refresh tokens: a database leak
+ * must not yield working credentials. The prefix is stored in clear so a key
+ * can be identified in a list — "which of these three is taped inside my Stream
+ * Deck profile" is a question the UI has to answer without ever holding the key.
+ */
+export const apiKeys = pgTable(
+    'api_keys',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        channelId: uuid('channel_id')
+            .notNull()
+            // CASCADE: a key is meaningless without its channel, and an orphaned
+            // credential is strictly worse than a deleted one.
+            .references(() => channels.id, { onDelete: 'cascade' }),
+        name: text('name').notNull(),
+        keyHash: text('key_hash').notNull(),
+        /** First few characters, for display only. Never enough to reconstruct. */
+        prefix: text('prefix').notNull(),
+        lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        uniqueIndex('api_keys_key_hash_key').on(table.keyHash),
+        index('api_keys_channel_idx').on(table.channelId)
+    ]
+);

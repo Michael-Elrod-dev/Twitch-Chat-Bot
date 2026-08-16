@@ -1,0 +1,79 @@
+name: Production uptime
+
+# Interim uptime monitoring. A scheduled workflow is not a monitoring system —
+# GitHub's scheduler is best-effort and can lag by many minutes — but it costs
+# nothing, needs no third-party account, and turns "the bot is down" from
+# something the owner notices during a stream into an email. A real probe with
+# sub-minute resolution is on the ops backlog.
+#
+# Failure is deliberately a workflow failure rather than a logged warning,
+# because a failed workflow is what actually sends the notification.
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub does not guarantee this cadence and will skip
+    # runs under load, which is precisely why this is called interim.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check /healthz over TLS
+        env:
+          BASE_URL: https://almosthadai.duckdns.org
+        run: |
+          # --fail so a 5xx is an error; no --insecure, because certificate
+          # validity is part of what is being monitored. An expired certificate
+          # would silently break every EventSub delivery, so it must fail here.
+          for attempt in 1 2 3; do
+            if body=$(curl -fsS --max-time 15 "$BASE_URL/healthz"); then
+              echo "healthz: $body"
+              echo "$body" | grep -q '"status":"ok"' || {
+                echo "::error::healthz responded but did not report ok"
+                exit 1
+              }
+              exit 0
+            fi
+            echo "attempt $attempt failed"
+            sleep 10
+          done
+
+          # Three failures 10s apart is not a blip. Report what the endpoint
+          # actually did, so the notification email carries a diagnosis rather
+          # than only an alarm.
+          echo "::error::Production /healthz unreachable after 3 attempts"
+          curl -sS -o /dev/null -w 'final attempt: http=%{http_code} tls_verify=%{ssl_verify_result} connect=%{time_connect}s\n' \
+            "$BASE_URL/healthz" || echo "connection failed entirely"
+          exit 1
+
+      - name: Check certificate expiry
+        # Separate step so an expiring certificate is distinguishable from an
+        # outage in the notification, and can warn before it becomes one.
+        run: |
+          expiry=$(echo | openssl s_client -servername almosthadai.duckdns.org \
+            -connect almosthadai.duckdns.org:443 2>/dev/null \
+            | openssl x509 -noout -enddate | cut -d= -f2)
+          echo "certificate expires: $expiry"
+
+          days=$(( ( $(date -d "$expiry" +%s) - $(date +%s) ) / 86400 ))
+          echo "days remaining: $days"
+
+          if [ "$days" -lt 10 ]; then
+            echo "::error::Certificate expires in $days days and Caddy has not renewed it"
+            exit 1
+          fi
+          if [ "$days" -lt 21 ]; then
+            echo "::warning::Certificate expires in $days days"
+          fi

@@ -105,7 +105,17 @@ const envSchema = z.object({
         .transform((value) => value === 'true'),
 
     /** Spacing between subscription creates, under Twitch's documented 100/min. */
-    EVENTSUB_CREATE_SPACING_MS: z.coerce.number().int().min(0).max(60_000).default(750)
+    EVENTSUB_CREATE_SPACING_MS: z.coerce.number().int().min(0).max(60_000).default(750),
+
+    /**
+     * API rate limit, per authenticated principal.
+     *
+     * Generous by design: this is a single-user desktop app talking to its own
+     * server, so the limit exists to bound a runaway client or a leaked key, not
+     * to ration normal use.
+     */
+    API_RATE_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+    API_RATE_MAX: z.coerce.number().int().min(1).max(100_000).default(300)
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -7,6 +7,8 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
 import type { AiService } from '../services/aiService.js';
 import type { AnalyticsSink, InteractionType } from '../services/analytics.js';
 import type { ChatterRoles } from '../domain/permissions.js';
+import type { EventBus } from '../live/eventBus.js';
+import { NULL_EVENT_BUS } from '../live/eventBus.js';
 
 /** What the pipeline decided to do with a message. Returned for tests and tracing. */
 export type PipelineOutcome =
@@ -29,6 +31,12 @@ export interface ChatPipelineOptions {
     analytics: AnalyticsSink;
     logger: Logger;
     sendMessage: (text: string) => Promise<void>;
+    /**
+     * Where realtime observers listen. Defaults to a bus that goes nowhere, so
+     * a session with no watchers costs nothing and every existing caller keeps
+     * working unchanged.
+     */
+    bus?: EventBus;
 }
 
 /**
@@ -49,6 +57,18 @@ export class ChatPipeline {
     }
 
     async handle(event: ChatMessageEvent): Promise<PipelineOutcome> {
+        const outcome = await this.classify(event);
+
+        // Published after the decision, never before: an observer should see
+        // what the bot did, not what it was about to consider doing. Publishing
+        // cannot throw - the bus swallows listener failures - so this can never
+        // turn a delivered message into a failed one.
+        this.publish(event, outcome);
+
+        return outcome;
+    }
+
+    private async classify(event: ChatMessageEvent): Promise<PipelineOutcome> {
         const o = this.options;
 
         // The bot must never react to itself.
@@ -183,6 +203,19 @@ export class ChatPipeline {
         prompt = prompt.replace(/@/g, ' ').replace(/\s+/g, ' ').trim();
 
         return prompt === '' ? null : prompt;
+    }
+
+    private publish(event: ChatMessageEvent, outcome: PipelineOutcome): void {
+        const o = this.options;
+
+        (o.bus ?? NULL_EVENT_BUS).publish(o.channelId, {
+            type: 'chat.message',
+            channelId: o.channelId,
+            at: new Date().toISOString(),
+            chatter: { login: event.chatter.login, displayName: event.chatter.displayName },
+            text: event.text,
+            outcome: outcome.action
+        });
     }
 
     private async recordRoles(event: ChatMessageEvent, roles: ChatterRoles): Promise<void> {

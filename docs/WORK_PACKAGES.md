@@ -279,3 +279,30 @@ Owner actions, in order — the report includes this as a fill-in checklist:
 - Completion report: box-prep summary, deploy-script usage doc, the finale evidence, flagged-not-fixed.
 
 > **P1-WP6.1 + WP6.2 verified by lead 2026-08-16:** production probed directly — `/healthz` 200 over Let's Encrypt TLS, HTTP→HTTPS 308; legacy 49/1222; server **532/532** — and the database-protection rule I ordered after the `down -v` incident enforced itself against the lead's own habitual TEST_DATABASE_URL (refusal + pointer to `scripts/test-db.sh`; sanctioned path green). That is exactly the mechanism I asked for. The finale stands: four real chat responses through the full production path, evidenced server-side post-observability-fix; three subscriptions converged-by-intent with the corrected comment; ETL counts match the known table with zero plaintext tokens; one backup proven end-to-end including independent re-download; the `--exclude src` anchoring bug caught-and-documented; scanner probes for `/.env` observed within seconds of DNS (and 404ing — the reason secrets live only in the box's env). Logging-audit verdicts endorsed, including the two flagged-for-metrics duplicate-rate signals. **Ops backlog opened (landing with/after P1-WP7):** healthz uptime monitoring (interim: scheduled CI probe; owner option: free external monitor), prod-artifact restore drill, registry-based deploy, duplicate-rate counters. Secret rotation handed to owner with Opus's no-transcript procedure — endorsed. **PHASE 1 LIVE MILESTONE: the bot is in production.** Committed as this entry's commit.
+
+> **Verified by lead 2026-08-16:** legacy 49/1222; server **575/575** via the sanctioned throwaway DB; lint 0; uptime workflow present. The tenant rule — credential-as-selector with no channel identifiers anywhere in the API surface — is the design working as intended, and the 19-test attack suite is the right shape. Both honesty items are the reintroduction standard functioning: the x-channel non-catch is a *correct* non-catch (you cannot test the absence of an unaccepted parameter; breaking the real binding was caught), and the trivially-true reaping test being exposed and made load-bearing is exactly why the validation pass exists. The `saved_by` NULL-on-unknown-saver resolution is right (accurate over fabricated). The zod-in-shared trade is approved as argued — one schema definition beats two drifting ones. Flags routed: POST /songs → P1-WP4.2 by design; event producers arrive with features; Redis-backed rate limiting → multi-instance backlog (with conduits); live-token-in-query accepted for 15-min tokens with the ticket-endpoint upgrade named; **WP7 deploy → P1-WP7.1 (deliberate, below)**. Committed by lead.
+
+---
+
+## P1-WP7.1 — Deploy WP7 to production  [STATUS: ISSUED 2026-08-16]
+
+Small, deliberate: `scripts/deploy.sh` with the new build; migration `0002_api_keys` applies via the boot migrator (advisory-locked — verify it applied once, cleanly, in prod logs); any new env vars documented in `.env.example` get real values on the box; post-deploy: `/healthz` + `/readyz` green, `/api/v1/me` 401s unauthenticated, the live WS upgrade 401s without a token, and one authenticated smoke of `/api/v1/me` + `commands` list against the owner's channel (owner sign-in flow gives the JWT). Report the evidence lines.
+
+---
+
+## P1-WP4.1 — AI domain port  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** the bot's signature feature returns: Claude-powered chat responses, multi-tenant. The `AiService` stub becomes real, per-channel rate limits enforce from `channel_settings` + `api_usage`, and the AI handler commands land in the registry.
+
+**Scope guard:** `server/`, `shared/`, docs. Legacy untouched. **The Anthropic API key is a server secret (env: `ANTHROPIC_API_KEY`), never per-channel, never in the DB, never logged.**
+
+**Lead calls (locked):**
+- **Client:** the official `@anthropic-ai/sdk` (pinned exact) replaces the legacy raw-fetch client. Model from env (`AI_MODEL`, default `claude-sonnet-5`), `max_tokens` + reply-length knobs in `channel_settings` with sane defaults. Timeout + no-retry-on-4xx; a failed AI call yields the channel's configured fallback message (ported behavior), never an exception into the pipeline.
+- **Port the Phase-0 AI stack's behaviors** (aiManager, rateLimiter, contextBuilder, promptBuilder, prompts) with channel scope: per-channel-per-stream rate limits by role rank (from `channel_roles` + settings), context from v2 tables (recent chat via `chat_messages` — note: chat persistence may not exist yet post-port; if the pipeline doesn't yet write `chat_messages`, land the minimal write path here as the AI context depends on it — flag its cost), XML prompt building with escaping, usage counter prefix on replies, fail-closed `aiEnabled` already in place.
+- **Handlers:** `!ai on|off` (mod, declarative level) in the registry; the mention-trigger path activates via the existing pipeline seam (`!` still wins; bare-mention rules per the ported trigger tests).
+- **`!advice`/`!roast` (game commands): port only if the prompt assets migrate cleanly; otherwise flag for a content pass — do not invent new prompt text.**
+- **Tests:** ported behavior suite (trigger rules, rate-limit matrix by role, fail-closed, usage counters), prompt-builder escaping, fake-Anthropic client end-to-end through the pipeline (two channels, isolated limits — the house centerpiece shape), reintroduction validation throughout. No live Anthropic calls in tests.
+- **Live proof:** after local green, deploy (same deliberate procedure) and demonstrate one real AI reply in the owner's chat (owner supplies `ANTHROPIC_API_KEY` for the box when asked — it lives in the recovered dump's server_secret set; the owner should generate a FRESH key at console.anthropic.com instead, since the old one's status is unknown).
+
+### Exit criteria
+- Suites/lint/image green; two-channel AI isolation test green; live AI reply evidenced in prod; per-task report with flagged-not-fixed.

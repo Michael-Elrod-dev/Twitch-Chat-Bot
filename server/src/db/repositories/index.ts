@@ -6,3 +6,6 @@ export * from './emoteRepository.js';
 export * from './quoteRepository.js';
 export * from './channelSettingsRepository.js';
 export * from './channelRoleRepository.js';
+export * from './apiKeyRepository.js';
+export * from './songQueueRepository.js';
+export * from './analyticsRepository.js';
