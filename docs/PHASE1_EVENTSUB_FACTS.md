@@ -437,10 +437,12 @@ code that produced P0-1 and P0-2.
 
 | Item | Where | Status |
 |---|---|---|
-| `chat:edit` vs `user:write:chat` | P1-WP6 | **Implemented as `user:write:chat`; awaiting the live send** — see §9 |
-| Redirect URI rules (localhost, exact match) | P1-WP6 | **Awaiting app registration** — see §9 |
-| Twitch CLI EventSub mocking capability | P1-WP5 | ✅ **RESOLVED** — see §9.1 |
+| `chat:edit` vs `user:write:chat` | P1-WP6 | ✅ **RESOLVED** — `user:write:chat` suffices (§9.2) |
+| Redirect URI rules (localhost, exact match) | P1-WP6 | ✅ **RESOLVED** — and webhook callbacks follow a different rule (§9.3) |
+| Twitch CLI EventSub mocking capability | P1-WP5 | ✅ **RESOLVED** — cannot trigger chat (§9.1) |
 | `bot_identity` table shape | P1-WP3 | ✅ Resolved: consent record, not a token pair |
+| Dashboard-created rewards / refund risk | P1-WP3 | ✅ **RESOLVED** — existing rewards are app-manageable (§9.4) |
+| A live redemption-status update | P1-WP7+ | Needs a real redemption; the ownership precondition is settled |
 
 ---
 
@@ -466,44 +468,80 @@ loop. `npm run dev:event -w server` signs with the same function the handler
 verifies with. Either way there is **one** ingest implementation — no websocket
 transport was ever built for the new server, and none will be.
 
-### 9.2 ⏳ PENDING — `chat:edit` vs `user:write:chat`
+### 9.2 ✅ RESOLVED — `user:write:chat` is sufficient; `chat:edit` is not required
 
-The bot's consent requests **`user:write:chat`** and not `chat:edit`, on the
-reasoning from §4: the scopes page defines `chat:edit` as the *IRC* scope and
-`user:write:chat` as the *API* scope, the chat guides consistently use the
-latter, and requesting both speculatively risks suspension.
+**Settled by a live send on 2026-08-16.** The bot account (`almosthadai`) granted
+exactly:
 
-This is settled by the first live `POST /helix/chat/messages`. If it returns 401
-with `user:write:chat` granted, the reference page is right and the scope list
-changes by one line in `server/src/twitch/oauth.ts`.
+```
+["user:bot", "user:read:chat", "user:write:chat"]
+```
 
-**Result:** _to be filled in during live activation._
+`chat:edit` was **not** requested and **not** granted. A `POST
+/helix/chat/messages` on an app access token, with the broadcaster having granted
+`channel:bot`, returned `is_sent: true` and the message appeared in chat.
 
-### 9.3 ⏳ PENDING — redirect URI rules
+**Conclusion:** the [API reference](https://dev.twitch.tv/docs/api/reference#send-chat-message)
+page's mention of `chat:edit` is stale; the scopes page and the chat guides are
+correct. The scope list in `server/src/twitch/oauth.ts` needs no change, and the
+decision not to speculatively request both scopes was right.
 
-`http://localhost:3000/auth/twitch/callback` is what the implementation is built
-against and what the owner registers in the console. Whether Twitch accepts a
-plaintext loopback redirect is answered the moment that registration is saved
-and the first consent completes.
+### 9.3 ✅ RESOLVED — redirect URIs and webhook callbacks follow *different* rules
 
-Note the implementation needs only **one** registered URI: all three flows
-(channel connect, bot consent, app sign-in) share a single callback, with the
-flow carried in the server-issued `state`.
+Two separate rules, and conflating them would waste a lot of time.
 
-**Result:** _to be filled in during live activation._
+**OAuth redirect URI — plaintext loopback is accepted.** All three flows completed
+against `http://localhost:3000/auth/twitch/callback` registered in the console.
+No HTTPS requirement, no port restriction.
 
-### 9.4 ⏳ PENDING — app-created rewards and the refund path
+**EventSub webhook callback — HTTPS on port 443, enforced at creation.** Measured
+directly:
 
-The P1-WP3 finding is that Update Redemption Status only works for rewards the
-**application itself created**, which is why onboarding creates them rather than
-adopting dashboard-made ones. `HelixApi.listCustomRewards` passes
-`only_manageable_rewards=true` so a reward we cannot manage is never presented as
-if we could.
+| Callback offered | Twitch's answer |
+|---|---|
+| `http://localhost:3000/eventsub/webhook` | **400** — *"callback must provide valid https callback with standard port in creation request"* |
+| `https://localhost/eventsub/webhook` | **202** accepted, `webhook_callback_verification_pending` |
 
-Proof requires creating one reward with the broadcaster's token and updating a
-real redemption's status.
+The second is the more interesting result: Twitch validates the **scheme and port
+only** at creation time and does not resolve the host. The subscription is
+accepted and then dies at the challenge, because nothing reachable answers.
 
-**Result:** _to be filled in during live activation._
+**Consequence:** live EventSub cannot be activated from a development machine.
+It needs a publicly reachable HTTPS:443 endpoint — the VPS with DuckDNS + Caddy
+as designed, or a tunnel. Everything *outbound* (app token, chat send, rewards)
+works from localhost, so only the inbound half is blocked.
+
+Also confirmed: **one** registered redirect URI serves all three flows, because
+the flow travels in the server-issued `state`.
+
+### 9.4 ✅ RESOLVED — and it overturns the P1-WP3 risk
+
+`HelixApi.listCustomRewards` with `only_manageable_rewards=true`, against the
+owner's real channel, returned **the five rewards the Phase-0 bot has been using
+in production**:
+
+```
+Skip song queue (200) · Pick the game (50000) · MS paint (5000, disabled)
+Song Request (100) · Add a quote (1000)
+```
+
+`only_manageable_rewards=true` returns exactly the rewards **created by the
+requesting client id**. That these appear means the legacy bot created them
+through the API under this same client id — so **their redemption status is
+already updatable, and the refund path works on them as they stand**.
+
+A full create → list → delete cycle was also exercised on a throwaway reward and
+behaved correctly.
+
+**Design consequence:** the WP3 mitigation — "rewards are created by the app at
+onboarding" — is **not required for this channel's existing rewards**. It remains
+the right rule for *new* rewards and for any channel whose rewards were made in
+the dashboard, since those genuinely cannot be managed. Reward-id capture at
+onboarding still replaces title-string routing.
+
+⚠️ **Not yet proven:** an actual `PATCH .../redemptions` status update, which
+needs a real redemption to exist. The ownership precondition — the part that was
+in doubt — is settled.
 
 ---
 

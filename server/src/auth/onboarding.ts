@@ -34,6 +34,16 @@ export interface ChannelOnboardingOptions {
     dependencies: () => ChannelDependencies;
     /** Runs the live subscription diff once the channel is registered. */
     reconcile: () => Promise<void>;
+    /**
+     * Called after the bot account's consent changes.
+     *
+     * Bot identity is read once at boot, so without this a fresh consent sits in
+     * the database while the running process keeps using the previous value —
+     * the bot would answer as the wrong account until someone restarted it. That
+     * is a bad enough failure on a laptop and a worse one on a server nobody is
+     * watching.
+     */
+    onBotIdentityChanged?: () => Promise<void>;
 }
 
 export class OnboardingService {
@@ -137,6 +147,17 @@ export class OnboardingService {
         });
 
         logger.info({ login: identity.login, scopes: grant.scopes.length }, 'Bot identity recorded');
+
+        // The consent is durable at this point, so a failure here degrades to
+        // "restart to pick it up" rather than losing the grant.
+        try {
+            await this.options.onBotIdentityChanged?.();
+        } catch (err) {
+            logger.error(
+                { err: (err as Error).message },
+                'Bot identity saved but could not be applied to the running process - restart to pick it up'
+            );
+        }
 
         return { missingScopes: missing };
     }

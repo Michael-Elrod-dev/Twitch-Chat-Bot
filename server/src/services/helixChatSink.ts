@@ -18,8 +18,14 @@ const MAX_MESSAGE_LENGTH = 500;
 
 export interface HelixChatSinkOptions {
     helix: HelixApi;
-    /** The shared bot's Twitch user id — the `sender_id` on every send. */
-    botUserId: string;
+    /**
+     * The shared bot's Twitch user id — the `sender_id` on every send.
+     *
+     * Accepts a getter so a re-granted consent takes effect immediately. Holding
+     * the value would mean the bot kept speaking as the previous account until
+     * someone restarted the process.
+     */
+    botUserId: string | (() => string);
     logger: Logger;
 }
 
@@ -31,7 +37,10 @@ export class HelixChatSink implements ChatSink {
     }
 
     async send({ channelId, broadcasterTwitchId, text }: OutboundMessage): Promise<void> {
-        const { helix, botUserId, logger } = this.options;
+        const { helix, logger } = this.options;
+        const botUserId = typeof this.options.botUserId === 'function'
+            ? this.options.botUserId()
+            : this.options.botUserId;
 
         if (botUserId === '') {
             logger.error({ channelId }, 'Cannot send chat: no bot identity is configured');

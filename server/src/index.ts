@@ -29,6 +29,7 @@ import { createAuthRouter, AUTH_CALLBACK_PATH } from './http/authRoutes.js';
 import { createApiRouter } from './http/apiRoutes.js';
 import {
     bootstrapChannels,
+    buildChannelSession,
     createChannelRepositories,
     resolveBotIdentity,
     type ChannelDependencies
@@ -50,7 +51,9 @@ const VERSION = process.env['npm_package_version'] ?? '0.1.0';
  * serve, so a health check cannot pass on a half-built process.
  */
 async function main(): Promise<void> {
-    let env;
+    // Annotated because a nested function closes over it, so inference alone
+    // cannot settle the type before use.
+    let env: Env;
     try {
         env = loadEnv();
     } catch (error) {
@@ -118,7 +121,9 @@ async function main(): Promise<void> {
         logger.warn('TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET are not set - OAuth and live Helix calls are unavailable');
     }
 
-    const botIdentity = await resolveBotIdentity(database.db, env, logger);
+    // Mutable on purpose: bot consent can be re-granted while the process runs,
+    // and everything downstream reads through this rather than copying it.
+    let botIdentity = await resolveBotIdentity(database.db, env, logger);
 
     // Real Helix when credentials exist, the in-memory fake otherwise. The
     // reconciler cannot tell the difference, which is what let the whole
@@ -147,7 +152,7 @@ async function main(): Promise<void> {
         logger,
         callbackUrl,
         secret: env.TWITCH_EVENTSUB_SECRET,
-        botUserId: botIdentity.twitchUserId
+        botUserId: () => botIdentity.twitchUserId
     });
 
     const channelRepository = new ChannelRepository(database.db);
@@ -159,8 +164,6 @@ async function main(): Promise<void> {
     if (!env.EVENTSUB_DRY_RUN && !helix) {
         logger.error('EVENTSUB_DRY_RUN=false but Twitch credentials are missing - staying in dry-run');
     }
-
-    const sessionManagerRef: { current: SessionManager | null } = { current: null };
 
     const revocationRecovery = new RevocationRecovery({
         logger,
@@ -181,13 +184,14 @@ async function main(): Promise<void> {
     });
 
     const sessionManager = new SessionManager({ transport, logger });
-    sessionManagerRef.current = sessionManager;
     await sessionManager.start();
 
     // The real sink the moment a bot identity and credentials exist; the logging
     // one otherwise, so the pipeline is exercised either way.
-    const chatSink: ChatSink = helix && botIdentity.twitchUserId !== ''
-        ? new HelixChatSink({ helix, botUserId: botIdentity.twitchUserId, logger })
+    // Chosen on whether a real Helix client exists, NOT on whether a bot identity
+    // does - consent can arrive later, and the sink reads the id per send.
+    const chatSink: ChatSink = helix
+        ? new HelixChatSink({ helix, botUserId: () => botIdentity.twitchUserId, logger })
         : new LoggingChatSink(logger);
 
     const buildDependencies = (): ChannelDependencies => ({
@@ -217,6 +221,45 @@ async function main(): Promise<void> {
         logger
     });
 
+    /**
+     * Applies a newly-granted bot consent without a restart.
+     *
+     * The reconciler and the chat sink read the identity through getters, so
+     * they need nothing. Sessions do: each pipeline captured the bot's user id
+     * at construction for its own-message check, and a session still holding the
+     * old id would let the bot answer itself. Rebuilding them is cheap and this
+     * happens roughly once per deployment.
+     */
+    async function applyNewBotIdentity(): Promise<void> {
+        const previous = botIdentity.twitchUserId;
+        botIdentity = await resolveBotIdentity(database.db, env, logger);
+
+        if (botIdentity.twitchUserId === previous) return;
+
+        logger.warn(
+            { login: botIdentity.login, channels: sessionManager.size },
+            'Bot identity changed - rebuilding sessions'
+        );
+
+        // Removed and re-added individually rather than via stopAll(), which
+        // would also stop the transport and close the ingest queue.
+        const deps = buildDependencies();
+        for (const channel of await channelRepository.listActive()) {
+            try {
+                await sessionManager.remove(channel.id);
+                await sessionManager.add(buildChannelSession(deps, channel));
+            } catch (err) {
+                logger.error(
+                    { channelId: channel.id, err: (err as Error).message },
+                    'Could not rebuild session for the new bot identity'
+                );
+            }
+        }
+
+        await transport.reconcile();
+        logger.info({ login: botIdentity.login }, 'New bot identity applied');
+    }
+
     const authRouter = createAuthRouter({
         oauth,
         states: createStateStore(cache),
@@ -226,7 +269,8 @@ async function main(): Promise<void> {
             logger,
             sessionManager,
             dependencies: buildDependencies,
-            reconcile: () => transport.reconcile()
+            reconcile: () => transport.reconcile(),
+            onBotIdentityChanged: applyNewBotIdentity
         }),
         sessions: new AppSessionRepository(database.db),
         logger,

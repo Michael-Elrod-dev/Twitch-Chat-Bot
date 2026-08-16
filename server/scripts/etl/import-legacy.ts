@@ -5,9 +5,14 @@
  * them opaquely — no token value is ever logged, printed, or included in the
  * summary. The report is counts only.
  *
- * IDEMPOTENT: re-running deletes the channel's v2 rows and re-imports. The
- * channel row itself is matched on twitch_broadcaster_id, so the channel id is
+ * IDEMPOTENT: re-running deletes the channel's v2 CONTENT rows and re-imports.
+ * The channel row is matched on twitch_broadcaster_id, so the channel id is
  * stable across runs.
+ *
+ * CREDENTIALS ARE NEVER OVERWRITTEN: channel_tokens and bot_identity are
+ * skip-if-present. The dump's tokens died months ago; anything granted since is
+ * both newer and encrypted, and replacing it would disconnect a working channel
+ * to install a token that cannot work. See ./tokens.ts.
  *
  * Usage (see run-import.sh, which supplies the throwaway MySQL):
  *   MYSQL_URL=... DATABASE_URL=... tsx server/scripts/etl/import-legacy.ts
@@ -16,6 +21,7 @@
 import mysql from 'mysql2/promise';
 import postgres from 'postgres';
 import { routeTokenKey, splitViewer, resolveRequester, assignQuoteNumbers } from './transform.js';
+import { importChannelTokens, importBotIdentity } from './tokens.js';
 import type { LegacyViewer } from './transform.js';
 
 const MYSQL_URL = process.env['MYSQL_URL'];
@@ -67,8 +73,13 @@ async function main(): Promise<void> {
         const channelId = channel!.id;
         bump('channels', 1);
 
-        // Clear this channel's previously-imported rows so a re-run is a clean
+        // Clear this channel's previously-imported CONTENT so a re-run is a clean
         // re-import rather than a duplicate one. Order respects FK dependencies.
+        //
+        // `channel_tokens` is deliberately absent from this list. The dump is a
+        // point-in-time snapshot whose credentials are long dead; a live
+        // authorization obtained since is always the better one, and deleting it
+        // to make room for a stale token would disconnect a working channel.
         await sql`delete from api_usage where channel_id = ${channelId}`;
         await sql`delete from chat_messages where channel_id = ${channelId}`;
         await sql`delete from chat_totals where channel_id = ${channelId}`;
@@ -79,24 +90,26 @@ async function main(): Promise<void> {
         await sql`delete from emotes where channel_id = ${channelId}`;
         await sql`delete from channel_roles where channel_id = ${channelId}`;
         await sql`delete from streams where channel_id = ${channelId}`;
-        await sql`delete from channel_tokens where channel_id = ${channelId}`;
 
-        // ---- channel_tokens --------------------------------------------------
-        for (const provider of ['twitch', 'spotify'] as const) {
-            const access = provider === 'twitch'
+        // ---- channel_tokens: import ONLY where nothing live exists -----------
+        const tokenOutcomes = await importChannelTokens(sql, channelId, (provider) => ({
+            accessToken: provider === 'twitch'
                 ? tokens.get('broadcasterAccessToken')
-                : tokens.get('spotifyUserAccessToken');
-            const refresh = provider === 'twitch'
+                : tokens.get('spotifyUserAccessToken'),
+            refreshToken: provider === 'twitch'
                 ? tokens.get('broadcasterRefreshToken')
-                : tokens.get('spotifyUserRefreshToken');
+                : tokens.get('spotifyUserRefreshToken')
+        }));
 
-            if (!access || !refresh) continue;
-
-            await sql`
-                insert into channel_tokens (channel_id, provider, access_token, refresh_token, scopes)
-                values (${channelId}, ${provider}, ${access}, ${refresh}, ${JSON.stringify([])}::jsonb)
-            `;
-            bump('channel_tokens');
+        for (const { provider, action } of tokenOutcomes) {
+            bump(`channel_tokens.${action}.${provider}`);
+            if (action === 'preserved') {
+                console.log(`  channel_tokens/${provider}: live credentials present - dump value NOT imported`);
+            } else if (action === 'imported') {
+                // Imported values are plaintext by construction; the encrypted
+                // read path refuses them until the upgrade script has run.
+                console.log(`  channel_tokens/${provider}: imported as PLAINTEXT - run db:encrypt-tokens`);
+            }
         }
 
         // ---- channel_settings ------------------------------------------------
@@ -111,15 +124,16 @@ async function main(): Promise<void> {
         // ---- bot_identity ----------------------------------------------------
         const botId = tokens.get('botId');
         if (botId) {
-            await sql`
-                insert into bot_identity (twitch_user_id, twitch_login, granted_scopes, refresh_token)
-                values (${botId}, ${'almosthadai'},
-                        ${JSON.stringify(['user:read:chat', 'user:write:chat', 'user:bot'])}::jsonb,
-                        ${tokens.get('botRefreshToken') ?? null})
-                on conflict (twitch_user_id) do update
-                    set refresh_token = excluded.refresh_token, updated_at = now()
-            `;
-            bump('bot_identity');
+            const outcome = await importBotIdentity(sql, {
+                twitchUserId: botId,
+                login: 'almosthadai',
+                refreshToken: tokens.get('botRefreshToken') ?? null
+            });
+
+            bump(`bot_identity.${outcome}`);
+            if (outcome === 'preserved') {
+                console.log('  bot_identity: live consent present - dump value NOT imported');
+            }
         }
 
         // ---- viewers + channel_roles ----------------------------------------

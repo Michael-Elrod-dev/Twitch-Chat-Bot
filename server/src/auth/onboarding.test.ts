@@ -252,6 +252,54 @@ describeDb('OnboardingService', () => {
             expect(result.missingScopes).toContain('user:write:chat');
         });
 
+        it('notifies the running process so consent takes effect without a restart', async () => {
+            // Bot identity is read once at boot. Without this hook a fresh
+            // consent sits in the database while the process keeps answering as
+            // the previous account - which is exactly what happened during
+            // P1-WP6 activation.
+            const applied: string[] = [];
+            const notifying = new OnboardingService({
+                db: handle.db, cipher, logger, sessionManager: manager, reconcile,
+                dependencies: () => ({
+                    repositories: () => emptyRepositories(),
+                    cache: nullCache(), logger, chatSink: sink,
+                    ai: new StubAiService(), analytics: new NoopAnalyticsSink(),
+                    bot: { twitchUserId: 'bot-1', login: 'b', aiTriggers: ['b'] }
+                }),
+                onBotIdentityChanged: async () => { applied.push('applied'); }
+            });
+
+            await notifying.recordBotConsent(
+                identity({ userId: 'bot-hook', login: 'almosthadai', scopes: [...BOT_SCOPES] }),
+                grant({ scopes: [...BOT_SCOPES] })
+            );
+
+            expect(applied).toEqual(['applied']);
+        });
+
+        it('keeps the consent when applying it to the running process fails', async () => {
+            // The grant is already durable; a failure here degrades to "restart
+            // to pick it up" rather than losing the authorization.
+            const failing = new OnboardingService({
+                db: handle.db, cipher, logger, sessionManager: manager, reconcile,
+                dependencies: () => ({
+                    repositories: () => emptyRepositories(),
+                    cache: nullCache(), logger, chatSink: sink,
+                    ai: new StubAiService(), analytics: new NoopAnalyticsSink(),
+                    bot: { twitchUserId: 'bot-1', login: 'b', aiTriggers: ['b'] }
+                }),
+                onBotIdentityChanged: async () => { throw new Error('rebuild exploded'); }
+            });
+
+            await expect(failing.recordBotConsent(
+                identity({ userId: 'bot-durable', login: 'almosthadai', scopes: [...BOT_SCOPES] }),
+                grant({ scopes: [...BOT_SCOPES] })
+            )).resolves.toMatchObject({ missingScopes: [] });
+
+            expect(await new BotIdentityRepository(handle.db, cipher).get())
+                .toMatchObject({ twitchUserId: 'bot-durable' });
+        });
+
         it('replaces a previous bot account rather than accumulating rows', async () => {
             await service.recordBotConsent(
                 identity({ userId: 'bot-old', login: 'old', scopes: [...BOT_SCOPES] }),

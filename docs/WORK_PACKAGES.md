@@ -220,3 +220,60 @@ Owner actions, in order — the report includes this as a fill-in checklist:
 ### Exit criteria
 - Mocked suites green (both stacks, lint, typecheck, image); live activation executed with evidence in the report (log excerpts with secrets redacted); EVENTSUB_FACTS updated with every empirical answer; any design deltas called out.
 - Completion report: per-task, the owner checklist with what happened at each step, flagged-not-fixed.
+
+> **Verified by lead 2026-08-15:** legacy 49/1222; server **515/515** (my first run had 4 DB-suite hook timeouts — root cause was environmental: the lead's dev stack from WP5 verification was still running under tsx watch, hot-reloaded onto WP6 code mid-flight, and interfered with the test database; clean stack → all green. Operational note recorded: a wedged server instance can block test migrations — symptom is 60s hook timeouts). Lint 0. Crypto spot-read by lead: random IV per op, AAD column binding, auth tags, timing-safe compares — all present; the AAD purpose-binding and keyless-cipher-refuses designs are endorsed as better than specced. The state-before-code order, zero-scope sign-in with immediate Twitch-token discard, and hashed+rotated refresh handles are all approved. The `.gitignore`-swallows-`.env.example` catch is noted with appreciation — a silently-never-committed template is an evil failure mode. The 401-unbounded-recursion-hangs-not-fails honesty item is recorded. Flags routed: uncalled Helix methods activate with P1-WP4.2/4.3 (by design); refund-path send-retry → P1-WP4.2; OAuth state in-memory fallback accepted (single-process; revisit with conduits); dev app-role password → VPS provisioning checklist. **Live activation (§8 steps 1–4) is now an owner action item; step 5 report lands alongside the next package.** Committed as `a7fdaff`.
+
+---
+
+## P1-WP7 — API v1 + realtime  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** the desktop app's entire server surface exists and is proven: JWT-guarded REST for everything the UI manages, a channel-scoped realtime feed, and Stream Deck API keys. After this, client work (P1-WP8) has a complete, typed contract to build against.
+
+**Scope guard:** `server/`, `shared/`, docs. Legacy untouched (49/1222). No UI. Live-activation step 5 evidence rides along when the owner completes steps 1–4, but this package does not depend on it.
+
+**Lead calls (locked):**
+- **REST under `/api/v1`**, JWT-guarded, channel identity from token claims — a token for channel A structurally cannot address channel B (no channel ids in URLs; the token IS the tenant selector). Resources: `me` (channel + settings; PATCH settings incl. aiEnabled), `commands` CRUD, `emotes` CRUD, `quotes` CRUD (+ `GET /quotes/random`), `songs` (queue GET, DELETE head/skip, `POST /toggle` — wiring the existing songToggle semantics against the reconciler-managed rewards when P1-WP4.2 lands; until then queue-table-only), `analytics` (summary from `chat_totals`/`streams` — fine over empty data). Consistent error envelope (the WP2 shape) everywhere; zod request validation with schemas exported from `shared/` — **the shared package becomes the app's typed API contract** (request/response types + event types).
+- **Realtime:** WebSocket at `/api/v1/live` (the `ws` dep already in the tree), JWT at upgrade, channel-scoped fan-out fed by an event bus seam from ChannelSession (pipeline emits: `chat.message`, `song_queue.updated`, `channel.status`; keep the event set minimal and typed in `shared/`). Heartbeat ping/pong; dead-connection reaping.
+- **API keys (Stream Deck):** `api_keys` table (channel-scoped, hashed at rest, prefix-identifiable), `X-Api-Key` middleware accepted ONLY on the songs endpoints (parity with the legacy loopback API's purpose), issued/revoked via JWT-authed endpoints.
+- **Rate limiting:** simple per-principal (JWT sub or API key) sliding window on the API; generous defaults, env-tunable.
+
+### Tasks
+1. REST resources + validation + error envelope + tenant-isolation tests (channel A's JWT vs channel B's data — the API-layer mirror of WP4's centerpiece).
+2. Event bus seam in ChannelSession → WS broadcaster; end-to-end test: synthetic EventSub chat event in → WS client receives `chat.message` for its channel only.
+3. API keys table+middleware+management endpoints, hashed storage, songs-only scope.
+4. Rate limiter + tests.
+5. `shared/` API contract exports (types + zod schemas) consumed by server; this is the app-facing artifact — keep it clean.
+6. README/API docs section (endpoint table, auth modes, WS events).
+
+### Exit criteria
+- Full CRUD round-trips via supertest against real DB; the WS end-to-end (event in → scoped push out) green; isolation tests green; suites/lint/typecheck/image green.
+- Completion report: endpoint table, per-task summary, flagged-not-fixed; live-activation step-5 evidence if the owner has run steps 1–4 by then.
+
+---
+
+## P1-WP6.2 — VPS deployment & EventSub goes live  [STATUS: ISSUED 2026-08-15]
+
+**Goal:** the server runs in production on the owner's Hetzner box (`almosthadai.duckdns.org`, CX23, Ubuntu 26.04) with real TLS, real secrets, the owner's data, and — the finale — `EVENTSUB_DRY_RUN=false`: Twitch delivers a real inbound event and the bot answers in chat with no synthetic anything. This completes live activation.
+
+**Access:** `ssh root@almosthadai.duckdns.org` works non-interactively from this machine (owner's ed25519 key). All server work happens over that channel. **Secrets discipline unchanged: no secret values in logs, shell history you print, or the report.**
+
+**Sequencing note:** P1-WP6.1's items fold in where they now belong — the production DB starts clean so the ETL re-import targets the **VPS** database (local re-import optional, owner's data should live in prod); the 34 synthetic channels are a local-dev cleanup only; the bot-identity-refresh code fix ships before deploy so prod never needs the restart workaround.
+
+**Lead calls (locked):**
+- **Box prep (keep it boring):** apt upgrade; Docker from the official repo; 2GB swapfile (4GB box insurance); unattended-upgrades on; verify SSH is key-only (`PasswordAuthentication no`); rely on the Hetzner cloud firewall (22/80/443 — already applied) rather than duplicating with UFW.
+- **Deploy mechanism (this package):** a `scripts/deploy.sh` run from the dev machine — rsync the repo (excluding dev-only files: `.env`, `compose.override.yml`, `node_modules`, legacy `src/`+`tests/` stay home too) to `/opt/almosthadai`, then `docker compose -f docker-compose.yml build && up -d` on the box. CI-driven deploys (registry + tag-push) are a later package; document that this script is the interim.
+- **Caddy:** real TLS site block for `almosthadai.duckdns.org` (Let's Encrypt auto-HTTPS), replacing the placeholder. HTTP→HTTPS redirect.
+- **Production `.env` on the box only:** `NODE_ENV=production`, `PUBLIC_URL=https://almosthadai.duckdns.org`, `EVENTSUB_DRY_RUN=false`, fresh `TOKEN_ENCRYPTION_KEY`/`JWT_SECRET`/`TWITCH_EVENTSUB_SECRET`/`POSTGRES_PASSWORD`/`APP_DB_PASSWORD` (the WP6 flag — no devpassword in prod), AWS creds for backups, and the **rotated** Twitch client secret (owner checkpoint 1). Local `.env` gets the rotated secret too.
+- **Data:** run the ETL against the VPS postgres **through an SSH tunnel** (postgres stays loopback-only on the box — never published). Verify counts match the known table (22 commands / 1509 viewers / etc.).
+- **Backups:** `pg-backup.sh` on a systemd timer (hourly) shipping verified dumps to the existing S3 bucket; prove one real backup lands in S3 and passes verification.
+- **Live finale (owner present):** owner re-runs both consent flows against the production domain (checkpoint 3) → reconciler creates real subscriptions → all pass Twitch's challenge (list them as `enabled`) → owner (or engineer via a test account… no: owner) types a real command in their own chat → **the bot answers, no synthetic events anywhere in the path**. Capture the evidence (subscription list + log excerpt, secrets redacted).
+
+**Owner checkpoints (relay via owner):**
+1. Regenerate the Twitch client secret (dev console → app → New Secret) and hand it over at the moment the engineer asks — old secret dies, both `.env`s get the new one.
+2. Add `https://almosthadai.duckdns.org/auth/twitch/callback` as an additional OAuth Redirect URL in the Twitch app (keep the localhost one for dev).
+3. Run both consent URLs on the prod domain when told (bot account first, then broadcaster).
+4. Type a command in their own chat for the finale.
+
+### Exit criteria
+- `https://almosthadai.duckdns.org/healthz` green over real TLS; subscriptions `enabled`; the real-chat finale witnessed; ETL counts verified in prod; one verified backup in S3; timer active; suites/lint/image still green locally (the bot-identity fix is code).
+- Completion report: box-prep summary, deploy-script usage doc, the finale evidence, flagged-not-fixed.

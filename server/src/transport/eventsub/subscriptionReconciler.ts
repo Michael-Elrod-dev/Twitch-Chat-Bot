@@ -64,7 +64,12 @@ export interface ReconcilerOptions {
     logger: Logger;
     callbackUrl: string;
     secret: string;
-    botUserId: string;
+    /**
+     * A getter, not a value, because the bot account can change at runtime when
+     * consent is re-granted — and the chat subscription's condition names it, so
+     * a stale id here would diff every subscription as an orphan.
+     */
+    botUserId: string | (() => string);
     desired?: DesiredSubscriptionType[];
 }
 
@@ -91,7 +96,10 @@ export class SubscriptionReconciler {
 
     /** Pure: computes the diff without touching Twitch. Exposed so it can be tested and logged. */
     plan(broadcasterIds: string[], actual: EventSubSubscription[]): ReconcilePlan {
-        const { callbackUrl, secret, botUserId, desired = DESIRED_SUBSCRIPTIONS } = this.options;
+        const { callbackUrl, secret, desired = DESIRED_SUBSCRIPTIONS } = this.options;
+        const botUserId = typeof this.options.botUserId === 'function'
+            ? this.options.botUserId()
+            : this.options.botUserId;
 
         const wanted = new Map<string, CreateSubscriptionInput>();
         for (const broadcasterTwitchId of new Set(broadcasterIds)) {
