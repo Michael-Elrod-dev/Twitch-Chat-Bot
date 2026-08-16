@@ -17,14 +17,14 @@ const STATE_TTL_SECONDS = 600;
 const STATE_BYTES = 32;
 
 export interface StateRecord {
-    flow: OAuthFlow;
+    flow: OAuthFlow | 'spotify';
     /** Where to send the browser afterwards, when the flow was started from the app. */
     returnTo?: string;
     createdAt: number;
 }
 
 export interface StateStore {
-    issue: (flow: OAuthFlow, returnTo?: string) => Promise<string>;
+    issue: (flow: OAuthFlow | 'spotify', returnTo?: string) => Promise<string>;
     /** @returns the record and consumes it, or null when unknown, expired or replayed. */
     consume: (state: string) => Promise<StateRecord | null>;
 }

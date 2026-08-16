@@ -271,6 +271,28 @@ export class HelixApi implements HelixClient {
         }));
     }
 
+    /**
+     * Enables or disables a reward.
+     *
+     * This is what "song requests off" must actually mean: a disabled reward
+     * cannot be redeemed at all, so nobody spends points on something the bot
+     * will only refund. Flipping a database flag alone would leave the reward
+     * visible and redeemable.
+     */
+    async setCustomRewardEnabled(
+        broadcasterId: string,
+        userAccessToken: string,
+        rewardId: string,
+        isEnabled: boolean
+    ): Promise<void> {
+        await this.request('/channel_points/custom_rewards', {
+            method: 'PATCH',
+            query: { broadcaster_id: broadcasterId, id: rewardId },
+            body: { is_enabled: isEnabled },
+            userAccessToken
+        });
+    }
+
     async deleteCustomReward(broadcasterId: string, userAccessToken: string, rewardId: string): Promise<void> {
         await this.request('/channel_points/custom_rewards', {
             method: 'DELETE',

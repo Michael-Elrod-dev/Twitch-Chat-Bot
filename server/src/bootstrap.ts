@@ -12,6 +12,21 @@ import { ChannelAiService } from './ai/aiService.js';
 import { AiRateLimiter } from './ai/rateLimiter.js';
 import { ChatHistoryRepository } from './db/repositories/chatHistoryRepository.js';
 import { createAiHandlers } from './domain/aiHandlers.js';
+import { createSongHandlers } from './domain/songHandlers.js';
+import { SongToggleService } from './domain/songToggle.js';
+import { createSongRequestHandler, createSkipQueueHandler } from './domain/songRedemption.js';
+import { createQuoteRedemptionHandler } from './domain/quoteRedemption.js';
+import { RedemptionPipeline } from './session/redemptionPipeline.js';
+import { RedemptionSettlement } from './services/redemptionSettlement.js';
+import { ChannelRewardRepository } from './db/repositories/channelRewardRepository.js';
+import { SongQueueRepository } from './db/repositories/songQueueRepository.js';
+import { ChannelTokenRepository } from './db/repositories/channelTokenRepository.js';
+import { UserTokenProvider } from './twitch/userTokenProvider.js';
+import { HttpSpotifyClient, type SpotifyClient } from './spotify/spotifyClient.js';
+import { SpotifyTokenProvider, type SpotifyOAuthConfig } from './spotify/spotifyAuth.js';
+import { PlaybackMonitor } from './spotify/playbackMonitor.js';
+import type { HelixApi } from './twitch/helixApi.js';
+import type { TokenCipher } from './crypto/tokenCipher.js';
 import type { ChannelRecord } from './db/repositories/channelRepository.js';
 import { BotIdentityRepository } from './db/repositories/botIdentityRepository.js';
 import { CommandRepository } from './db/repositories/commandRepository.js';
@@ -89,6 +104,13 @@ export interface ChannelDependencies {
     claude?: ClaudeClient;
     /** Database handle, needed to build the per-channel AI rate limiter. */
     db?: import('./db/client.js').Database;
+    /** Live Helix. Absent means redemption settlement and reward toggles are inert. */
+    helix?: HelixApi;
+    /** Twitch application credentials, for broadcaster token refresh. */
+    twitchOAuth?: { clientId: string; clientSecret: string };
+    /** Spotify application credentials, for the per-channel connect. */
+    spotifyOAuth?: SpotifyOAuthConfig;
+    cipher?: TokenCipher;
 }
 
 export function buildChannelSession(deps: ChannelDependencies, channel: ChannelRecord): ChannelSession {
@@ -106,6 +128,91 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         logger: channelLogger
     });
 
+    /*
+     * The Spotify half, per channel.
+     *
+     * Built only when the deployment has Spotify credentials AND the channel
+     * has connected: a channel with no Spotify gets null, and every song path
+     * reports "not connected" rather than failing obscurely.
+     */
+    const songQueue = deps.db ? new SongQueueRepository(deps.db, channelId) : null;
+
+    let spotify: SpotifyClient | null = null;
+    if (deps.db && deps.cipher && deps.spotifyOAuth) {
+        const spotifyTokens = new SpotifyTokenProvider({
+            config: deps.spotifyOAuth,
+            channelId,
+            repository: new ChannelTokenRepository(deps.db, channelId, deps.cipher),
+            logger: channelLogger
+        });
+
+        spotify = new HttpSpotifyClient({
+            accessToken: () => spotifyTokens.get(),
+            logger: channelLogger
+        });
+    }
+
+    const monitor = (spotify && songQueue)
+        ? new PlaybackMonitor({ channelId, client: spotify, queue: songQueue, logger: channelLogger })
+        : null;
+
+    /*
+     * Redemptions. Settlement needs the BROADCASTER's user token, so this only
+     * exists where the credentials to obtain one do - and a channel without it
+     * leaves redemptions unhandled rather than taking points it cannot refund.
+     */
+    let redemptions: RedemptionPipeline | undefined;
+    let songToggle: SongToggleService | null = null;
+
+    if (deps.db && deps.cipher && deps.helix && deps.twitchOAuth && songQueue) {
+        const userTokens = new UserTokenProvider({
+            clientId: deps.twitchOAuth.clientId,
+            clientSecret: deps.twitchOAuth.clientSecret,
+            channelId,
+            repository: new ChannelTokenRepository(deps.db, channelId, deps.cipher),
+            logger: channelLogger
+        });
+
+        const rewardRepo = new ChannelRewardRepository(deps.db, channelId);
+
+        songToggle = new SongToggleService({
+            channelId,
+            broadcasterTwitchId: channel.twitchBroadcasterId,
+            settings,
+            rewards: rewardRepo,
+            helix: deps.helix,
+            userTokens,
+            logger: channelLogger
+        });
+
+        const songDeps = { spotify: spotify as SpotifyClient, queue: songQueue, settings, logger: channelLogger };
+
+        redemptions = new RedemptionPipeline({
+            channelId,
+            rewards: rewardRepo,
+            settlement: new RedemptionSettlement({
+                channelId,
+                broadcasterTwitchId: channel.twitchBroadcasterId,
+                helix: deps.helix,
+                userTokens,
+                logger: channelLogger
+            }),
+            handlers: {
+                add_quote: createQuoteRedemptionHandler({ quotes: repositories.quotes, logger: channelLogger }),
+                // Song handlers only where Spotify is connected; without it the
+                // pipeline refunds rather than pretending to queue.
+                ...(spotify ? {
+                    song_request: createSongRequestHandler(songDeps),
+                    skip_queue: createSkipQueueHandler(songDeps)
+                } : {})
+            },
+            logger: channelLogger,
+            sendMessage: async (text: string) => {
+                await chatSink.send({ channelId, broadcasterTwitchId: channel.twitchBroadcasterId, text });
+            }
+        });
+    }
+
     const commands = new CommandManager({
         channelId,
         repository: repositories.commands,
@@ -113,7 +220,19 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         logger: channelLogger,
         // The AI toggle is always available; a channel-specific registry adds
         // to it rather than replacing it.
-        handlers: { ...createAiHandlers({ settings, logger: channelLogger }), ...(handlers ?? {}) }
+        handlers: {
+            ...createAiHandlers({ settings, logger: channelLogger }),
+            ...(songToggle && songQueue
+                ? createSongHandlers({
+                    queue: songQueue,
+                    spotify,
+                    toggle: songToggle,
+                    logger: channelLogger,
+                    lastPlayed: () => monitor?.lastPlayed() ?? null
+                })
+                : {}),
+            ...(handlers ?? {})
+        }
     });
     const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
 
@@ -168,7 +287,8 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         logger: channelLogger,
         pipeline,
         commands,
-        emotes
+        emotes,
+        ...(redemptions ? { redemptions } : {})
     });
 }
 

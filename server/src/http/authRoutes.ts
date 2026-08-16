@@ -6,7 +6,13 @@ import { TwitchError } from '../twitch/errors.js';
 import type { StateStore } from '../auth/stateStore.js';
 import type { OnboardingService } from '../auth/onboarding.js';
 import type { AppSessionRepository } from '../db/repositories/appSessionRepository.js';
-import { generateRefreshToken, signJwt } from '../auth/jwt.js';
+import { generateRefreshToken, signJwt, verifyJwt } from '../auth/jwt.js';
+import {
+    buildSpotifyAuthorizeUrl,
+    exchangeSpotifyCode,
+    type SpotifyOAuthConfig,
+    type SpotifyGrant
+} from '../spotify/spotifyAuth.js';
 
 /**
  * The OAuth surface.
@@ -22,6 +28,7 @@ import { generateRefreshToken, signJwt } from '../auth/jwt.js';
  */
 
 export const AUTH_CALLBACK_PATH = '/auth/twitch/callback';
+export const SPOTIFY_CALLBACK_PATH = '/auth/spotify/callback';
 
 export interface AuthRoutesOptions {
     oauth: TwitchOAuthClient;
@@ -33,6 +40,12 @@ export interface AuthRoutesOptions {
     jwtTtlSeconds: number;
     /** False when client credentials are absent; every route then 503s honestly. */
     configured: boolean;
+    /** Spotify connect, per channel. Absent means the routes 503. */
+    spotify?: {
+        config: SpotifyOAuthConfig;
+        /** Stores the grant against the channel that started the flow. */
+        onConnected: (twitchUserId: string, grant: SpotifyGrant) => Promise<void>;
+    };
 }
 
 export function createAuthRouter(options: AuthRoutesOptions): Router {
@@ -58,6 +71,103 @@ export function createAuthRouter(options: AuthRoutesOptions): Router {
     router.get('/auth/twitch/connect', startFlow('channel'));
     router.get('/auth/bot/connect', startFlow('bot'));
     router.get('/auth/app/login', startFlow('signin'));
+
+    /*
+     * Spotify connect.
+     *
+     * Guarded by the app JWT rather than a bare link: this attaches a Spotify
+     * account to a channel, so the server must know WHICH channel is asking.
+     * The Twitch flows can identify themselves from the consent that follows;
+     * this one cannot.
+     */
+    router.get('/auth/spotify/connect', (req: Request, res: Response) => {
+        void (async () => {
+            if (!options.spotify) {
+                res.status(503).json(apiFailure('unavailable', 'Spotify is not configured on this server'));
+                return;
+            }
+            if (!options.jwtSecret) {
+                res.status(503).json(apiFailure('unavailable', 'Authentication is not configured'));
+                return;
+            }
+
+            // Accepts the token from a header or the query string, because this
+            // is opened in a browser where headers cannot be set.
+            const header = req.headers.authorization ?? '';
+            const token = header.startsWith('Bearer ')
+                ? header.slice('Bearer '.length)
+                : (typeof req.query['access_token'] === 'string' ? req.query['access_token'] : '');
+
+            if (token === '') {
+                res.status(401).type('text/plain').send('Sign in first, then open this link from the app.');
+                return;
+            }
+
+            let claims;
+            try {
+                claims = verifyJwt(token, options.jwtSecret);
+            } catch {
+                res.status(401).type('text/plain').send('That sign-in has expired. Sign in again and retry.');
+                return;
+            }
+
+            // The Twitch user id rides in the state, so the callback knows whose
+            // channel to attach the Spotify account to without trusting anything
+            // the callback itself carries.
+            const state = await states.issue('spotify', claims.sub);
+            logger.info({ login: claims.login }, 'Spotify connect started');
+
+            res.redirect(buildSpotifyAuthorizeUrl(options.spotify.config, state));
+        })().catch((err: unknown) => {
+            logger.error({ err: (err as Error).message }, 'Spotify connect failed');
+            if (!res.headersSent) res.status(500).json(apiFailure('internal', 'Could not start the Spotify connection'));
+        });
+    });
+
+    router.get(SPOTIFY_CALLBACK_PATH, (req: Request, res: Response) => {
+        void (async () => {
+            const oauthError = typeof req.query['error'] === 'string' ? req.query['error'] : '';
+            if (oauthError !== '') {
+                logger.warn({ oauthError }, 'Spotify authorization was declined');
+                res.status(400).type('text/plain').send(`Spotify authorization was declined (${oauthError}).`);
+                return;
+            }
+
+            const code = typeof req.query['code'] === 'string' ? req.query['code'] : '';
+            const state = typeof req.query['state'] === 'string' ? req.query['state'] : '';
+
+            // State first, always - the same rule as the Twitch callback.
+            const record = await states.consume(state);
+            if (!record || record.flow !== 'spotify') {
+                logger.warn('Spotify callback with an unknown, expired or replayed state - refusing');
+                res.status(403).type('text/plain').send('This link is no longer valid. Please start again.');
+                return;
+            }
+
+            if (code === '' || !options.spotify) {
+                res.status(400).type('text/plain').send('Spotify did not return a code. Please start again.');
+                return;
+            }
+
+            const grant = await exchangeSpotifyCode(options.spotify.config, code);
+            await options.spotify.onConnected(record.returnTo as string, grant);
+
+            res.status(200).type('text/plain').send('Spotify connected. You can close this tab.');
+        })().catch((err: unknown) => {
+            const upstream = err instanceof TwitchError;
+            logger[upstream ? 'warn' : 'error'](
+                { err: (err as Error).message },
+                upstream ? 'Spotify authorization could not be completed' : 'Spotify callback failed'
+            );
+            if (!res.headersSent) {
+                res.status(upstream ? 400 : 500).type('text/plain').send(
+                    upstream
+                        ? 'Spotify could not complete this authorization. It may have expired - please start again.'
+                        : 'Authorization failed.'
+                );
+            }
+        });
+    });
 
     router.get(AUTH_CALLBACK_PATH, (req: Request, res: Response) => {
         void handleCallback(req, res, options).catch((err: unknown) => {

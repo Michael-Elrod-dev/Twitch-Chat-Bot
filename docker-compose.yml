@@ -30,6 +30,8 @@ services:
       # A SERVER secret: one key for the deployment, never per-channel.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-5}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       API_RATE_WINDOW_MS: ${API_RATE_WINDOW_MS:-60000}
       API_RATE_MAX: ${API_RATE_MAX:-300}
       EVENTSUB_MAX_SKEW_SECONDS: ${EVENTSUB_MAX_SKEW_SECONDS:-600}

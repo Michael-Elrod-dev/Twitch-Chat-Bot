@@ -48,12 +48,20 @@ export class PlaybackMonitor {
     /** The track we last handed to Spotify, so it is not queued twice. */
     private lastQueuedUri: string | null = null;
 
+    /** What that track was, for `!lastsong`. In memory only, by design. */
+    private lastPlayedTrack: { trackName: string; artistName: string } | null = null;
+
     constructor(options: PlaybackMonitorOptions) {
         this.options = options;
     }
 
     get isRunning(): boolean {
         return this.running;
+    }
+
+    /** @returns the last track advanced to this session, or null after a restart. */
+    lastPlayed(): { trackName: string; artistName: string } | null {
+        return this.lastPlayedTrack;
     }
 
     start(): void {
@@ -115,6 +123,7 @@ export class PlaybackMonitor {
 
             await this.options.client.queueTrack(next.trackUri);
             this.lastQueuedUri = next.trackUri;
+            this.lastPlayedTrack = { trackName: next.trackName, artistName: next.artistName };
 
             await this.options.queue.removeHead();
 

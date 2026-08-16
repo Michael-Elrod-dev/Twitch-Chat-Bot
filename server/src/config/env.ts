@@ -129,7 +129,17 @@ const envSchema = z.object({
      * else keeps working.
      */
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
-    AI_MODEL: z.string().min(1).default('claude-sonnet-5')
+    AI_MODEL: z.string().min(1).default('claude-sonnet-5'),
+
+    /**
+     * Spotify application credentials.
+     *
+     * A server secret like the others: one application, per-channel user
+     * tokens. Absent means song requests are unavailable and every song path
+     * reports that rather than failing obscurely.
+     */
+    SPOTIFY_CLIENT_ID: z.string().min(1).optional(),
+    SPOTIFY_CLIENT_SECRET: z.string().min(1).optional()
 });
 
 export type Env = z.infer<typeof envSchema>;

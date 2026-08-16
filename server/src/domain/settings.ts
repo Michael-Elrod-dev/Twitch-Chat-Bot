@@ -61,6 +61,12 @@ export class SettingsService {
         }
     }
 
+    /** Partial update, invalidating the cache so a change takes effect at once. */
+    async update(patch: Partial<ChannelSettingsRecord>): Promise<void> {
+        await this.repository.update(patch);
+        await this.cache.del(CacheKeys.settings(this.channelId));
+    }
+
     /** Invalidates the cache on write, so a toggle takes effect immediately. */
     async setAiEnabled(enabled: boolean): Promise<void> {
         await this.repository.setAiEnabled(enabled);

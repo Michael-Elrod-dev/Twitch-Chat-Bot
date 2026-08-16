@@ -10,6 +10,10 @@ import { createRedis } from './cache/redis.js';
 import { CacheManager } from './cache/cacheManager.js';
 import { ChannelRepository } from './db/repositories/channelRepository.js';
 import { AppSessionRepository } from './db/repositories/appSessionRepository.js';
+import { ChannelTokenRepository } from './db/repositories/channelTokenRepository.js';
+import { ChannelRewardRepository } from './db/repositories/channelRewardRepository.js';
+import { RewardAdoptionService } from './services/rewardAdoption.js';
+import { UserTokenProvider } from './twitch/userTokenProvider.js';
 import { SessionManager } from './session/sessionManager.js';
 import { EventSubWebhookTransport } from './transport/eventsub/webhookTransport.js';
 import { EVENTSUB_WEBHOOK_PATH } from './transport/eventsub/webhook.js';
@@ -131,6 +135,10 @@ async function main(): Promise<void> {
     const redirectUri = `${publicUrl}${AUTH_CALLBACK_PATH}`;
 
     const twitchConfigured = Boolean(env.TWITCH_CLIENT_ID && env.TWITCH_CLIENT_SECRET);
+    const spotifyConfigured = Boolean(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET);
+    if (!spotifyConfigured) {
+        logger.warn('SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET are not set - song requests are unavailable');
+    }
     if (!twitchConfigured) {
         logger.warn('TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET are not set - OAuth and live Helix calls are unavailable');
     }
@@ -230,7 +238,22 @@ async function main(): Promise<void> {
         bot: botIdentity,
         bus,
         claude,
-        db: database.db
+        db: database.db,
+        cipher,
+        ...(helix ? { helix } : {}),
+        ...(twitchConfigured ? {
+            twitchOAuth: {
+                clientId: env.TWITCH_CLIENT_ID as string,
+                clientSecret: env.TWITCH_CLIENT_SECRET as string
+            }
+        } : {}),
+        ...(spotifyConfigured ? {
+            spotifyOAuth: {
+                clientId: env.SPOTIFY_CLIENT_ID as string,
+                clientSecret: env.SPOTIFY_CLIENT_SECRET as string,
+                redirectUri: `${publicUrl}/auth/spotify/callback`
+            }
+        } : {})
     });
 
     // One reconciliation after every channel is registered, rather than one per
@@ -240,6 +263,53 @@ async function main(): Promise<void> {
     await bootstrapChannels(buildDependencies(), sessionManager, active);
     transport.setAutoReconcile(true);
     await transport.reconcile();
+
+    /*
+     * Bind the bot's reward kinds to real Twitch rewards.
+     *
+     * Adoption only - `createMissing` stays off, because creating channel-point
+     * rewards in someone's channel unasked is a visible, surprising act. A
+     * channel with no matching reward logs that the kind is inactive and
+     * carries on.
+     *
+     * Per channel and independent: one channel's failure must not stop another
+     * from binding.
+     */
+    if (helix && twitchConfigured) {
+        for (const channel of active) {
+            try {
+                const result = await new RewardAdoptionService({
+                    channelId: channel.id,
+                    broadcasterTwitchId: channel.twitchBroadcasterId,
+                    helix,
+                    userTokens: new UserTokenProvider({
+                        clientId: env.TWITCH_CLIENT_ID as string,
+                        clientSecret: env.TWITCH_CLIENT_SECRET as string,
+                        channelId: channel.id,
+                        repository: new ChannelTokenRepository(database.db, channel.id, cipher),
+                        logger
+                    }),
+                    rewards: new ChannelRewardRepository(database.db, channel.id),
+                    logger
+                }).reconcile();
+
+                logger.info(
+                    {
+                        channelId: channel.id,
+                        adopted: result.adopted.map((a) => a.title),
+                        unchanged: result.unchanged,
+                        ignored: result.ignored
+                    },
+                    'Channel-point rewards reconciled'
+                );
+            } catch (err) {
+                logger.error(
+                    { channelId: channel.id, err: (err as Error).message },
+                    'Could not reconcile channel-point rewards - redemptions for this channel will be unmanaged'
+                );
+            }
+        }
+    }
 
     const oauth = new TwitchOAuthClient({
         config: {
@@ -305,7 +375,36 @@ async function main(): Promise<void> {
         logger,
         jwtSecret: env.JWT_SECRET,
         jwtTtlSeconds: env.JWT_TTL_SECONDS,
-        configured: twitchConfigured
+        configured: twitchConfigured,
+        ...(spotifyConfigured ? {
+            spotify: {
+                config: {
+                    clientId: env.SPOTIFY_CLIENT_ID as string,
+                    clientSecret: env.SPOTIFY_CLIENT_SECRET as string,
+                    redirectUri: `${publicUrl}/auth/spotify/callback`
+                },
+                onConnected: async (twitchUserId: string, grant) => {
+                    const channel = await channelRepository.findByBroadcasterId(twitchUserId);
+                    if (!channel) throw new Error('no channel for the connecting user');
+
+                    await new ChannelTokenRepository(database.db, channel.id, cipher).upsert('spotify', {
+                        accessToken: grant.accessToken,
+                        // Spotify always returns one on the initial exchange;
+                        // only refreshes may omit it.
+                        refreshToken: grant.refreshToken ?? '',
+                        expiresAt: grant.expiresInSeconds > 0
+                            ? new Date(Date.now() + grant.expiresInSeconds * 1000)
+                            : null,
+                        scopes: grant.scopes
+                    });
+
+                    logger.info(
+                        { channelId: channel.id, login: channel.twitchLogin, scopes: grant.scopes.length },
+                        'Spotify connected for channel'
+                    );
+                }
+            }
+        } : {})
     });
 
     // The v1 API. Order is the security contract: credentials resolve first,
