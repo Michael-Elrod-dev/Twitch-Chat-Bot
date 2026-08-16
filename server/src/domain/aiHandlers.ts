@@ -19,7 +19,12 @@ export interface AiHandlerDeps {
 
 export function createAiHandlers(deps: AiHandlerDeps): HandlerRegistry {
     return {
-        aiToggle: {
+        /*
+         * Named to match the handler_name the Phase-0 data already carries
+         * ('toggleAI', mod-level). The imported row is the owner's; the handler
+         * name is ours to choose, so it bends.
+         */
+        toggleAI: {
             level: 'mod',
             handler: async (context: HandlerContext): Promise<void> => {
                 const arg = (context.args[0] ?? '').toLowerCase();
