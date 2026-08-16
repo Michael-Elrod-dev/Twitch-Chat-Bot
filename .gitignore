@@ -38,3 +38,4 @@ coverage/
 # Build outputs
 dist/
 build/
+*.tsbuildinfo

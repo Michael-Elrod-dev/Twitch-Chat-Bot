@@ -1,0 +1,31 @@
+# Local development overlay.
+#
+# Docker Compose loads `compose.override.yml` automatically, so `docker compose up`
+# gets the dev loop and CI/production (which pass `-f docker-compose.yml` explicitly)
+# do not.
+#
+# Source is bind-mounted and run through `tsx watch`, so editing a file in
+# server/ or shared/ restarts the process in place - no rebuild, no stale image.
+services:
+  server:
+    build:
+      target: build
+    command: ["npx", "tsx", "watch", "server/src/index.ts"]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      # Docker Desktop on Windows and macOS does not propagate inotify events
+      # from the host into the container, so the watcher must poll. Harmless on
+      # native Linux, where it simply costs a periodic stat.
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "500"
+    volumes:
+      # Source is live-mounted...
+      - ./server/src:/app/server/src:ro
+      - ./server/drizzle:/app/server/drizzle:ro
+      - ./shared/src:/app/shared/src:ro
+      # ...but the image's node_modules must win over anything on the host,
+      # which may have been installed for a different platform.
+      - /app/node_modules
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-3000}:3000"

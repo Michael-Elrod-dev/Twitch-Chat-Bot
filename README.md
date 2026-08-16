@@ -149,6 +149,37 @@ to run.
 Coverage thresholds are enforced in `jest.config.js` (75% statements/lines/functions,
 70% branches).
 
+### Local development loop
+
+The Phase-1 server runs in Docker with a live-reload overlay:
+
+```bash
+docker compose up
+```
+
+`compose.override.yml` is picked up automatically: it bind-mounts `server/src`
+and `shared/src` and runs the server through `tsx watch`, so saving a file
+restarts the process without a rebuild. Postgres, Redis and Caddy come up
+alongside it. The server is on `http://localhost:3000` and through Caddy on
+`http://localhost:8080`.
+
+Production and CI use the base file explicitly and never see the overlay:
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
+Working on the server without Docker:
+
+```bash
+npm run build          # shared/ must be built once for server/ to resolve it
+npm run dev            # tsx watch against a locally-running Postgres/Redis
+npm run test:server    # Vitest
+```
+
+Schema and repository tests need a Postgres; they self-skip without
+`TEST_DATABASE_URL` and CI always supplies one.
+
 ### CI
 
 Every push and pull request to `main` runs lint and the full suite via GitHub Actions
