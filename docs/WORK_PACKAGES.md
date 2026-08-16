@@ -630,3 +630,133 @@ Everything in this package's scope is done, but the gate asks a wider question, 
 
 ### Exit criteria
 - Suites/lint/image green; the five commands answering in production (or retired with owner sign-off recorded); gate re-declared.
+
+### Completion report — P1-WP4.4 (engineer, 2026-08-16)
+
+**Status:** complete and deployed. Server **753/753** (44 files); legacy **49/1222** untouched; lint 0; typecheck clean. Production reports **zero** unknown-handler warnings since boot.
+
+#### Correction: it was seven commands, not five
+
+My P1-WP4.3 gate audit reported five unported handlers. **The real number was seven.** I enumerated Phase-1 handlers with a grep that matched only inline handler literals, so factory-built ones were invisible to it; I then reconciled the two lists by hand and, for `quoteHandler` and `modCommands`, never actually checked. They were missing too, and the report neither listed nor cleared them.
+
+Both are now ported, and the enumeration is no longer done by hand — see the gate test below.
+
+`modCommands` is the stranger of the two: **it has no implementation in Phase 0 either.** Legacy intercepted `!command` inside `CommandManager.handleCommand` before the handler registry was consulted, so the row's `handler_name` was decorative — it named a handler that never existed anywhere. Phase 1's dispatch is uniform, so the behaviour now lives where the row has always claimed it does.
+
+#### The seven
+
+| Command | Handler | Ported as |
+|---|---|---|
+| `!chats` | `combinedStats` | per-viewer totals broken down by kind, from `chat_totals` |
+| `!topchats` | `topStats` | top 5 by total interactions |
+| `!follow` | `followAge` | follow date + elapsed, from `channel_roles.followed_at` |
+| `!fursona` | `fursona` | unchanged — host verified alive |
+| `!waifu` | `waifu` | **host dead — substituted, owner decision below** |
+| `!quote` | `quoteHandler` | random or numbered, `Quote #n/total - 'text' - author, year` |
+| `!command` | `modCommands` | `add`/`edit`/`delete`, mod-level |
+
+**`!topchats` changes its source, not its answer.** Phase 0 grouped and counted the whole `chat_messages` table on every invocation — a table that grows without bound and that the owner has now deferred pruning, so that query's cost only ever rises. `chat_totals` is the aggregate that exists for exactly this question.
+
+**`!follow` was never a Helix call**, which the spec asked me to state. The legacy handler read `viewers.followed_at` straight from its own database and could only answer for people it had already recorded. Ported faithfully against `channel_roles.followed_at` — the same fact made channel-relative, which is the correction Phase 0 could not express: its single global column would have claimed someone follows every channel the bot serves.
+
+#### Third-party health checks — one alive, one dead
+
+Checked before porting rather than assumed. Neither command calls an API: both hash the username into a stable seed and post a URL, so there is no key, no rate limit and no terms to accept — only a host that must still serve the file.
+
+```
+thisfursonadoesnotexist.com/v2/jpgs-2x/seed00042.jpg   200  image/jpeg  122 KB   ALIVE
+arfa.dev/waifu-ed/editor_d6a3dae.html?seed=12345       404                       DEAD
+arfa.dev/waifu-ed/                                     404  (nginx)              path removed entirely
+www.thiswaifudoesnotexist.net/example-12345.jpg        200  image/jpeg  274 KB   candidate
+```
+
+`!fursona` ports unchanged. **`!waifu`'s host removed the project** — the whole `/waifu-ed/` path 404s, not just a hashed build artifact — so porting the legacy URL would have shipped a command that posts a broken link to every viewer who runs it.
+
+**OWNER DECISION REQUIRED.** I substituted `thiswaifudoesnotexist.net`, verified live and structurally identical to the fursona site (seed → deterministic image), so "your picture is yours" survives. This is shipped so the gate is not held open by an unanswered question, but it is **your call**: keep the substitute, or drop the command — dropping means deleting the handler and the `!waifu` row together. Phase 0's exact hash is preserved either way, so nobody's fursona changed.
+
+#### The game-limit ruling, applied
+
+Usage now charges the **requester**. Phase 0 charged the target, so `!roast @victim` repeated a few times exhausted the victim's allowance and locked them out of the bot — griefable by anyone who can type. `GameRequestTarget` no longer carries roles at all: the roles that rank a request belong to whoever pays for it.
+
+Asserted at both layers *and* on the row that gets written — checking the argument alone would not catch a service that accepted the requester and charged the target anyway.
+
+#### Reintroduction validation
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 21 | AI service charges the target (the Phase-0 griefing bug) | `api_usage` row assertion |
+| 22 | Handler passes the target as the requester | requester test |
+| 23 | `!waifu` ported as the dead arfa.dev URL | dead-host test |
+| 24 | Fursona seed no longer stable per user | stability test |
+| 25 | `!chats` not channel-scoped | isolation test |
+| 26 | `!follow` reads a global follow date | channel-relative test |
+| 27 | Stats handlers built but not registered | **gate test** |
+| 28 | Quote/mod handlers built but not registered | **gate test** |
+
+R28 named exactly `['modCommands', 'quoteHandler']` — the two I had missed.
+
+**Process note:** one reintroduction was run with `git checkout` on an uncommitted file, which discarded the method under test rather than restoring it, and the "restored" run failed for that reason. Re-run from a proper backup; no result was reported from the broken state.
+
+#### The gate is now a test, not a hand comparison
+
+`registers every one of them through the real composition root` builds a session via `buildChannelSession` with a production-shaped dependency set, feeds one command per production `handler_name`, and asserts **zero** "unknown handler" warnings. Built through the composition root rather than by calling factories, because a handler that exists but is never registered is the bug this project has now shipped three times. The hand comparison is what got the count wrong; a machine does not make that mistake twice.
+
+#### Absorption ledger
+
+| Phase-0 file | Lines | Absorbed into | State |
+|---|---|---|---|
+| `src/commands/handlers/stats.js` | 62 | `domain/statsHandlers.ts` | **full** |
+| `src/commands/handlers/utility.js` | 97 | `domain/statsHandlers.ts` (`followAge`), `domain/streamHandlers.ts` (`uptime`) | **full** |
+| `src/commands/handlers/thirdParty.js` | 63 | `domain/thirdPartyHandlers.ts` | **full** (one host substituted) |
+| `src/commands/handlers/quotes.js` | 50 | `domain/quoteHandlers.ts` | **full** |
+| `src/commands/commandManager.js` (`!command` block) | ~90 | `domain/quoteHandlers.ts` (`modCommands`) | **full** |
+
+**This package: 362 lines.** Cumulative: **3,592 legacy lines superseded.**
+
+#### Legacy Retirement gate: **OPEN**
+
+Every `handler_name` in the owner's production `commands` table resolves to a registered Phase-1 handler — all seventeen, proven through the composition root by a test that fails if any regresses, and confirmed in production by zero unknown-handler warnings since deploy.
+
+The three items that blocked it at the end of P1-WP4.3:
+
+1. **Unported commands — cleared.** Seven, not five; all ported.
+2. **Playlist port — cleared as a blocker.** Foundation shipped in WP4.3 and the remaining work is UX explicitly sequenced to the app settings screen in `PHASE1_DESIGN.md` §3. Nothing in the legacy tree implements it that deletion would take away.
+3. **Analytics history — was never a blocker.** Verified in WP4.3: the only surviving legacy data holds 1509 viewers, 22 commands, 3 emotes and 4 quotes, and **zero rows** in `streams`, `chat_totals`, `chat_messages`, `viewing_sessions` and `song_queue`.
+
+**One caveat on the declaration, stated plainly:** it rests on the seventeen `handler_name` values read from production on 2026-08-16. A command row added between then and deletion would not be covered. Re-running the gate test against a fresh read of the production table immediately before deletion is a cheap way to close that window, and I recommend the retirement package start with exactly that.
+
+#### Flagged, not fixed
+
+| Item | Why not here | Route |
+|---|---|---|
+| `!waifu` host substitution | needs an owner keep-or-drop decision | **owner** |
+| Playlist create-if-missing / naming UX | specced for the app settings screen | P1-WP8/9 |
+| `!lastsong` in-memory, empty after restart | matches the specced design | note only |
+| Prod-artifact restore drill, registry deploy, duplicate-rate counters | prior ops backlog | ops backlog |
+
+> **P1-WP4.4 verified by lead 2026-08-16:** 753/753 throwaway-DB, legacy 49/1222, lint 0, prod healthy, requester-charge spot-checked in source (the new parity-diff rule in effect), committed. The self-correction — seven not five, with the grep-only-matched-inline-literals root cause named and the gate converted from a hand count into a composition-root test that fails on regression — is exactly how a wrong count should die. The `modCommands`-never-existed-anywhere find (a decorative handler_name resolved by a legacy special case) is a fitting last archaeology. The waifu substitution shipped-with-owner-veto was the right unblocking move; the git-checkout-on-uncommitted-file incident is recorded with its nothing-reported-from-broken-state assurance. **GATE: OPEN, accepted — with your own caveat adopted as the retirement package's task 0.**
+>
+> **Owner process rule (2026-08-16, from the usage-counter regression):** lead verification of ported behavior now includes spot-diffing legacy source vs port for core behavioral conditionals. The ledger proves presence; parity needs eyes on the diff.
+
+---
+
+## P1-WP4.5 — Usage-counter visibility (micro)  [STATUS: ISSUED 2026-08-16]
+
+Part regression fix, part owner-requested redesign (owner delegated the how; lead ruled). The legacy suppression (`aiManager.js:91`: no counter for broadcasters/unlimited caps) was dropped in the 4.1 port — the owner saw `(2/999999)` live. Restore the intent and improve it: **no counter for anyone while remaining > 3**; at ≤3, a human suffix `(2 left this stream)`; `(last one this stream)` on the final request; denial message unchanged; unlimited caps (≥1000) never see a counter. Absolute threshold, constant 3, env-knobbed; uniform across roles. Flag the threshold/always-on as a future `channel_settings` field for the app's AI settings screen. Tests pin the show/hide boundary at exactly 3, the last-one message, and unlimited suppression; reintroduction-validated.
+
+---
+
+## P1-LR — Legacy Retirement  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** the repo contains exactly one bot. The Phase-0 tree and everything that exists only to serve it are deleted; CI, lint, docs, and dependencies shrink to the Phase-1 world. This is the hard gate before the repo goes in front of Claude Design.
+
+**Tasks:**
+1. **Task 0 (your own caveat, adopted):** re-run the gate test against a fresh read of the production `commands` table — close the window between declaration and deletion. Any new unhandled row blocks until handled.
+2. **Delete:** `src/`, `tests/`, `jest.config.js`, `jest.setup.js`, legacy-only root dependencies (audit `package.json` root deps — most exist solely for the legacy bot; the workspaces carry their own), `scripts/getFollowers.js`, and any other legacy-only artifacts your audit finds. The ETL tooling stays (it reads the historical dump); `docs/archive/` stays (it's the record).
+3. **CI/lint shrink:** remove the legacy test job and jest-specific config; eslint config drops its legacy-JS accommodations; confirm every remaining job is green.
+4. **Docs sweep:** README and living docs reference only the Phase-1 world; the absorption ledgers in this file are the permanent record of where everything went.
+5. **Prove production indifference:** the server tree is untouched by the deletion; deploy (or diff-prove no deployable change) and confirm prod healthy.
+6. **Final state report:** repo tree summary, dependency count, suite count — the "one bot" declaration with evidence.
+
+### Exit criteria
+- CI fully green on the shrunk pipeline; prod healthy; zero grep hits for deleted artifacts; the declaration: **repo is Claude-Design-ready pending the rebrand.**

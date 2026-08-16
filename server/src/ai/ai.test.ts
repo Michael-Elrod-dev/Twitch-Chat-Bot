@@ -391,13 +391,40 @@ describeDb('AI service', () => {
             const user = await makeViewer(`ai-game-${Date.now()}`);
             const { service, client } = buildService(alphaId);
 
-            await service.handleGameRequest('roast', {
-                twitchUserId: user, displayName: 'Target', roles: roles()
-            });
+            await service.handleGameRequest(
+                'roast',
+                { twitchUserId: user, displayName: 'Target' },
+                { twitchUserId: user, roles: roles() }
+            );
 
             expect(client.requests[0]?.system).toBe(GAME_PROMPTS.roast);
             expect(client.requests[0]?.userMessage).toContain('<target_user>');
             expect(client.requests[0]?.userMessage).not.toContain('<chat_history>');
+        });
+
+        it('spends the requester budget and leaves the target untouched', async () => {
+            /*
+             * The lead's P1-WP4.4 ruling, asserted where it actually matters —
+             * on the row that gets written. Phase 0 charged the target, so
+             * `!roast @victim` repeated a few times locked the victim out of
+             * the bot. Asserting the argument alone would not catch a service
+             * that accepted the requester and then charged the target anyway.
+             */
+            const target = await makeViewer(`ai-target-${Date.now()}`);
+            const requester = await makeViewer(`ai-payer-${Date.now()}`);
+            const { service } = buildService(alphaId);
+
+            await service.handleGameRequest(
+                'roast',
+                { twitchUserId: target, displayName: 'Target' },
+                { twitchUserId: requester, roles: roles() }
+            );
+
+            const charged = await handle.sql<{ twitch_user_id: string }[]>`
+                select twitch_user_id from api_usage where channel_id = ${alphaId}
+                  and twitch_user_id in (${target}, ${requester})`;
+
+            expect(charged.map((r) => r.twitch_user_id)).toEqual([requester]);
         });
     });
 

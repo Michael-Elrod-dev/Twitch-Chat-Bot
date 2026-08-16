@@ -82,6 +82,37 @@ describeDb('!advice and !roast', () => {
         expect(ai.gameRequests[0]?.target.twitchUserId).toBe('100');
     });
 
+    it('charges the requester, not the target', async () => {
+        /*
+         * Lead ruling, P1-WP4.4 — a deliberate departure from Phase 0, which
+         * charged the target. `!roast @victim` a few times exhausted the
+         * victim's allowance and locked them out of the bot entirely: griefable
+         * by anyone who can type. The person who spends the request pays.
+         */
+        const ai = new StubAiService();
+        const replies: string[] = [];
+
+        await handlersFor(alphaId, ai)['roast']?.handler(
+            contextFor(['@alphaviewer'], { twitchUserId: '999', login: 'asker' }, replies)
+        );
+
+        expect(ai.gameRequests[0]?.target.twitchUserId).toBe('100');
+        expect(ai.gameRequests[0]?.requester.twitchUserId).toBe('999');
+    });
+
+    it('charges the caller when they target themselves', async () => {
+        // The degenerate case must still be one charge to the one person.
+        const ai = new StubAiService();
+        const replies: string[] = [];
+
+        await handlersFor(alphaId, ai)['advice']?.handler(
+            contextFor([], { twitchUserId: '100', login: 'alphaviewer' }, replies)
+        );
+
+        expect(ai.gameRequests[0]?.requester.twitchUserId).toBe('100');
+        expect(ai.gameRequests[0]?.target.twitchUserId).toBe('100');
+    });
+
     it('targets the caller when no name is given', async () => {
         const ai = new StubAiService();
         const replies: string[] = [];

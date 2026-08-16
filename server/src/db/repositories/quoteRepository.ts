@@ -6,6 +6,8 @@ export interface QuoteRecord {
     quoteNumber: number;
     quoteText: string;
     author: string | null;
+    /** When it was saved. `!quote` prints the year, as Phase 0 did. */
+    savedAt: Date;
 }
 
 export class QuoteRepository extends ChannelScopedRepository {
@@ -20,7 +22,12 @@ export class QuoteRepository extends ChannelScopedRepository {
 
     async getByNumber(quoteNumber: number): Promise<QuoteRecord | null> {
         const [row] = await this.db
-            .select({ quoteNumber: quotes.quoteNumber, quoteText: quotes.quoteText, author: quotes.author })
+            .select({
+                quoteNumber: quotes.quoteNumber,
+                quoteText: quotes.quoteText,
+                author: quotes.author,
+                savedAt: quotes.savedAt
+            })
             .from(quotes)
             .where(and(eq(quotes.channelId, this.channelId), eq(quotes.quoteNumber, quoteNumber)));
 
@@ -29,7 +36,12 @@ export class QuoteRepository extends ChannelScopedRepository {
 
     async getRandom(): Promise<QuoteRecord | null> {
         const [row] = await this.db
-            .select({ quoteNumber: quotes.quoteNumber, quoteText: quotes.quoteText, author: quotes.author })
+            .select({
+                quoteNumber: quotes.quoteNumber,
+                quoteText: quotes.quoteText,
+                author: quotes.author,
+                savedAt: quotes.savedAt
+            })
             .from(quotes)
             .where(eq(quotes.channelId, this.channelId))
             .orderBy(raw`random()`)
@@ -100,7 +112,12 @@ export class QuoteRepository extends ChannelScopedRepository {
     /** Newest first, which is what a management UI wants by default. */
     async list(limit: number, offset: number): Promise<QuoteRecord[]> {
         return this.db
-            .select({ quoteNumber: quotes.quoteNumber, quoteText: quotes.quoteText, author: quotes.author })
+            .select({
+                quoteNumber: quotes.quoteNumber,
+                quoteText: quotes.quoteText,
+                author: quotes.author,
+                savedAt: quotes.savedAt
+            })
             .from(quotes)
             .where(eq(quotes.channelId, this.channelId))
             .orderBy(desc(quotes.quoteNumber))

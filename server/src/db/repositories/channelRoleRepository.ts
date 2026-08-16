@@ -47,6 +47,25 @@ export class ChannelRoleRepository extends ChannelScopedRepository {
     }
 
     /**
+     * @returns when this viewer followed THIS channel, or null.
+     *
+     * Channel-relative, which is the correction Phase 0 could not express: its
+     * `!follow` read a single global `viewers.followed_at`, so it would claim
+     * someone follows every channel the bot serves.
+     */
+    async followedAt(twitchUserId: string): Promise<Date | null> {
+        const [row] = await this.db
+            .select({ followedAt: channelRoles.followedAt })
+            .from(channelRoles)
+            .where(and(
+                eq(channelRoles.channelId, this.channelId),
+                eq(channelRoles.twitchUserId, twitchUserId)
+            ));
+
+        return row?.followedAt ?? null;
+    }
+
+    /**
      * Records roles observed on a chat message.
      *
      * Only ever called from a path that genuinely knows the roles. Phase 0's

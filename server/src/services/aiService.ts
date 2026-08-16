@@ -31,6 +31,19 @@ export type GamePromptType = 'advice' | 'roast';
 export interface GameRequestTarget {
     twitchUserId: string;
     displayName: string;
+}
+
+/**
+ * Who pays for the request.
+ *
+ * Separate from the target on a lead ruling (P1-WP4.4), and a deliberate
+ * departure from Phase 0: Phase 0 charged the *target*, so `!roast @victim`
+ * repeated a few times exhausted the victim's allowance and locked them out of
+ * the bot. That is griefable by anyone who can type. The person who spends the
+ * request is the person who pays for it.
+ */
+export interface GameRequestRequester {
+    twitchUserId: string;
     roles: {
         isModerator: boolean;
         isVip: boolean;
@@ -41,22 +54,34 @@ export interface GameRequestTarget {
 
 export interface AiService {
     handleTextRequest: (request: AiRequest) => Promise<AiResult>;
-    handleGameRequest: (type: GamePromptType, target: GameRequestTarget) => Promise<AiResult>;
+    handleGameRequest: (
+        type: GamePromptType,
+        target: GameRequestTarget,
+        requester: GameRequestRequester
+    ) => Promise<AiResult>;
 }
 
 /** Records what it was asked and answers nothing. */
 export class StubAiService implements AiService {
     readonly requests: AiRequest[] = [];
 
-    readonly gameRequests: { type: GamePromptType; target: GameRequestTarget }[] = [];
+    readonly gameRequests: {
+        type: GamePromptType;
+        target: GameRequestTarget;
+        requester: GameRequestRequester;
+    }[] = [];
 
     async handleTextRequest(request: AiRequest): Promise<AiResult> {
         this.requests.push(request);
         return { ok: false, message: 'AI is not wired up yet' };
     }
 
-    async handleGameRequest(type: GamePromptType, target: GameRequestTarget): Promise<AiResult> {
-        this.gameRequests.push({ type, target });
+    async handleGameRequest(
+        type: GamePromptType,
+        target: GameRequestTarget,
+        requester: GameRequestRequester
+    ): Promise<AiResult> {
+        this.gameRequests.push({ type, target, requester });
         return { ok: false, message: 'AI is not wired up yet' };
     }
 }

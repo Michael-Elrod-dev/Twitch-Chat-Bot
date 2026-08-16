@@ -48,11 +48,12 @@ function createGameHandler(type: GamePromptType, deps: GameHandlerDeps): Handler
                 return;
             }
 
-            const result = await deps.ai.handleGameRequest(type, {
-                twitchUserId: target.twitchUserId,
-                displayName: target.login,
-                roles: context.chatter
-            });
+            const result = await deps.ai.handleGameRequest(
+                type,
+                { twitchUserId: target.twitchUserId, displayName: target.login },
+                // The requester pays. See GameRequestRequester for why.
+                { twitchUserId: context.chatter.twitchUserId, roles: context.chatter }
+            );
 
             await context.reply(
                 result.ok

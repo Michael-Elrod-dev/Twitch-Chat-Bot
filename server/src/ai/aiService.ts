@@ -77,15 +77,23 @@ export class ChannelAiService implements AiService {
         });
     }
 
-    /** `!advice` and `!roast` — about one person rather than a conversation. */
+    /**
+     * `!advice` and `!roast` — about one person rather than a conversation.
+     *
+     * The prompt is about the TARGET; the allowance is charged to the
+     * REQUESTER. Phase 0 conflated the two and charged the target, which made
+     * `!roast @victim` a way to burn someone else's budget until they could no
+     * longer use the bot. Lead ruling, P1-WP4.4.
+     */
     async handleGameRequest(
         type: GamePromptType,
-        target: { twitchUserId: string; displayName: string; roles: ChatterRoles }
+        target: { twitchUserId: string; displayName: string },
+        requester: { twitchUserId: string; roles: ChatterRoles }
     ): Promise<AiResult> {
         return this.run({
-            twitchUserId: target.twitchUserId,
+            twitchUserId: requester.twitchUserId,
             username: target.displayName,
-            roles: target.roles,
+            roles: requester.roles,
             build: async (history, stream, roles) => ({
                 system: GAME_PROMPTS[type],
                 userMessage: buildGamePrompt({

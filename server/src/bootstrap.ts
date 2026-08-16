@@ -15,6 +15,10 @@ import { createAiHandlers } from './domain/aiHandlers.js';
 import { createSongHandlers } from './domain/songHandlers.js';
 import { createStreamHandlers } from './domain/streamHandlers.js';
 import { createGameHandlers } from './domain/gameHandlers.js';
+import { createStatsHandlers } from './domain/statsHandlers.js';
+import { createQuoteHandlers } from './domain/quoteHandlers.js';
+import { QuoteManager } from './domain/quoteManager.js';
+import { createThirdPartyHandlers } from './domain/thirdPartyHandlers.js';
 import { StreamService } from './domain/streamService.js';
 import { PresenceTracker } from './domain/presenceTracker.js';
 import { StreamRepository } from './db/repositories/streamRepository.js';
@@ -285,6 +289,14 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         })
         : null;
 
+    /*
+     * A holder rather than the manager itself: `!command` edits the very
+     * registry it is registered in, so the CommandManager cannot exist yet when
+     * its handlers are built. Filled in immediately after construction, and
+     * read only from inside a handler.
+     */
+    const managerRef: { current: CommandManager | null } = { current: null };
+
     const commands = new CommandManager({
         channelId,
         repository: repositories.commands,
@@ -307,9 +319,24 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                 ? createStreamHandlers({ streams, broadcasterLogin: channel.twitchLogin })
                 : {}),
             ...createGameHandlers({ ai, roles: repositories.roles, logger: channelLogger }),
+            ...(deps.db
+                ? createStatsHandlers({
+                    analytics: new AnalyticsRepository(deps.db, channelId),
+                    roles: repositories.roles
+                })
+                : {}),
+            // No database and no network: these only need a username.
+            ...createThirdPartyHandlers(),
+            ...createQuoteHandlers({
+                quotes: new QuoteManager({ repository: repositories.quotes }),
+                commands: () => managerRef.current as CommandManager,
+                logger: channelLogger
+            }),
             ...(handlers ?? {})
         }
     });
+    managerRef.current = commands;
+
     const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
 
 

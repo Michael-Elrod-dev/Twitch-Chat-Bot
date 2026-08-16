@@ -1,4 +1,4 @@
-import { desc, eq, sql as raw } from 'drizzle-orm';
+import { and, desc, eq, sql as raw } from 'drizzle-orm';
 import { chatTotals, streams, viewers, channelRoles } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
 import type { InteractionType } from '../../services/analytics.js';
@@ -63,6 +63,51 @@ export class AnalyticsRepository extends ChannelScopedRepository {
                     lastUpdatedAt: new Date()
                 }
             });
+    }
+
+    /** @returns one viewer's totals in this channel, or null if they have none. */
+    async totalsForLogin(login: string): Promise<{
+        login: string;
+        messageCount: number;
+        commandCount: number;
+        redemptionCount: number;
+        totalCount: number;
+    } | null> {
+        const [row] = await this.db
+            .select({
+                login: viewers.login,
+                messageCount: chatTotals.messageCount,
+                commandCount: chatTotals.commandCount,
+                redemptionCount: chatTotals.redemptionCount,
+                totalCount: chatTotals.totalCount
+            })
+            .from(chatTotals)
+            .innerJoin(viewers, eq(viewers.twitchUserId, chatTotals.twitchUserId))
+            .where(and(
+                eq(chatTotals.channelId, this.channelId),
+                raw`lower(${viewers.login}) = ${login.toLowerCase()}`
+            ))
+            .limit(1);
+
+        return row ?? null;
+    }
+
+    /**
+     * @returns the most active viewers in this channel.
+     *
+     * Reads `chat_totals`, where Phase 0 read `chat_messages` — it grouped and
+     * counted the entire per-message table on every `!topchats`, which grows
+     * without bound and which the owner has now deferred pruning on. The
+     * aggregate exists precisely so this question costs one indexed read.
+     */
+    async topChatters(limit: number): Promise<{ login: string; totalCount: number }[]> {
+        return this.db
+            .select({ login: viewers.login, totalCount: chatTotals.totalCount })
+            .from(chatTotals)
+            .innerJoin(viewers, eq(viewers.twitchUserId, chatTotals.twitchUserId))
+            .where(eq(chatTotals.channelId, this.channelId))
+            .orderBy(desc(chatTotals.totalCount))
+            .limit(limit);
     }
 
     async summary(): Promise<AnalyticsSummaryRecord> {
