@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { channelRoles, viewers } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
 
@@ -20,6 +20,28 @@ export class ChannelRoleRepository extends ChannelScopedRepository {
             })
             .from(channelRoles)
             .where(and(eq(channelRoles.channelId, this.channelId), eq(channelRoles.twitchUserId, twitchUserId)));
+
+        return row ?? null;
+    }
+
+    /**
+     * Resolves `@name` to a Twitch user id, within this channel.
+     *
+     * Channel-scoped on purpose. Phase 0 searched the whole `viewers` table, so
+     * `!roast @someone` in channel A could name a person who has only ever
+     * appeared in channel B. Restricting the lookup to viewers this channel has
+     * actually seen keeps one tenant's audience invisible to another.
+     */
+    async findByLogin(login: string): Promise<{ twitchUserId: string; login: string } | null> {
+        const [row] = await this.db
+            .select({ twitchUserId: viewers.twitchUserId, login: viewers.login })
+            .from(channelRoles)
+            .innerJoin(viewers, eq(viewers.twitchUserId, channelRoles.twitchUserId))
+            .where(and(
+                eq(channelRoles.channelId, this.channelId),
+                sql`lower(${viewers.login}) = ${login.toLowerCase()}`
+            ))
+            .limit(1);
 
         return row ?? null;
     }

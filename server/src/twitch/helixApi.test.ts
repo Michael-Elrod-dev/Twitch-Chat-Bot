@@ -178,10 +178,18 @@ describe('HelixApi', () => {
 
         it('follows the cursor when listing chatters', async () => {
             const api = build((n) => (n === 0
-                ? jsonResponse(200, { data: [{ user_id: '1' }], pagination: { cursor: 'c' } })
-                : jsonResponse(200, { data: [{ user_id: '2' }] })));
+                ? jsonResponse(200, {
+                    data: [{ user_id: '1', user_login: 'one' }],
+                    pagination: { cursor: 'c' }
+                })
+                : jsonResponse(200, { data: [{ user_id: '2', user_login: 'two' }] })));
 
-            expect(await api.getChatters('1', '2', 'user-token')).toEqual(['1', '2']);
+            // The login rides along: presence writes both, and an id with no
+            // name turns every viewer row into an unreadable number.
+            expect(await api.getChatters('1', '2', 'user-token')).toEqual([
+                { twitchUserId: '1', login: 'one' },
+                { twitchUserId: '2', login: 'two' }
+            ]);
         });
     });
 

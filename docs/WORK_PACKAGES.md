@@ -493,3 +493,140 @@ All six song commands are wired to real command rows in production with correct 
 
 ### Exit criteria
 - Suites/lint/image green; two-channel isolation held for presence/totals; reintroduction validation; ledger showing the legacy analytics tree fully absorbed; live proof; the Legacy Retirement gate declared OPEN or blocked-with-reasons.
+
+### Completion report — P1-WP4.3 (engineer, 2026-08-16)
+
+**Status:** code complete and deployed; live proof pending the owner's commands. Server **734/734** (43 files); legacy **49/1222** untouched; lint 0; typecheck clean; migration `0004` applied to production.
+
+#### Task 0 — the named coverage debt, closed
+
+Both branches now assert through a real collaborator rather than through construction:
+
+- **Redemption pipeline** — a malformed redemption arrives at Helix as `CANCELED`, proving routing → handler → settlement → Helix is joined end to end.
+- **Song toggle** — `!songs off` from a mod arrives at Helix as `setCustomRewardEnabled`, proving the service was built *and* registered with the CommandManager.
+
+Severing either wire fails exactly one test.
+
+#### The silent-skip hazard — fixed, as directed
+
+The hazard was real and I hit it myself: a reintroduction run reported "12 passed" while the tests that would have caught the defect had silently skipped. Locally, **181 of 693 tests** vanished without `TEST_DATABASE_URL` and the suite still printed green.
+
+`server/src/testing/dbSkipReporter.ts` now makes that impossible to miss and impossible in CI. Three modes, all verified:
+
+| Condition | Behaviour | Verified |
+|---|---|---|
+| No `TEST_DATABASE_URL` | Yellow banner naming the skip count and the command to run them | banner printed, exit 0 |
+| `REQUIRE_DB_TESTS=1`, no database | Red banner, **job fails** | exit code 1 |
+| `REQUIRE_DB_TESTS=1` with database | Silent, normal pass | 734/734, exit 0 |
+
+CI sets `REQUIRE_DB_TESTS=1`, so a Postgres service that fails to start now fails the job instead of quietly reporting a green check over 181 tests that never ran.
+
+#### `viewers.context` — resolved, and the answer is "nowhere"
+
+Three independent findings, all verifiable:
+
+1. **Nothing in the Phase-0 codebase ever wrote it.** The column appears in `contextBuilder.getUserProfile`'s SELECT and in `promptBuilder`, and in no INSERT or UPDATE anywhere in the tree.
+2. **The ETL never carried it** — its viewers SELECT names eight columns and `context` is not among them.
+3. **The recovered dump carries zero values.** All **1509** viewer rows have it NULL — and 1509 matches the owner's verified import count exactly, so this is the real data, not a partial copy.
+
+The feature was vestigial: every `!advice` and `!roast` Phase 0 ever answered took the prompts' own "if no profile context exists" branch. So the commands port **profile-less**, which is not a regression but an accurate description of what they always did. **No dead column was added** — carrying an always-empty column into v2 would advertise data that has never existed. A curated profile remains a real feature the app can add later, with a writer.
+
+#### Streams, presence, totals, games, playlist
+
+**Streams writer.** `stream.online` now carries **Twitch's own stream id** (the payload's `id`), replacing Phase 0's `Date.now()`. State is resolved **from the database on start**, so a mid-stream deploy resumes rather than silently beginning a new stream — Phase 0 held it in an instance field, so every deploy reset the AI allowance and `!uptime`. The P1-WP4.1 flag is closed at source: `currentStreamId: () => null` and the hardcoded null prompt context are both gone. `!uptime` answers from the recorded start time.
+
+**Presence.** A 60s chatters poll (matching Phase 0's cadence) drives `viewing_sessions` and is the promised caller for `touchPresence`. **The P1-1 lesson is the whole design**: the chatters endpoint carries no role information, so this path writes presence and never a role — Phase 0's poll wrote role defaults and erased every moderator and VIP flag once a minute. Session-owned lifecycle, self-stops on dead broadcaster auth, and it does not call Helix at all while offline.
+
+**Chat totals.** Synchronous upsert alongside the message write, incremented in SQL so concurrent messages both count. No Redis queue: at two channels it is one upsert on a two-column primary key, and the queue's consumer is a second moving part that can fall behind. **The batching architecture is recorded as the scale path** in the method's own comment, with the seam named. The analytics API's numbers are now real rather than structurally-correct zeroes.
+
+**Game commands.** `!advice`/`!roast` wired. The viewer lookup is **channel-scoped**, tightening Phase 0: it searched the whole `viewers` table, so `!roast @someone` in one channel could name a person who had only ever appeared in another.
+
+**Requests playlist (owner-elevated).** Foundation shipped: append via the tested `addToPlaylist`, **dedup via a DB claim, never playlist paging** — Phase 0 paged the entire playlist on every request, an unbounded number of Spotify calls on the redemption path growing with the playlist. The claim is a write-that-answers (`ON CONFLICT DO NOTHING ... RETURNING`), so two simultaneous requests for one track produce one append; a failed append releases the claim so it is not recorded as saved. Keyed by playlist as well as track, so a new season's playlist gets the songs again. Never a refund — the song is queued and will play; a bookkeeping failure must not cost the viewer their points. `channel_settings` schema-prepped (`requests_playlist_enabled/name/id`, default **off**) so the toggle/naming UX is a UI change rather than a migration.
+
+**Retention.** No prune job built, per the owner's deferral. Recorded in `PHASE1_DESIGN.md` §9 with its trigger.
+
+#### Reintroduction validation
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 1 | Redemption pipeline built but not handed to the session | task-0 wiring test |
+| 2 | Song toggle built but not registered | task-0 wiring test |
+| 3 | Stream not reopened when Twitch drops and returns | reopen test |
+| 4 | Orphaned viewing sessions left open at stream end | offline test |
+| 5 | Restart does not resume the open stream | resume test |
+| 6 | Stream context not wired into the prompt (the 4.1 flag) | composition-root test |
+| 7 | Rate-limit bucket not wired to the stream | `api_usage` assertion |
+| 8 | `!uptime` from process time, not stream start | uptime test |
+| 9 | Presence poll writes role defaults (Phase-0 P1-1) | role-preservation test |
+| 10 | Duplicate viewing session opened every tick | dedup test |
+| 11 | Departed viewers never closed | close test |
+| 12 | Presence polls while offline | Helix call-count test |
+| 13 | Totals overwrite instead of increment | concurrency test |
+| 14 | Totals not channel-scoped | isolation test |
+| 15 | Game-command lookup searches all channels | isolation test |
+| 16 | Unknown target silently does nothing | reply test |
+| 17 | Playlist append ignores the enabled toggle | toggle test |
+| 18 | Playlist dedup removed | claim test |
+| 19 | Failed append keeps its claim | release test |
+| 20 | Release ignores playlist scope | scoped-release test |
+
+**Honesty items.**
+- **Two tests were not load-bearing when first written, and both were rewritten.** (a) The 4.1-flag reintroduction broke *nothing* — the stream service and its context were tested, the wire between them was not. (b) The replacement was then named "…and the rate-limit bucket" while asserting only the prompt, so reverting `currentStreamId` still passed. A test that names two things and checks one lies about its own coverage.
+- **One correct non-catch, recorded as such:** removing the `streamId &&` guard before `recordMessage` changes no behaviour, because the UPDATE matches no rows when the id is null. The guard saves a pointless query; it does not enforce correctness, and no test should claim it does.
+- **My first two reintroduction runs for task 0 were void** — the DB env did not survive between shells and the suites skipped. That produced the reporter fix above.
+
+#### Absorption ledger — the legacy analytics tree
+
+| Phase-0 file | Lines | Absorbed into | State |
+|---|---|---|---|
+| `src/analytics/analyticsManager.js` | 112 | `domain/streamService.ts`, `db/repositories/streamRepository.ts` | **full** |
+| `src/analytics/viewers/viewerTracker.js` | 576 | `domain/presenceTracker.ts`, `channelRoleRepository.touchPresence` | **full** |
+| `src/redis/analyticsQueueConsumer.js` | 267 | `services/analytics.ts` (synchronous) — queue deliberately not ported | **superseded** |
+| `src/redis/queueManager.js` | 278 | same — the analytics queue was its only remaining consumer | **superseded** |
+| `src/ai/contextBuilder.js` | 175 | `domain/streamService.context()`, `ai/promptBuilder.ts` | **full** (profile path vestigial — see above) |
+| `src/commands/handlers/aiGames.js` | 111 | `domain/gameHandlers.ts` | **full** |
+| `src/commands/handlers/utility.js` | 97 | `domain/streamHandlers.ts` (`!uptime`) | **partial** — `followAge` unported |
+| `src/commands/handlers/stats.js` | 62 | — | **unported** |
+| `src/commands/handlers/thirdParty.js` | 63 | — | **unported** |
+
+**Total this package: 1,741 legacy lines superseded.** Cumulative with WP4.2: **3,230**.
+
+#### Legacy Retirement gate: **BLOCKED — with reasons**
+
+Everything in this package's scope is done, but the gate asks a wider question, and the honest answer is no. Three items, in severity order:
+
+**1. Five production commands have no Phase-1 handler.** The owner's database carries `combinedStats` (`!chats`), `topStats` (`!topchats`), `followAge` (`!follow`), `fursona`, and `waifu`. Each row survives; the handler does not, so the pipeline logs *"Command references an unknown handler"* and answers nothing. Deleting the legacy tree deletes the only implementation. Two of them (`!chats`, `!topchats`) read `chat_totals`, which this package just made real — they are close. `!follow` needs a Helix follow lookup; `fursona`/`waifu` call third-party APIs. **None are in this package's locked scope**, so I have not built them.
+
+**2. The `Chat Song Requests` playlist port is foundation-only, by spec.** Append and dedup work; the create-if-missing and naming UX is specced for the app settings screen. Until a playlist id is set, the feature is inert — correct for now, but the owner's existing playlist behaviour is not yet reproduced end to end.
+
+**3. Verified, and *not* a blocker — the analytics history does not exist to lose.** I checked rather than assumed: the recovered dump (the only surviving legacy data) contains **1509 viewers, 22 commands, 3 emotes, 4 quotes — and zero rows** in `streams`, `chat_totals`, `chat_messages`, `viewing_sessions`, and `song_queue`. The ETL handles all five tables correctly; the source simply had nothing in them. Production matches. So retirement risks no analytics history, because none survived to Phase 1 in the first place.
+
+**Recommendation:** a small package covering the five commands clears item 1 and, with it, the gate. Item 2 is a deliberate sequencing choice already recorded in the design doc and should not block deletion on its own — but it is the owner's call, since it is their community feature.
+
+#### Flagged, not fixed
+
+| Item | Why not here | Route |
+|---|---|---|
+| `!chats`, `!topchats`, `!follow`, `fursona`, `waifu` unported | outside locked scope | **blocks Legacy Retirement** |
+| Game-command rate limit charged to the **target**, not the requester | ported Phase-0 behaviour; changing it is a product decision | abuse vector: `!roast @victim` repeatedly burns the victim's AI allowance |
+| Playlist create-if-missing / naming UX | specced for the app settings screen | P1-WP8/9 |
+| `!lastsong` in-memory, empty after restart | matches the specced design | note only |
+| Prod-artifact restore drill, registry deploy, duplicate-rate counters | prior ops backlog | ops backlog |
+
+> **P1-WP4.3 verified by lead 2026-08-16:** 734/734 throwaway-DB, legacy 49/1222, lint 0, prod healthy, committed. The `viewers.context` resolution is exemplary evidence work — zero populated values across exactly the verified 1509 rows means the profile feature never existed in practice, and refusing to carry an always-empty column forward ("advertising data that has never existed") is the right call. The silent-skip fix verified in all three modes, the R12/R15/R16/R19 test-honesty catches, and the analytics-history-loss check (nothing survived to lose — verified, not assumed) are all endorsed. **Gate ruling: BLOCKED is correct, and the blocker becomes P1-WP4.4 (below).** The game-limit abuse vector is ruled by the lead: **charge the requester, not the target** — `!roast @victim` burning the victim's allowance is exploitable griefing; this is a deliberate behavior change from Phase 0, owner-vetoable. Ledger at 3,230 cumulative lines superseded.
+
+---
+
+## P1-WP4.4 — The last five commands  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** clear the Legacy Retirement gate. The five production command rows without Phase-1 handlers — `!chats`, `!topchats`, `!follow`, `fursona`, `waifu` — get ported or explicitly retired with the owner, and the gate is re-declared.
+
+**Lead calls:**
+- `!chats` / `!topchats`: read the now-real `chat_totals` (per-channel; `!topchats` respects a sane top-N).
+- `!follow`: port against Phase-1 data/Helix as the legacy behavior actually was (state what it did — follow-age vs follow-prompt — from the legacy source, and port that).
+- `fursona` / `waifu`: these call third-party APIs — verify each API is alive and its terms unchanged before porting; if an API is dead or sketchy, flag to the owner with a keep-with-alternative/drop decision rather than silently porting a corpse.
+- **Game-limit ruling lands here:** usage charges the requester (owner-vetoable as a deliberate Phase-0 behavior change), with the reintroduction test updated to match.
+- Ledger updated; then the formal re-declaration: **Legacy Retirement gate OPEN or still blocked, with reasons.**
+
+### Exit criteria
+- Suites/lint/image green; the five commands answering in production (or retired with owner sign-off recorded); gate re-declared.

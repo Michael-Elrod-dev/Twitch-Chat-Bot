@@ -14,8 +14,13 @@ import { ChatHistoryRepository } from './db/repositories/chatHistoryRepository.j
 import { createAiHandlers } from './domain/aiHandlers.js';
 import { createSongHandlers } from './domain/songHandlers.js';
 import { createStreamHandlers } from './domain/streamHandlers.js';
+import { createGameHandlers } from './domain/gameHandlers.js';
 import { StreamService } from './domain/streamService.js';
+import { PresenceTracker } from './domain/presenceTracker.js';
 import { StreamRepository } from './db/repositories/streamRepository.js';
+import { AnalyticsRepository } from './db/repositories/analyticsRepository.js';
+import { PlaylistRepository } from './db/repositories/playlistRepository.js';
+import { DatabaseAnalyticsSink } from './services/analytics.js';
 import { SongToggleService } from './domain/songToggle.js';
 import { createSongRequestHandler, createSkipQueueHandler } from './domain/songRedemption.js';
 import { createQuoteRedemptionHandler } from './domain/quoteRedemption.js';
@@ -181,9 +186,13 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
      */
     let redemptions: RedemptionPipeline | undefined;
     let songToggle: SongToggleService | null = null;
+    // Hoisted: presence polling needs the same broadcaster token, and building
+    // a second provider would mean two independent refresh paths racing to
+    // rotate one refresh token.
+    let userTokens: UserTokenProvider | null = null;
 
     if (deps.db && deps.cipher && deps.helix && deps.twitchOAuth && songQueue) {
-        const userTokens = new UserTokenProvider({
+        userTokens = new UserTokenProvider({
             clientId: deps.twitchOAuth.clientId,
             clientSecret: deps.twitchOAuth.clientSecret,
             channelId,
@@ -203,7 +212,13 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             logger: channelLogger
         });
 
-        const songDeps = { spotify: spotify as SpotifyClient, queue: songQueue, settings, logger: channelLogger };
+        const songDeps = {
+            spotify: spotify as SpotifyClient,
+            queue: songQueue,
+            settings,
+            logger: channelLogger,
+            playlist: new PlaylistRepository(deps.db, channelId)
+        };
 
         redemptions = new RedemptionPipeline({
             channelId,
@@ -231,32 +246,6 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         });
     }
 
-    const commands = new CommandManager({
-        channelId,
-        repository: repositories.commands,
-        cache,
-        logger: channelLogger,
-        // The AI toggle is always available; a channel-specific registry adds
-        // to it rather than replacing it.
-        handlers: {
-            ...createAiHandlers({ settings, logger: channelLogger }),
-            ...(songToggle && songQueue
-                ? createSongHandlers({
-                    queue: songQueue,
-                    spotify,
-                    toggle: songToggle,
-                    logger: channelLogger,
-                    lastPlayed: () => monitor?.lastPlayed() ?? null
-                })
-                : {}),
-            ...(streams
-                ? createStreamHandlers({ streams, broadcasterLogin: channel.twitchLogin })
-                : {}),
-            ...(handlers ?? {})
-        }
-    });
-    const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
-
     /*
      * The real AI when a client and a database are available, the injected stub
      * otherwise. Everything per-channel - the budget, the history, the settings -
@@ -279,6 +268,64 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         })
         : ai_fallback;
 
+    /*
+     * Presence polling. Needs everything the redemption path needs (a
+     * broadcaster user token) plus a stream to attach sessions to.
+     */
+    const presence = (streams && userTokens && deps.helix && deps.db)
+        ? new PresenceTracker({
+            channelId,
+            broadcasterTwitchId: channel.twitchBroadcasterId,
+            streams,
+            streamRepository: new StreamRepository(deps.db, channelId),
+            roles: repositories.roles,
+            helix: deps.helix,
+            userToken: () => (userTokens as UserTokenProvider).get(),
+            logger: channelLogger
+        })
+        : null;
+
+    const commands = new CommandManager({
+        channelId,
+        repository: repositories.commands,
+        cache,
+        logger: channelLogger,
+        // The AI toggle is always available; a channel-specific registry adds
+        // to it rather than replacing it.
+        handlers: {
+            ...createAiHandlers({ settings, logger: channelLogger }),
+            ...(songToggle && songQueue
+                ? createSongHandlers({
+                    queue: songQueue,
+                    spotify,
+                    toggle: songToggle,
+                    logger: channelLogger,
+                    lastPlayed: () => monitor?.lastPlayed() ?? null
+                })
+                : {}),
+            ...(streams
+                ? createStreamHandlers({ streams, broadcasterLogin: channel.twitchLogin })
+                : {}),
+            ...createGameHandlers({ ai, roles: repositories.roles, logger: channelLogger }),
+            ...(handlers ?? {})
+        }
+    });
+    const emotes = new EmoteManager({ channelId, repository: repositories.emotes, cache });
+
+
+    /*
+     * Real totals where there is a database, the injected sink otherwise. The
+     * analytics API already reads chat_totals, so wiring this is what turns its
+     * numbers from structurally-correct zeroes into the channel's real history.
+     */
+    const analyticsSink = deps.db
+        ? new DatabaseAnalyticsSink({
+            analytics: new AnalyticsRepository(deps.db, channelId),
+            streams: new StreamRepository(deps.db, channelId),
+            currentStreamId: () => streams?.currentStreamId() ?? null
+        })
+        : analytics;
+
     const pipeline = new ChatPipeline({
         channelId,
         botTwitchUserId: bot.twitchUserId,
@@ -288,8 +335,10 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         settings,
         roles: repositories.roles,
         ai,
-        analytics,
+        analytics: analyticsSink,
         logger: channelLogger,
+        // Messages land against the stream they happened in.
+        currentStreamId: () => streams?.currentStreamId() ?? null,
         ...(repositories.history ? { history: repositories.history } : {}),
         ...(deps.bus ? { bus: deps.bus } : {}),
         // The pipeline knows only "say this"; where it goes is the sink's problem.
@@ -314,7 +363,8 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         // stop. Building one and never handing it over is exactly the bug that
         // left a queued track untouched through ninety minutes of playback.
         ...(monitor ? { monitor } : {}),
-        ...(streams ? { streams } : {})
+        ...(streams ? { streams } : {}),
+        ...(presence ? { presence } : {})
     });
 }
 

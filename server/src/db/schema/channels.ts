@@ -91,6 +91,21 @@ export const channelSettings = pgTable('channel_settings', {
     /** Last go-live post, for the notification cooldown. */
     lastDiscordNotificationAt: timestamp('last_discord_notification_at', { withTimezone: true }),
     songRequestsEnabled: boolean('song_requests_enabled').notNull().default(true),
+    /*
+     * The requests playlist, elevated by the owner to a core feature
+     * (PHASE1_DESIGN §3): requested songs are saved to a playlist the streamer
+     * names, so the community's history survives the stream.
+     *
+     * P1-WP4.3 ships the foundation — append with DB-side dedup — against a
+     * default-off toggle and a playlist id supplied out of band. The naming and
+     * create-if-missing UX belongs to the app's settings screen, so these
+     * columns exist now to keep that a UI change rather than a migration.
+     */
+    requestsPlaylistEnabled: boolean('requests_playlist_enabled').notNull().default(false),
+    /** What the streamer calls it. Display and creation only — never used to look one up. */
+    requestsPlaylistName: text('requests_playlist_name'),
+    /** Spotify's id. Null means "not connected yet", and the append is skipped. */
+    requestsPlaylistId: text('requests_playlist_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });

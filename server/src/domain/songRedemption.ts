@@ -2,6 +2,7 @@ import type { RedemptionHandler } from '../session/redemptionPipeline.js';
 import type { SpotifyClient, SpotifyTrack } from '../spotify/spotifyClient.js';
 import { parseTrackId } from '../spotify/spotifyClient.js';
 import type { SongQueueRepository } from '../db/repositories/songQueueRepository.js';
+import type { PlaylistRepository } from '../db/repositories/playlistRepository.js';
 import type { SettingsService } from './settings.js';
 import type { Logger } from '../logger.js';
 import { ManualReauthRequiredError } from '../twitch/errors.js';
@@ -22,6 +23,8 @@ export interface SongRedemptionOptions {
     queue: SongQueueRepository;
     settings: SettingsService;
     logger: Logger;
+    /** Dedup record for the requests playlist. Absent means the feature is off. */
+    playlist?: PlaylistRepository;
 }
 
 export function createSongRequestHandler(options: SongRedemptionOptions): RedemptionHandler {
@@ -85,6 +88,8 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
             'Song queued by redemption'
         );
 
+        await saveToPlaylist(options, settings, context.channelId, track);
+
         /*
          * Deliberately NOT "added to the queue".
          *
@@ -106,6 +111,50 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
 
         return null;
     };
+}
+
+/**
+ * Appends the track to the channel's requests playlist.
+ *
+ * Best-effort by design and never a refund: the viewer's song is queued and
+ * will play. Failing their redemption because a *bookkeeping* playlist could
+ * not be written would take their points for a problem they cannot see.
+ *
+ * Dedup is the DB claim, never a playlist read. Phase 0 paged the whole
+ * playlist on every request — an unbounded number of Spotify calls on the
+ * redemption path, growing with the playlist.
+ */
+async function saveToPlaylist(
+    options: SongRedemptionOptions,
+    settings: { requestsPlaylistEnabled: boolean; requestsPlaylistId: string | null },
+    channelId: string,
+    track: SpotifyTrack
+): Promise<void> {
+    const playlistId = settings.requestsPlaylistId;
+    if (!options.playlist || !settings.requestsPlaylistEnabled || !playlistId) return;
+
+    // Claim first: winning the insert is what makes this the one caller that
+    // appends, even if two viewers request the same track simultaneously.
+    if (!await options.playlist.claim(playlistId, track.uri)) {
+        options.logger.debug(
+            { channelId, track: track.name },
+            'Track is already in the requests playlist'
+        );
+        return;
+    }
+
+    try {
+        await options.spotify.addToPlaylist(playlistId, track.uri);
+        options.logger.info({ channelId, track: track.name }, 'Saved to the requests playlist');
+    } catch (err) {
+        // Release the claim, or the track is recorded as saved while Spotify
+        // never received it and no later request would ever retry it.
+        await options.playlist.release(playlistId, track.uri);
+        options.logger.warn(
+            { channelId, track: track.name, err: (err as Error).message },
+            'Could not save to the requests playlist - the song is still queued'
+        );
+    }
 }
 
 export function createSkipQueueHandler(options: SongRedemptionOptions): RedemptionHandler {

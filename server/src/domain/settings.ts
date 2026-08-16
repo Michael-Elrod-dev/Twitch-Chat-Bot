@@ -11,7 +11,12 @@ const CACHE_TTL_SECONDS = 60;
 const DEFAULTS: ChannelSettingsRecord = {
     aiEnabled: true,
     songRequestsEnabled: true,
-    discordWebhookUrl: null
+    discordWebhookUrl: null,
+    // Off until the streamer turns it on and names a playlist: saving a
+    // viewer's request somewhere they never asked for is a surprise.
+    requestsPlaylistEnabled: false,
+    requestsPlaylistName: null,
+    requestsPlaylistId: null
 };
 
 export interface SettingsServiceOptions {

@@ -15,6 +15,16 @@ export interface HandlerContext {
         twitchUserId: string;
         login: string;
         displayName: string;
+        /*
+         * The chatter's roles in THIS channel. The pipeline has always passed
+         * them (it forwards the whole chat event chatter); the type simply did
+         * not say so, which left handlers unable to reach what was already
+         * there.
+         */
+        isModerator: boolean;
+        isVip: boolean;
+        isSubscriber: boolean;
+        isBroadcaster: boolean;
     };
     reply: (message: string) => Promise<void>;
 }

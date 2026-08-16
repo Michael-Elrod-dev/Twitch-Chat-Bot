@@ -6,6 +6,7 @@ import type { EmoteManager } from '../domain/emoteManager.js';
 import type { RedemptionPipeline } from './redemptionPipeline.js';
 import type { PlaybackMonitor } from '../spotify/playbackMonitor.js';
 import type { StreamService } from '../domain/streamService.js';
+import type { PresenceTracker } from '../domain/presenceTracker.js';
 
 /** Bounded dedup history. Twitch documents EventSub as at-least-once. */
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -32,6 +33,12 @@ export interface ChannelSessionOptions {
      * which is what every channel did before P1-WP4.3.
      */
     streams?: StreamService;
+    /**
+     * The viewer-presence poll. Session-owned for the same reason the playback
+     * monitor is: a poller that outlives its session keeps calling Helix for a
+     * channel the bot no longer serves.
+     */
+    presence?: PresenceTracker;
 }
 
 export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
@@ -56,6 +63,7 @@ export class ChannelSession {
     private readonly redemptions: RedemptionPipeline | undefined;
     private readonly monitor: PlaybackMonitor | undefined;
     private readonly streams: StreamService | undefined;
+    private readonly presence: PresenceTracker | undefined;
 
     private state: SessionState = 'stopped';
     private live = false;
@@ -73,6 +81,7 @@ export class ChannelSession {
         this.redemptions = options.redemptions;
         this.monitor = options.monitor;
         this.streams = options.streams;
+        this.presence = options.presence;
     }
 
     getState(): SessionState {
@@ -104,6 +113,7 @@ export class ChannelSession {
             // Started only once the session is otherwise ready, so a failed
             // load cannot leave a poller running for a session that never came up.
             this.monitor?.start();
+            this.presence?.start();
 
             this.state = 'running';
             this.logger.info({ channelId: this.channelId }, 'Channel session started');
@@ -126,6 +136,9 @@ export class ChannelSession {
         // Each step isolated: one failure must not abandon the rest of teardown.
         await this.runTeardownStep('stop playback monitor', async () => {
             this.monitor?.stop();
+        });
+        await this.runTeardownStep('stop presence tracker', async () => {
+            this.presence?.stop();
         });
         await this.runTeardownStep('clear dedup history', async () => {
             this.seenMessageIds.clear();

@@ -230,3 +230,33 @@ export const channelRewards = pgTable(
         )
     ]
 );
+
+/**
+ * What has already been appended to a channel's requests playlist.
+ *
+ * This table IS the dedup mechanism, and it exists to avoid the Phase-0 one:
+ * `spotifyManager` paged the entire playlist on every request to check for a
+ * duplicate, which is a flagged hot-path sin — an unbounded number of Spotify
+ * calls on the redemption path, growing with the playlist, for a question a
+ * unique index answers in one round trip.
+ *
+ * Keyed by playlist as well as track: a streamer who starts a new playlist for
+ * a new season should get their songs again, not silence.
+ */
+export const playlistAdditions = pgTable(
+    'playlist_additions',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        channelId: uuid('channel_id')
+            .notNull()
+            .references(() => channels.id, { onDelete: 'cascade' }),
+        /** Spotify's playlist id at the time of the append. */
+        playlistId: text('playlist_id').notNull(),
+        trackUri: text('track_uri').notNull(),
+        addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        uniqueIndex('playlist_additions_channel_playlist_track_key')
+            .on(table.channelId, table.playlistId, table.trackUri)
+    ]
+);

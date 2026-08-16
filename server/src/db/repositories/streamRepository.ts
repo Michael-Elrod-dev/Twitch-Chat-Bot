@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql as raw } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql as raw } from 'drizzle-orm';
 import { streams, viewingSessions } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
 
@@ -112,6 +112,47 @@ export class StreamRepository extends ChannelScopedRepository {
             ));
 
         return true;
+    }
+
+    /** @returns the twitch user ids with an open viewing session in this stream. */
+    async openViewers(streamId: string): Promise<string[]> {
+        const rows = await this.db
+            .select({ twitchUserId: viewingSessions.twitchUserId })
+            .from(viewingSessions)
+            .where(and(
+                eq(viewingSessions.streamId, streamId),
+                eq(viewingSessions.channelId, this.channelId),
+                isNull(viewingSessions.endedAt)
+            ));
+
+        return rows.map((r) => r.twitchUserId);
+    }
+
+    async openViewingSession(streamId: string, twitchUserId: string, at: Date): Promise<void> {
+        await this.db.insert(viewingSessions).values({
+            channelId: this.channelId,
+            streamId,
+            twitchUserId,
+            startedAt: at
+        });
+    }
+
+    /** Closes the open sessions for viewers who have left. */
+    async closeViewingSessions(streamId: string, twitchUserIds: string[], at: Date): Promise<number> {
+        if (twitchUserIds.length === 0) return 0;
+
+        const closed = await this.db
+            .update(viewingSessions)
+            .set({ endedAt: at })
+            .where(and(
+                eq(viewingSessions.streamId, streamId),
+                eq(viewingSessions.channelId, this.channelId),
+                isNull(viewingSessions.endedAt),
+                inArray(viewingSessions.twitchUserId, twitchUserIds)
+            ))
+            .returning({ id: viewingSessions.id });
+
+        return closed.length;
     }
 
     /** Rolls the per-stream aggregates the analytics surface reads. */

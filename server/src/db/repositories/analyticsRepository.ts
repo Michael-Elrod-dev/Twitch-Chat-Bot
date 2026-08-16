@@ -1,6 +1,7 @@
 import { desc, eq, sql as raw } from 'drizzle-orm';
 import { chatTotals, streams, viewers, channelRoles } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
+import type { InteractionType } from '../../services/analytics.js';
 
 export interface AnalyticsSummaryRecord {
     viewers: number;
@@ -22,6 +23,48 @@ const TOP_CHATTERS = 10;
  * returns NULL rather than 0 for `sum()` over no rows, hence the coalesces.
  */
 export class AnalyticsRepository extends ChannelScopedRepository {
+    /**
+     * Rolls one interaction into the channel's per-viewer totals.
+     *
+     * **Written synchronously, on purpose.** Phase 0 pushed every interaction
+     * through a Redis queue and a consumer process, which bought batching at
+     * the price of a second moving part that could fall behind or lose the
+     * queue's contents. At two channels the write is one upsert on a two-column
+     * primary key; the queue would cost more than it saves.
+     *
+     * The batching architecture is the recorded scale path, not a rejected
+     * idea: when a channel's message rate makes one upsert per message
+     * measurable, the seam to change is this method, and nothing above it.
+     */
+    async recordInteraction(twitchUserId: string, type: InteractionType): Promise<void> {
+        const isMessage = type === 'message' ? 1 : 0;
+        const isCommand = type === 'command' ? 1 : 0;
+        const isRedemption = type === 'redemption' ? 1 : 0;
+
+        await this.db
+            .insert(chatTotals)
+            .values({
+                channelId: this.channelId,
+                twitchUserId,
+                messageCount: isMessage,
+                commandCount: isCommand,
+                redemptionCount: isRedemption,
+                totalCount: 1
+            })
+            .onConflictDoUpdate({
+                target: [chatTotals.channelId, chatTotals.twitchUserId],
+                // Incremented in SQL rather than read-modify-write: two messages
+                // landing together must both count.
+                set: {
+                    messageCount: raw`${chatTotals.messageCount} + ${isMessage}`,
+                    commandCount: raw`${chatTotals.commandCount} + ${isCommand}`,
+                    redemptionCount: raw`${chatTotals.redemptionCount} + ${isRedemption}`,
+                    totalCount: raw`${chatTotals.totalCount} + 1`,
+                    lastUpdatedAt: new Date()
+                }
+            });
+    }
+
     async summary(): Promise<AnalyticsSummaryRecord> {
         const [totals] = await this.db
             .select({

@@ -193,14 +193,23 @@ export class HelixApi implements HelixClient {
         };
     }
 
-    /** Requires a moderator-scoped **user** token (`moderator:read:chatters`). */
-    async getChatters(broadcasterId: string, moderatorId: string, userAccessToken: string): Promise<string[]> {
-        const collected: string[] = [];
+    /**
+     * Requires a moderator-scoped **user** token (`moderator:read:chatters`).
+     *
+     * Returns the login alongside the id: presence writes both, and an id with
+     * no name turns every viewer row into an unreadable number.
+     */
+    async getChatters(
+        broadcasterId: string,
+        moderatorId: string,
+        userAccessToken: string
+    ): Promise<{ twitchUserId: string; login: string }[]> {
+        const collected: { twitchUserId: string; login: string }[] = [];
         let cursor: string | undefined;
 
         do {
             const page = await this.request<{
-                data: { user_id: string }[];
+                data: { user_id: string; user_login: string }[];
                 pagination?: { cursor?: string };
             }>('/chat/chatters', {
                 query: {
@@ -212,7 +221,7 @@ export class HelixApi implements HelixClient {
                 userAccessToken
             });
 
-            collected.push(...(page.data ?? []).map((c) => c.user_id));
+            collected.push(...(page.data ?? []).map((c) => ({ twitchUserId: c.user_id, login: c.user_login })));
             cursor = page.pagination?.cursor;
         } while (cursor);
 

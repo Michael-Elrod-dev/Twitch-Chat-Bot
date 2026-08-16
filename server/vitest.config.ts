@@ -6,6 +6,13 @@ export default defineConfig({
         include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
 
         /*
+         * `default` keeps the normal output; the second makes DB-gated skips
+         * loud locally and fatal in CI. See dbSkipReporter for why a silently
+         * green suite is a real hazard rather than a cosmetic one.
+         */
+        reporters: ['default', './src/testing/dbSkipReporter.ts'],
+
+        /*
          * Test FILES run one at a time.
          *
          * The database-backed suites share one Postgres, and some of the schema

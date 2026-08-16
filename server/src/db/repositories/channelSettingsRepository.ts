@@ -6,6 +6,10 @@ export interface ChannelSettingsRecord {
     aiEnabled: boolean;
     songRequestsEnabled: boolean;
     discordWebhookUrl: string | null;
+    /** See the schema: the requests-playlist feature, foundation shipped in P1-WP4.3. */
+    requestsPlaylistEnabled: boolean;
+    requestsPlaylistName: string | null;
+    requestsPlaylistId: string | null;
 }
 
 export class ChannelSettingsRepository extends ChannelScopedRepository {
@@ -14,7 +18,10 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
             .select({
                 aiEnabled: channelSettings.aiEnabled,
                 songRequestsEnabled: channelSettings.songRequestsEnabled,
-                discordWebhookUrl: channelSettings.discordWebhookUrl
+                discordWebhookUrl: channelSettings.discordWebhookUrl,
+                requestsPlaylistEnabled: channelSettings.requestsPlaylistEnabled,
+                requestsPlaylistName: channelSettings.requestsPlaylistName,
+                requestsPlaylistId: channelSettings.requestsPlaylistId
             })
             .from(channelSettings)
             .where(eq(channelSettings.channelId, this.channelId));
@@ -44,6 +51,11 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
         if (patch.aiEnabled !== undefined) changes['aiEnabled'] = patch.aiEnabled;
         if (patch.songRequestsEnabled !== undefined) changes['songRequestsEnabled'] = patch.songRequestsEnabled;
         if (patch.discordWebhookUrl !== undefined) changes['discordWebhookUrl'] = patch.discordWebhookUrl;
+        if (patch.requestsPlaylistEnabled !== undefined) {
+            changes['requestsPlaylistEnabled'] = patch.requestsPlaylistEnabled;
+        }
+        if (patch.requestsPlaylistName !== undefined) changes['requestsPlaylistName'] = patch.requestsPlaylistName;
+        if (patch.requestsPlaylistId !== undefined) changes['requestsPlaylistId'] = patch.requestsPlaylistId;
 
         if (Object.keys(changes).length === 0) return;
 

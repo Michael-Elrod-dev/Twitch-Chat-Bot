@@ -87,7 +87,8 @@ jobs:
     services:
       # Schema and constraint tests run against a real Postgres. Without
       # TEST_DATABASE_URL they self-skip, so a contributor without Docker can
-      # still run the suite - but CI always enforces them.
+      # still run the suite - but CI enforces them via REQUIRE_DB_TESTS below,
+      # which fails the job rather than trusting that they ran.
       postgres:
         image: postgres:17
         env:
@@ -104,6 +105,11 @@ jobs:
 
     env:
       TEST_DATABASE_URL: postgres://test:test@127.0.0.1:5432/test
+      # Turns any skipped test into a failed job. Without this the suite can go
+      # green having never touched Postgres - if the service fails to start or
+      # the URL stops being passed through, the DB-backed tests self-skip and
+      # nothing says so. See server/src/testing/dbSkipReporter.ts.
+      REQUIRE_DB_TESTS: '1'
 
     steps:
       - name: Check out the repository

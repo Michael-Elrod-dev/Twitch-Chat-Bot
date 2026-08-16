@@ -25,16 +25,38 @@ export interface AiResult {
     message?: string;
 }
 
+/** `!advice` / `!roast`. Mirrors the Phase-0 prompt set. */
+export type GamePromptType = 'advice' | 'roast';
+
+export interface GameRequestTarget {
+    twitchUserId: string;
+    displayName: string;
+    roles: {
+        isModerator: boolean;
+        isVip: boolean;
+        isSubscriber: boolean;
+        isBroadcaster: boolean;
+    };
+}
+
 export interface AiService {
     handleTextRequest: (request: AiRequest) => Promise<AiResult>;
+    handleGameRequest: (type: GamePromptType, target: GameRequestTarget) => Promise<AiResult>;
 }
 
 /** Records what it was asked and answers nothing. */
 export class StubAiService implements AiService {
     readonly requests: AiRequest[] = [];
 
+    readonly gameRequests: { type: GamePromptType; target: GameRequestTarget }[] = [];
+
     async handleTextRequest(request: AiRequest): Promise<AiResult> {
         this.requests.push(request);
+        return { ok: false, message: 'AI is not wired up yet' };
+    }
+
+    async handleGameRequest(type: GamePromptType, target: GameRequestTarget): Promise<AiResult> {
+        this.gameRequests.push({ type, target });
         return { ok: false, message: 'AI is not wired up yet' };
     }
 }
