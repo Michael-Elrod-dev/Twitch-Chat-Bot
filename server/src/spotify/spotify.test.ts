@@ -8,6 +8,8 @@ import { PlaybackMonitor } from './playbackMonitor.js';
 import { parseTrackId, HttpSpotifyClient, type SpotifyClient, type SpotifyTrack, type PlaybackState } from './spotifyClient.js';
 import { buildSpotifyAuthorizeUrl, SPOTIFY_SCOPES } from './spotifyAuth.js';
 import { createSongRequestHandler, createSkipQueueHandler } from '../domain/songRedemption.js';
+import { ChannelSession } from '../session/channelSession.js';
+import { ManualReauthRequiredError } from '../twitch/errors.js';
 import type { SettingsService } from '../domain/settings.js';
 import type { RedemptionEvent } from '@almosthadai/shared';
 
@@ -559,5 +561,119 @@ describe('February 2026 platform changes', () => {
 
         const limit = Number(new URL(calls[0] as string).searchParams.get('limit'));
         expect(limit).toBeLessThanOrEqual(10);
+    });
+});
+
+describeDb('the monitor lifecycle belongs to the session', () => {
+    /**
+     * The live bug: the monitor was constructed but never started — not on
+     * connect, and not even at boot. A channel with Spotify connected polled
+     * nothing, and a queued track sat untouched through every track end.
+     *
+     * The fix puts the monitor's lifetime inside the session's, so "the session
+     * is running" and "the monitor is polling" cannot disagree.
+     */
+    let handle: DbHandle;
+    let channelId: string;
+
+    beforeAll(async () => {
+        handle = await connectTestDatabase(TEST_DATABASE_URL as string);
+        channelId = (await new ChannelRepository(handle.db).upsert({
+            twitchBroadcasterId: `mon-${Date.now()}`, twitchLogin: 'monitorchannel', displayName: null
+        })).id;
+    }, 60_000);
+
+    afterAll(async () => {
+        await handle?.close();
+    });
+
+    const buildMonitor = (client: SpotifyClient): PlaybackMonitor => new PlaybackMonitor({
+        channelId,
+        client,
+        queue: new SongQueueRepository(handle.db, channelId),
+        logger,
+        setIntervalImpl: (() => ({ unref: () => undefined }) as unknown as NodeJS.Timeout) as typeof setInterval,
+        clearIntervalImpl: (() => undefined) as typeof clearInterval
+    });
+
+    const buildSession = (monitor: PlaybackMonitor | undefined): ChannelSession => new ChannelSession({
+        channelId,
+        broadcasterTwitchId: '1001',
+        logger,
+        pipeline: { handle: async () => ({ action: 'none' as const }) } as never,
+        commands: { load: async () => undefined } as never,
+        emotes: { load: async () => undefined } as never,
+        ...(monitor ? { monitor } : {})
+    });
+
+    it('starts the monitor when the session starts', async () => {
+        const monitor = buildMonitor(new FakeSpotify());
+        expect(monitor.isRunning).toBe(false);
+
+        await buildSession(monitor).start();
+
+        expect(monitor.isRunning).toBe(true);
+    });
+
+    it('stops the monitor when the session stops', async () => {
+        // The symmetric case: a poller outliving its session keeps calling
+        // Spotify for a channel the bot no longer serves.
+        const monitor = buildMonitor(new FakeSpotify());
+        const session = buildSession(monitor);
+
+        await session.start();
+        await session.stop();
+
+        expect(monitor.isRunning).toBe(false);
+    });
+
+    it('does not start the monitor when the session fails to start', async () => {
+        const monitor = buildMonitor(new FakeSpotify());
+        const session = new ChannelSession({
+            channelId,
+            broadcasterTwitchId: '1001',
+            logger,
+            pipeline: { handle: async () => ({ action: 'none' as const }) } as never,
+            commands: { load: async () => { throw new Error('load failed'); } } as never,
+            emotes: { load: async () => undefined } as never,
+            monitor
+        });
+
+        await expect(session.start()).rejects.toThrow('load failed');
+        expect(monitor.isRunning).toBe(false);
+    });
+
+    it('runs a session with no monitor unchanged', async () => {
+        // A channel without Spotify must still start and stop normally.
+        const session = buildSession(undefined);
+
+        await expect(session.start()).resolves.toBeUndefined();
+        await expect(session.stop()).resolves.toBeUndefined();
+    });
+
+    it('stops itself when the Spotify authorization is dead', async () => {
+        // Not transient: polling on would attempt an impossible refresh every
+        // three seconds until somebody noticed.
+        const spotify = new FakeSpotify();
+        spotify.failWith = new ManualReauthRequiredError('spotify', channelId);
+
+        const monitor = buildMonitor(spotify);
+        monitor.start();
+        expect(monitor.isRunning).toBe(true);
+
+        await monitor.tick();
+
+        expect(monitor.isRunning).toBe(false);
+    });
+
+    it('keeps polling through an ordinary Spotify error', async () => {
+        const spotify = new FakeSpotify();
+        spotify.failWith = new Error('temporary blip');
+
+        const monitor = buildMonitor(spotify);
+        monitor.start();
+        await monitor.tick();
+
+        expect(monitor.isRunning).toBe(true);
     });
 });

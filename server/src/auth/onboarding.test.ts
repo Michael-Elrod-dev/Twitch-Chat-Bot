@@ -316,3 +316,99 @@ describeDb('OnboardingService', () => {
         });
     });
 });
+
+describeDb('runtime onboarding binds rewards', () => {
+    /**
+     * The third instance of the boot-only-capability class, found by sweeping
+     * after the playback monitor: reward adoption ran only at boot, so a channel
+     * that connected at runtime had no bound rewards — and every redemption in
+     * it was treated as unmanaged and silently ignored until the next restart.
+     *
+     * That is the friend's onboarding path, so it would have failed on their
+     * first redemption.
+     */
+    let handle: DbHandle;
+    let manager: SessionManager;
+
+    beforeAll(async () => {
+        handle = await connectTestDatabase(TEST_DATABASE_URL as string);
+    }, 60_000);
+
+    afterAll(async () => {
+        await manager?.stopAll();
+        await handle?.close();
+    });
+
+    const buildService = (adopted: string[]): OnboardingService => new OnboardingService({
+        db: handle.db,
+        cipher: createTokenCipher(randomBytes(32).toString('base64')),
+        logger,
+        sessionManager: manager,
+        dependencies: () => ({
+            repositories: () => ({
+                commands: { listAll: async () => [], updateUserLevel: vi.fn() },
+                emotes: { listAll: async () => [] },
+                settings: { get: async () => null },
+                roles: { upsertRoles: vi.fn(), get: async () => null },
+                quotes: {}
+            } as unknown as ChannelRepositories),
+            cache: nullCache(),
+            logger,
+            chatSink: new RecordingChatSink(),
+            ai: new StubAiService(),
+            analytics: new NoopAnalyticsSink(),
+            bot: { twitchUserId: 'bot-1', login: 'b', aiTriggers: ['b'] }
+        }),
+        reconcile: async () => undefined,
+        adoptRewards: async (channelId) => { adopted.push(channelId); }
+    });
+
+    it('adopts rewards for a channel that connects at runtime', async () => {
+        manager = new SessionManager({ transport: new FakeTransport(), logger });
+        await manager.start();
+
+        const adopted: string[] = [];
+        const result = await buildService(adopted).onboardChannel(
+            identity({ userId: `rt-${Date.now()}`, login: 'runtimechannel' }),
+            grant()
+        );
+
+        expect(adopted).toEqual([result.channel.id]);
+    });
+
+    it('still completes onboarding when adoption fails', async () => {
+        // A channel with tokens and no bound rewards recovers on the next boot;
+        // losing the connection entirely would not.
+        manager = new SessionManager({ transport: new FakeTransport(), logger });
+        await manager.start();
+
+        const failing = new OnboardingService({
+            db: handle.db,
+            cipher: createTokenCipher(randomBytes(32).toString('base64')),
+            logger,
+            sessionManager: manager,
+            dependencies: () => ({
+                repositories: () => ({
+                    commands: { listAll: async () => [], updateUserLevel: vi.fn() },
+                    emotes: { listAll: async () => [] },
+                    settings: { get: async () => null },
+                    roles: { upsertRoles: vi.fn(), get: async () => null },
+                    quotes: {}
+                } as unknown as ChannelRepositories),
+                cache: nullCache(),
+                logger,
+                chatSink: new RecordingChatSink(),
+                ai: new StubAiService(),
+                analytics: new NoopAnalyticsSink(),
+                bot: { twitchUserId: 'bot-1', login: 'b', aiTriggers: ['b'] }
+            }),
+            reconcile: async () => undefined,
+            adoptRewards: async () => { throw new Error('helix down'); }
+        });
+
+        await expect(failing.onboardChannel(
+            identity({ userId: `rt-fail-${Date.now()}`, login: 'failchannel' }),
+            grant()
+        )).resolves.toMatchObject({ sessionStarted: true });
+    });
+});

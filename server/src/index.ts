@@ -275,39 +275,49 @@ async function main(): Promise<void> {
      * Per channel and independent: one channel's failure must not stop another
      * from binding.
      */
-    if (helix && twitchConfigured) {
-        for (const channel of active) {
-            try {
-                const result = await new RewardAdoptionService({
-                    channelId: channel.id,
-                    broadcasterTwitchId: channel.twitchBroadcasterId,
-                    helix,
-                    userTokens: new UserTokenProvider({
-                        clientId: env.TWITCH_CLIENT_ID as string,
-                        clientSecret: env.TWITCH_CLIENT_SECRET as string,
-                        channelId: channel.id,
-                        repository: new ChannelTokenRepository(database.db, channel.id, cipher),
-                        logger
-                    }),
-                    rewards: new ChannelRewardRepository(database.db, channel.id),
-                    logger
-                }).reconcile();
+    /**
+     * One adoption path, used by boot AND by a channel connecting at runtime.
+     *
+     * Having two would be how they drift, and a runtime-onboarded channel with
+     * no bound rewards silently ignores every redemption in it.
+     */
+    async function adoptRewardsFor(channelId: string, broadcasterTwitchId: string): Promise<void> {
+        if (!helix || !twitchConfigured) return;
 
-                logger.info(
-                    {
-                        channelId: channel.id,
-                        adopted: result.adopted.map((a) => a.title),
-                        unchanged: result.unchanged,
-                        ignored: result.ignored
-                    },
-                    'Channel-point rewards reconciled'
-                );
-            } catch (err) {
-                logger.error(
-                    { channelId: channel.id, err: (err as Error).message },
-                    'Could not reconcile channel-point rewards - redemptions for this channel will be unmanaged'
-                );
-            }
+        const result = await new RewardAdoptionService({
+            channelId,
+            broadcasterTwitchId,
+            helix,
+            userTokens: new UserTokenProvider({
+                clientId: env.TWITCH_CLIENT_ID as string,
+                clientSecret: env.TWITCH_CLIENT_SECRET as string,
+                channelId,
+                repository: new ChannelTokenRepository(database.db, channelId, cipher),
+                logger
+            }),
+            rewards: new ChannelRewardRepository(database.db, channelId),
+            logger
+        }).reconcile();
+
+        logger.info(
+            {
+                channelId,
+                adopted: result.adopted.map((a) => a.title),
+                unchanged: result.unchanged,
+                ignored: result.ignored
+            },
+            'Channel-point rewards reconciled'
+        );
+    }
+
+    for (const channel of active) {
+        try {
+            await adoptRewardsFor(channel.id, channel.twitchBroadcasterId);
+        } catch (err) {
+            logger.error(
+                { channelId: channel.id, err: (err as Error).message },
+                'Could not reconcile channel-point rewards - redemptions for this channel will be unmanaged'
+            );
         }
     }
 
@@ -321,13 +331,32 @@ async function main(): Promise<void> {
     });
 
     /**
+     * Rebuilds one channel session in place.
+     *
+     * A session captures its capabilities at construction — the Spotify client,
+     * the playback monitor, the redemption handlers, the bot identity — so a
+     * capability acquired at **runtime** needs the session rebuilt before it
+     * takes effect. Twice now a runtime grant has been applied only at boot (the
+     * bot identity in P1-WP6.1, Spotify connect in P1-WP4.2), so every such path
+     * goes through this one function rather than reinventing it.
+     */
+    async function rebuildSession(channelId: string): Promise<void> {
+        const channel = (await channelRepository.listActive()).find((c) => c.id === channelId);
+        if (!channel) return;
+
+        // Removed and re-added individually rather than via stopAll(), which
+        // would also stop the transport and close the ingest queue.
+        await sessionManager.remove(channelId);
+        await sessionManager.add(buildChannelSession(buildDependencies(), channel));
+    }
+
+    /**
      * Applies a newly-granted bot consent without a restart.
      *
      * The reconciler and the chat sink read the identity through getters, so
      * they need nothing. Sessions do: each pipeline captured the bot's user id
      * at construction for its own-message check, and a session still holding the
-     * old id would let the bot answer itself. Rebuilding them is cheap and this
-     * happens roughly once per deployment.
+     * old id would let the bot answer itself.
      */
     async function applyNewBotIdentity(): Promise<void> {
         const previous = botIdentity.twitchUserId;
@@ -340,13 +369,9 @@ async function main(): Promise<void> {
             'Bot identity changed - rebuilding sessions'
         );
 
-        // Removed and re-added individually rather than via stopAll(), which
-        // would also stop the transport and close the ingest queue.
-        const deps = buildDependencies();
         for (const channel of await channelRepository.listActive()) {
             try {
-                await sessionManager.remove(channel.id);
-                await sessionManager.add(buildChannelSession(deps, channel));
+                await rebuildSession(channel.id);
             } catch (err) {
                 logger.error(
                     { channelId: channel.id, err: (err as Error).message },
@@ -369,6 +394,7 @@ async function main(): Promise<void> {
             sessionManager,
             dependencies: buildDependencies,
             reconcile: () => transport.reconcile(),
+            adoptRewards: adoptRewardsFor,
             onBotIdentityChanged: applyNewBotIdentity
         }),
         sessions: new AppSessionRepository(database.db),
@@ -403,6 +429,23 @@ async function main(): Promise<void> {
                         { channelId: channel.id, login: channel.twitchLogin, scopes: grant.scopes.length },
                         'Spotify connected for channel'
                     );
+
+                    // The running session captured a null Spotify client when
+                    // it started, so its playback monitor does not exist yet.
+                    // Rebuilding is what makes the connection take effect now
+                    // rather than at the next restart.
+                    try {
+                        await rebuildSession(channel.id);
+                        logger.info(
+                            { channelId: channel.id },
+                            'Session rebuilt - the playback monitor is now running'
+                        );
+                    } catch (err) {
+                        logger.error(
+                            { channelId: channel.id, err: (err as Error).message },
+                            'Spotify connected but the session could not be rebuilt - restart to start the playback monitor'
+                        );
+                    }
                 }
             }
         } : {})

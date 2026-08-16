@@ -85,8 +85,23 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
             'Song queued by redemption'
         );
 
+        /*
+         * Deliberately NOT "added to the queue".
+         *
+         * The owner themselves read that as *Spotify's* queue and went looking
+         * for the track there — viewers will make the same reading. This is the
+         * request list; the track reaches Spotify only when the current song
+         * ends. Saying where it sits is the difference between "nothing
+         * happened" and "it is coming".
+         */
+        const position = (await options.queue.list()).length;
+        const ahead = position - 1;
+
         await context.reply(
-            `@${context.event.redeemer.displayName} added "${track.name}" by ${track.artist} to the queue.`
+            `@${context.event.redeemer.displayName} "${track.name}" by ${track.artist} is #${position} in the request list`
+            + (ahead > 0
+                ? ` — ${ahead} song${ahead === 1 ? '' : 's'} ahead of it.`
+                : ' — it plays when the current song ends.')
         );
 
         return null;

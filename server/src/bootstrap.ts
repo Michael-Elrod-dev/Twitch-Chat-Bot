@@ -288,7 +288,11 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         pipeline,
         commands,
         emotes,
-        ...(redemptions ? { redemptions } : {})
+        ...(redemptions ? { redemptions } : {}),
+        // The session owns the monitor's lifetime: started on start, stopped on
+        // stop. Building one and never handing it over is exactly the bug that
+        // left a queued track untouched through ninety minutes of playback.
+        ...(monitor ? { monitor } : {})
     });
 }
 

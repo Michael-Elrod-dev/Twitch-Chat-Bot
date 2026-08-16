@@ -34,6 +34,8 @@ export interface ChannelOnboardingOptions {
     dependencies: () => ChannelDependencies;
     /** Runs the live subscription diff once the channel is registered. */
     reconcile: () => Promise<void>;
+    /** Binds the bot's reward kinds for a newly-connected channel. */
+    adoptRewards?: (channelId: string, broadcasterTwitchId: string) => Promise<void>;
     /**
      * Called after the bot account's consent changes.
      *
@@ -101,6 +103,25 @@ export class OnboardingService {
             logger.error(
                 { channelId: channel.id, err: (err as Error).message },
                 'Channel onboarded but its session failed to start - it will start on the next boot'
+            );
+        }
+
+        /*
+         * Bind the reward kinds BEFORE reconciling subscriptions, so a
+         * redemption arriving the moment the subscription goes live already has
+         * somewhere to route.
+         *
+         * Without this, adoption only ever ran at boot — so a channel that
+         * onboarded at runtime had no bound rewards and every redemption in it
+         * was treated as unmanaged and silently ignored until the next restart.
+         * Same class as the playback monitor and the bot identity.
+         */
+        try {
+            await this.options.adoptRewards?.(channel.id, channel.twitchBroadcasterId);
+        } catch (err) {
+            logger.error(
+                { channelId: channel.id, err: (err as Error).message },
+                'Channel onboarded but its channel-point rewards could not be bound - redemptions stay unmanaged until restart'
             );
         }
 

@@ -1,6 +1,7 @@
 import type { Logger } from '../logger.js';
 import type { SpotifyClient } from './spotifyClient.js';
 import type { SongQueueRepository } from '../db/repositories/songQueueRepository.js';
+import { ManualReauthRequiredError } from '../twitch/errors.js';
 
 /**
  * Feeds queued tracks into Spotify as the current one ends.
@@ -132,8 +133,24 @@ export class PlaybackMonitor {
                 'Queued the next requested track'
             );
         } catch (err) {
-            // A polling failure is transient by nature: log and let the next
-            // tick try. Throwing here would kill the interval entirely.
+            /*
+             * A dead Spotify authorization is NOT transient. Polling on would
+             * attempt a refresh that cannot succeed, every three seconds, until
+             * somebody noticed — so the monitor stops itself and says why. It
+             * starts again when the broadcaster reconnects, because that
+             * rebuilds the session.
+             */
+            if (err instanceof ManualReauthRequiredError) {
+                this.options.logger.error(
+                    { channelId: this.options.channelId },
+                    'Spotify authorization is no longer valid - stopping the playback monitor. Reconnect at /auth/spotify/connect'
+                );
+                this.stop();
+                return;
+            }
+
+            // Anything else is transient by nature: log and let the next tick
+            // try. Throwing here would kill the interval entirely.
             this.options.logger.warn(
                 { channelId: this.options.channelId, err: (err as Error).message },
                 'Playback monitor tick failed'

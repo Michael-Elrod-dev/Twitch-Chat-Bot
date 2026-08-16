@@ -4,6 +4,7 @@ import type { ChatPipeline, PipelineOutcome } from './chatPipeline.js';
 import type { CommandManager } from '../domain/commandManager.js';
 import type { EmoteManager } from '../domain/emoteManager.js';
 import type { RedemptionPipeline } from './redemptionPipeline.js';
+import type { PlaybackMonitor } from '../spotify/playbackMonitor.js';
 
 /** Bounded dedup history. Twitch documents EventSub as at-least-once. */
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -17,6 +18,14 @@ export interface ChannelSessionOptions {
     emotes: EmoteManager;
     /** Absent means redemptions are acknowledged and ignored. */
     redemptions?: RedemptionPipeline;
+    /**
+     * The Spotify playback poller.
+     *
+     * Owned by the session so its lifetime IS the session lifetime: started on
+     * start, stopped on stop. A poller outliving its session would keep calling
+     * Spotify for a channel the bot no longer serves.
+     */
+    monitor?: PlaybackMonitor;
 }
 
 export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
@@ -39,6 +48,7 @@ export class ChannelSession {
     private readonly commands: CommandManager;
     private readonly emotes: EmoteManager;
     private readonly redemptions: RedemptionPipeline | undefined;
+    private readonly monitor: PlaybackMonitor | undefined;
 
     private state: SessionState = 'stopped';
     private live = false;
@@ -54,6 +64,7 @@ export class ChannelSession {
         this.commands = options.commands;
         this.emotes = options.emotes;
         this.redemptions = options.redemptions;
+        this.monitor = options.monitor;
     }
 
     getState(): SessionState {
@@ -74,6 +85,11 @@ export class ChannelSession {
         try {
             await this.commands.load();
             await this.emotes.load();
+
+            // Started only once the session is otherwise ready, so a failed
+            // load cannot leave a poller running for a session that never came up.
+            this.monitor?.start();
+
             this.state = 'running';
             this.logger.info({ channelId: this.channelId }, 'Channel session started');
         } catch (err) {
@@ -93,6 +109,9 @@ export class ChannelSession {
         this.state = 'stopping';
 
         // Each step isolated: one failure must not abandon the rest of teardown.
+        await this.runTeardownStep('stop playback monitor', async () => {
+            this.monitor?.stop();
+        });
         await this.runTeardownStep('clear dedup history', async () => {
             this.seenMessageIds.clear();
         });
