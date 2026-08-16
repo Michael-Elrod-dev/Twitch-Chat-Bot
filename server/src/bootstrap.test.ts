@@ -81,6 +81,41 @@ describe('buildChannelSession', () => {
         expect(sink.sent).toEqual([{ channelId: 'c1', broadcasterTwitchId: '1001', text: 'c1 says hi' }]);
     });
 
+    /**
+     * The coverage hole that let the same bug ship twice.
+     *
+     * Every test above builds deps WITHOUT `db`/`cipher`/`spotifyOAuth`, so the
+     * optional-capability half of this function was never executed by anything.
+     * That is where both monitor defects lived: first the session was never told
+     * to start it, then — in the fix itself — the monitor was built and never
+     * handed over. Both compiled, both passed the suite, both shipped.
+     *
+     * Wiring is only observable through behaviour, so this asserts the lifecycle
+     * the session is supposed to drive rather than reaching for a private field.
+     */
+    it('hands the playback monitor to the session when Spotify is configured', async () => {
+        const lines: string[] = [];
+        const recording = pino({ level: 'info' }, {
+            write: (line: string) => { lines.push(JSON.parse(line).msg as string); }
+        });
+
+        const session = buildChannelSession({
+            ...deps,
+            logger: recording,
+            db: {} as unknown as Database,
+            cipher: {} as unknown as ChannelDependencies['cipher'],
+            spotifyOAuth: { clientId: 'id', clientSecret: 'secret', redirectUri: 'https://x/cb' }
+        }, channel('c1', '1001'));
+
+        await session.start();
+        expect(lines).toContain('Playback monitor started');
+
+        // The other half: a monitor that outlives its session polls Spotify for
+        // a channel the bot is no longer running.
+        await session.stop();
+        expect(lines).toContain('Playback monitor stopped');
+    });
+
     it('gives each channel its own repositories', () => {
         const calls: string[] = [];
         const session = buildChannelSession(

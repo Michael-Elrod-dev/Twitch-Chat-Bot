@@ -335,3 +335,161 @@ Small, deliberate: `scripts/deploy.sh` with the new build; migration `0002_api_k
 
 ### Exit criteria
 - Suites/lint/image green; two-channel isolation for queues/monitors; reintroduction validation; live proof evidenced (queue row + refund + subscription list showing the fourth type enabled); absorption ledger updated.
+
+### Completion report — P1-WP4.2 (engineer, 2026-08-16)
+
+**Status:** complete. Server **691/691** (38 files) via the sanctioned throwaway DB; legacy **49/1222** untouched; lint 0; typecheck clean; deployed and witnessed in production.
+
+#### Live evidence — the full set
+
+Four proofs, in the order they were obtained. Three of the four exposed a defect; that is the honest shape of this package.
+
+**1. Banked refund (the user-token money shot).** A malformed Song Request refunded the viewer's points through `UserTokenProvider`'s first production use. Fulfil-or-refund holds on all four failure routes: unmanaged reward → ignored; managed-with-no-handler → refund; handler throw → refund; handler reason → refund.
+
+**2. Fourth subscription type enabled.** Reconciler converged on deploy without a command:
+```
+{"type":"channel.channel_points_custom_reward_redemption.add","condition":{"broadcaster_user_id":"89468164"},"msg":"Created subscription"}
+{"subscriptionType":"channel.channel_points_custom_reward_redemption.add",...,"msg":"EventSub subscription verified"}
+```
+All four types verified (`…redemption.add`, `channel.chat.message`, `stream.online`, `stream.offline`). Rewards reconciled by id, never title: `adopted:[] unchanged:["song_request","skip_queue","add_quote"] ignored:["Pick the game","MS paint"]`.
+
+**3. Clean handoff, twice, after the response-contract fix.** One redemption → one queue entry → one hand-off → row removed. No parse errors:
+```
+"track":"Ella Baila Sola","by":"aimosthadme","msg":"Song queued by redemption"
+"track":"Ella Baila Sola","artist":"Eslabon Armado, Peso Pluma","msg":"Queued the next requested track"
+"track":"Maison","by":"aimosthadme","msg":"Song queued by redemption"
+"track":"Maison","artist":"Emilio Piano, Lucie","msg":"Queued the next requested track"
+```
+Pending queue drained to 0. **Pause gate observed by the owner:** paused near a track end did not drain the queue.
+
+**4. Two production finds, both live-only.** Detailed below — neither was reachable by any test that existed, and that is the finding.
+
+#### The two live defects
+
+**Monitor lifecycle.** Diagnosed as "never starts after boot"; the truth was worse — it never started at all, at boot or otherwise. A channel with Spotify connected before boot was equally dead. Fixed at the source: `ChannelSession` owns the monitor's lifetime, started after `commands.load()`/`emotes.load()` succeed, stopped as the first teardown step. Then the *fix itself* shipped broken — the monitor was constructed and never passed to the session, because a scripted edit silently didn't apply and nothing tested that wiring. Caught only by checking production for the log line I expected.
+
+**Sweep for the class** (*capability resolved at construction but acquirable at runtime*) — third instance found: **reward adoption ran only at boot**, so a channel onboarding at runtime had no bound rewards and every redemption in it was silently ignored until a restart. Would have hit the second broadcaster on their first song request with no error anywhere. All three paths now share one `rebuildSession(channelId)`.
+
+| Capability | Source | Verdict |
+|---|---|---|
+| Bot identity | DB, runtime consent | in class — fixed WP6.1 |
+| Spotify client + monitor | DB, runtime connect | in class — fixed here |
+| Reward adoption | Helix, runtime onboarding | **in class — found by the sweep** |
+| Cipher, Claude client, Helix, `*_configured` | env | not in class (restart required anyway) |
+| Broadcaster/Spotify tokens | DB, per call | not in class (already lazy) |
+
+**Response contract.** `request()` demanded parseable JSON of every response, so `POST /me/player/queue` — 2xx with no usable body — threw on every success. The monitor correctly refused to remove a track it believed unqueued and retried: four ticks, four real queue-adds, zero removals. The path check in this package was only half the verification; each call now declares its body:
+
+| Call | Body | Why |
+|---|---|---|
+| `GET /tracks/{id}`, `GET /search` | `json` | read |
+| `GET /me/player` | `json` | read; 204 when idle |
+| `POST /me/player/queue`, `/me/player/next` | `none` | 2xx, no usable body |
+| `POST /playlists/{id}/items` | `none` | returns a `snapshot_id` never read |
+
+**Sweep find — the mirror, and worse.** 404 was converted to `null` for *every* call. Correct on a read ("no active device"); on a **write** it made a failed queue-add resolve as success, so the monitor would remove a track it never queued and the song would vanish with nothing in any log. 404-as-null is now reads only. Loud duplicates led to a silent-loss bug.
+
+**Silver lining, confirmed in code.** `queueTrack` threw at `playbackMonitor.ts:125`, so `lastQueuedUri` was never set and `removeHead()` on :129 never ran. The re-queue-after-failed-removal guard and the bounded retry each did exactly what they were designed to do — the four duplicates are the correct output of a correct guard fed a false failure. Both components were right; only the truth they were given was wrong.
+
+#### Composition-root coverage — the answer
+
+**There was a hole, it is why the wiring bug shipped, and it is now closed.**
+
+`bootstrap.test.ts` existed and passed throughout. Every one of its cases built `ChannelDependencies` **without** `db`/`cipher`/`spotifyOAuth`, so the entire optional-capability half of `buildChannelSession` — Spotify client, playback monitor, redemption pipeline, song toggle — was never executed by any test. The chat path was well covered; the capability path had zero coverage while looking covered.
+
+Closed with a behavioural test (`hands the playback monitor to the session when Spotify is configured`) asserting start *and* stop through the session lifecycle rather than reaching for a private field. Reintroducing the exact shipped defect — monitor built, never handed over — fails it.
+
+Still uncovered by design, and named rather than implied: the redemption-pipeline and song-toggle branches of the same function have no equivalent wiring test. They are exercised end-to-end elsewhere (`endToEnd.test.ts`, `live.test.ts`), but not for *construction wiring*, which is the failure mode this hole produced. **Flagged, not fixed** — same class, same blast radius.
+
+#### Reintroduction validation — all rounds
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 1 | Redemption of an unmanaged reward gets handled | routing test |
+| 2 | Managed reward with no handler silently no-ops | refund test |
+| 3 | Handler throw does not refund | refund test |
+| 4 | Refund `RateLimitedError` drops instead of retrying | bounded-retry test |
+| 5 | Fulfilment retried like a refund | settlement test |
+| 6 | Routing keyed on title instead of reward id | adoption test |
+| 7 | Reward adopted for the wrong channel | isolation test |
+| 8 | `is_playing` gate removed (queue drains while paused) | pause-gate test |
+| 9 | Advance window ignored (queues at track start) | window test |
+| 10 | Same track queued every tick inside the window | `lastQueuedUri` test |
+| 11 | `removeHead` before a successful queue-add | ordering test |
+| 12 | Playlist path `/tracks` instead of `/items` | Feb-2026 test |
+| 13 | Search limit raised above 10 | Feb-2026 test |
+| 14 | Duplicate request not refunded | duplicate test |
+| 15 | Over-long track accepted | duration test |
+| 16 | Malformed quote not refunded | quote-format test |
+| 17 | Two channels share one queue | two-channel isolation |
+| 18 | Two channels share one monitor | two-channel isolation |
+| 19 | Monitor never started (live bug #1) | session lifecycle |
+| 20 | Monitor outlives its session | symmetric stop |
+| 21 | Dead Spotify auth polls forever | self-stop test |
+| 22 | Monitor started before the session is ready | ordering test |
+| 23 | Runtime onboarding skips reward adoption | onboarding test |
+| 24 | **Monitor built but never handed over** (the fix's own bug) | **composition-root test (new)** |
+| 25 | 2xx + non-JSON body treated as failure (live bug #2) | response-contract test |
+| 26 | 404 on a write treated as success | write-404 test |
+| 27 | One track handed to Spotify four times | end-window test |
+| 28 | JSON no longer demanded where the body IS read | over-reach guard |
+
+**Two honesty items.**
+- Round 25's first run caught only 2 of 5 new tests. My end-to-end test — the one meant to reproduce the incident — **passed against the broken client**, because I gave the fake an empty body, which the old code already handled. It tested nothing. Rewritten to return a non-empty non-JSON body, it catches.
+- The `2xx + empty body` and `2xx + whitespace body` cases do **not** catch the defect; the pre-existing empty-body branch handled them. They are boundary documentation, not proof, and are listed as such rather than padding the table.
+
+#### Absorption ledger
+
+| Phase-0 file | Lines | Absorbed into | State |
+|---|---|---|---|
+| `src/redemptions/redemptionManager.js` | 81 | `session/redemptionPipeline.ts` | **full** |
+| `src/messages/redemptionHandler.js` | 58 | `session/redemptionPipeline.ts`, `services/redemptionSettlement.ts` | **full** |
+| `src/redemptions/songs/songRequest.js` | 200 | `domain/songRedemption.ts` | **full** |
+| `src/redemptions/songs/spotifyManager.js` | 381 | `spotify/spotifyClient.ts`, `spotify/playbackMonitor.ts`, `spotify/spotifyAuth.ts` | **partial** — see gap below |
+| `src/redemptions/quotes/handleQuote.js` | 128 | `domain/quoteRedemption.ts` | **full** |
+| `src/redemptions/quotes/quoteManager.js` | 123 | `domain/quoteRedemption.ts`, quote repository (WP4) | **full** |
+| `src/commands/handlers/spotify.js` | 186 | `domain/songHandlers.ts` | **full** |
+| `src/commands/handlers/quotes.js` | 50 | `domain/quoteHandlers.ts` (WP4.1) | **full** |
+| `src/services/songToggleService.js` | 122 | `services/songToggle.ts` | **full** |
+| `src/api/routes/songsRouter.js` | 160 | `http/api/songsRoutes.ts` (WP7, wired here) | **full** |
+
+**Total: 1,489 legacy lines superseded.** Nine of ten fully absorbed; one partial.
+
+**The gap — "Chat Song Requests" playlist.** Legacy `spotifyManager.js:319–371` finds-or-creates a playlist named `Chat Song Requests` and adds every requested track to it, deduping first. Phase 1 ships `addToPlaylist` (specced as one of the five needs, correct `/items` path, tested) but **has no production caller** — the find-or-create and the add-on-request are not ported. Verified by grep: the only references are the interface, the implementation, and tests.
+
+This is a real behaviour the owner has today and would lose at Legacy Retirement. It is **not** in this package's locked scope — the spec listed playlist add as a client capability, not as a redemption feature — so I have flagged rather than built it. **It must be resolved before the Legacy Retirement gate**, either by porting it or by an explicit owner decision to drop it. Naming it here is the point of the ledger.
+
+All six song commands are wired to real command rows in production with correct levels: `!currentsong`/`!lastsong`/`!nextsong`/`!queue` (everyone), `!skipsong`/`!songs` (mod).
+
+#### Flagged, not fixed
+
+| Item | Why not here | Route |
+|---|---|---|
+| `Chat Song Requests` playlist unported | out of locked scope; owner-visible behaviour change | **blocks Legacy Retirement** |
+| Redemption-pipeline / song-toggle construction wiring untested | same hole as the monitor bug, other branches | next package |
+| `!lastsong` is in-memory, empty after restart | matches the specced design; legacy was equally volatile | note only |
+| Prod-artifact restore drill, registry deploy, duplicate-rate counters | prior ops backlog | ops backlog |
+| Redis-backed rate limiting | multi-instance backlog | with conduits |
+
+> **P1-WP4.2 COMPLETE — verified by lead 2026-08-16:** 691/691 throwaway-DB, legacy 49/1222, lint 0, prod healthy; production evidence (two clean handoffs, four subscription types, id-routing with personal rewards ignored) accepted as captured. The composition-root confession is accepted *with respect*: "the capability path had zero coverage while looking covered — that is why the wiring bug shipped inside the fix for the wiring bug" is the most valuable sentence in the report, and handing over the remaining uncovered branches *named* rather than behind a green suite is the standard. **Those branches (redemption-pipeline + song-toggle construction wiring) are task 0 of P1-WP4.3.** The playlist partial-absorption flag is ruled: **port it in 4.3** with dedup moved from playlist-paging to a DB check (the legacy paging was itself a flagged hot-path sin) — owner may veto to drop the feature instead. 28 reintroductions with two honestly-labeled non-proofs recorded.
+
+---
+
+## P1-WP4.3 — Analytics, viewers & stream context  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** the last legacy domain ports. Streams exist as data again (context for AI, uptime for commands), viewer presence and roles stay current, chat totals aggregate, the game commands return, and the recovered analytics surface serves real numbers. Closing this package clears the last gate before Legacy Retirement.
+
+**Scope guard:** `server/`, `shared/`, docs. Legacy untouched (its deletion is the NEXT package). Ledger required.
+
+**Lead calls (locked):**
+- **Task 0 — the named coverage debt:** construction-wiring tests for the redemption-pipeline and song-toggle branches of `buildChannelSession`, same behavioral shape as the monitor one, reintroduction-proven.
+- **Streams writer:** `stream.online`/`offline` events create/close `streams` rows (Twitch's real stream id at last); stream context flows into AI prompts (closing the 4.1 flag) and the online bucket for rate limits; `!uptime` handler lands here against it.
+- **Presence & roles:** per-session chatters poll (the granted `moderator:read:chatters` scope's purpose) on a sane interval, driving `viewing_sessions` + role-safe `touchPresence` (its promised caller arrives); role updates from chat events continue to own role truth.
+- **Chat totals:** synchronous upsert alongside the existing per-message write (no Redis queue at two-channel scale — the batching architecture is recorded as the scale path, not built now); the analytics API's numbers go real.
+- **Game commands:** `!advice`/`!roast` wire to their ready handlers; profile source = the viewers profile field (add the column if v2 lacks it — the legacy `context` column's data came through the ETL or is re-creatable; verify and state which).
+- **Playlist port (per ruling, owner-vetoable):** requests append to the channel's requests playlist via the tested `addToPlaylist`, dedup via DB (seen track_uris per channel), never playlist paging.
+- **Retention (lead default, owner-vetoable):** `chat_messages` pruned to a rolling **90 days** via a nightly job (systemd timer or in-process scheduler — pick and justify); `chat_totals`/`streams`/`viewing_sessions` keep forever (they ARE the aggregates). Prune is verified-safe: never touches other tables, reintroduction-tested against over-deletion.
+- **Live proof:** stream context appearing in an AI reply during a real (test) stream OR the offline path documented if the owner doesn't stream; `!uptime`/`!advice`/`!roast` answering; totals visibly incrementing via the API.
+
+### Exit criteria
+- Suites/lint/image green; two-channel isolation held for presence/totals; reintroduction validation; ledger showing the legacy analytics tree fully absorbed; live proof; the Legacy Retirement gate declared OPEN or blocked-with-reasons.
