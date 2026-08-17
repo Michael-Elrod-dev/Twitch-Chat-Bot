@@ -74,10 +74,11 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
      * imported rows are the owner's; the handler names are ours to bend.
      */
     return {
-        currentSong: { level: 'everyone', handler: currentlyPlaying },
+        currentSong: { level: 'everyone', description: 'Names the song playing now', handler: currentlyPlaying },
 
         lastSong: {
             level: 'everyone',
+            description: 'Names the song that just played',
             handler: async (context) => {
                 const last = deps.lastPlayed();
                 await context.reply(
@@ -90,6 +91,7 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
 
         nextSong: {
             level: 'everyone',
+            description: 'Names the song coming up',
             handler: async (context) => {
                 const [next] = await deps.queue.list();
                 await context.reply(
@@ -102,6 +104,7 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
 
         queueInfo: {
             level: 'everyone',
+            description: 'Reports how many songs are waiting',
             handler: async (context) => {
                 const queued = await deps.queue.list();
                 if (queued.length === 0) {
@@ -122,6 +125,7 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
         skipSong: {
             // Mods only: skipping removes something a viewer paid points for.
             level: 'mod',
+            description: 'Skips the current song',
             handler: async (context) => {
                 const removed = await deps.queue.removeHead();
                 await context.reply(
@@ -134,6 +138,7 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
 
         toggleSongs: {
             level: 'mod',
+            description: 'Opens and closes song requests',
             handler: async (context) => {
                 const arg = (context.args[0] ?? '').toLowerCase();
 

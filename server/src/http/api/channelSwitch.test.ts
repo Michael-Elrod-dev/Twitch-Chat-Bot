@@ -18,6 +18,8 @@ import { AnalyticsRepository } from '../../db/repositories/analyticsRepository.j
 import { DashboardRepository } from '../../db/repositories/dashboardRepository.js';
 import { SongQueueRepository } from '../../db/repositories/songQueueRepository.js';
 import { createChannelRepositories } from '../../bootstrap.js';
+import { SettingsService } from '../../domain/settings.js';
+import { nullCache } from '../../cache/testing.js';
 import { signJwt } from '../../auth/jwt.js';
 import { SessionManager } from '../../session/sessionManager.js';
 import { FakeTransport } from '../../transport/fakeTransport.js';
@@ -108,6 +110,12 @@ describeDb('channel master switch', () => {
         router.use(createResourceRouter({
             logger,
             repositories: (channelId) => createChannelRepositories(handle.db, channelId),
+            settings: (channelId) => new SettingsService({
+                channelId,
+                repository: createChannelRepositories(handle.db, channelId).settings,
+                cache: nullCache(),
+                logger
+            }),
             channels,
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),

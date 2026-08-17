@@ -52,6 +52,20 @@ export class PlaybackMonitor {
     /** What that track was, for `!lastsong`. In memory only, by design. */
     private lastPlayedTrack: { trackName: string; artistName: string } | null = null;
 
+    /**
+     * The uri and requester of that same handoff, for the now-playing card.
+     *
+     * This is the only place the pairing survives. The monitor removes the row
+     * from the queue at the instant it hands the track to Spotify, so by the
+     * time the track is *playing* — which is when the card asks — the requester
+     * is no longer in any table. Recording it here costs one field; the
+     * alternative would be a played-history table for one line of UI.
+     *
+     * In memory, like `lastPlayedTrack`: after a restart the card shows the
+     * track with no requester, which is honest — we genuinely no longer know.
+     */
+    private lastHandoff: { trackUri: string; requestedByLogin: string | null } | null = null;
+
     constructor(options: PlaybackMonitorOptions) {
         this.options = options;
     }
@@ -63,6 +77,20 @@ export class PlaybackMonitor {
     /** @returns the last track advanced to this session, or null after a restart. */
     lastPlayed(): { trackName: string; artistName: string } | null {
         return this.lastPlayedTrack;
+    }
+
+    /**
+     * @returns who requested `trackUri`, when it is the track this monitor last
+     * handed to Spotify. Null for anything else — including a track the
+     * streamer started themselves, which is most of a stream.
+     *
+     * Matched on the uri rather than assumed: the streamer can skip in Spotify
+     * at any moment, and attributing whatever is playing now to the last
+     * requester would credit a stranger's song to a viewer.
+     */
+    requesterOf(trackUri: string): string | null {
+        if (!this.lastHandoff || this.lastHandoff.trackUri !== trackUri) return null;
+        return this.lastHandoff.requestedByLogin;
     }
 
     start(): void {
@@ -125,6 +153,7 @@ export class PlaybackMonitor {
             await this.options.client.queueTrack(next.trackUri);
             this.lastQueuedUri = next.trackUri;
             this.lastPlayedTrack = { trackName: next.trackName, artistName: next.artistName };
+            this.lastHandoff = { trackUri: next.trackUri, requestedByLogin: next.requestedByLogin };
 
             await this.options.queue.removeHead();
 

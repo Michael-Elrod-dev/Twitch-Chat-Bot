@@ -23,8 +23,16 @@ import {
     type ApiKeySummary,
     type CreatedApiKey,
     type AnalyticsSummary,
+    type AnalyticsRange,
     type QueuedSong,
-    type Pagination
+    type Pagination,
+    type UpdateSettingsRequest,
+    type SpotifyStatus,
+    type SpotifyPlaylist,
+    type NowPlaying,
+    type ManagedReward,
+    type LiveSongQueueUpdated,
+    analyticsQuerySchema
 } from '@almosthadai/shared';
 import type { Logger } from '../../logger.js';
 import {
@@ -35,6 +43,10 @@ import {
     type ApiRequest
 } from './middleware.js';
 import type { ChannelRepositories } from '../../bootstrap.js';
+import type { SettingsService } from '../../domain/settings.js';
+import type { ChannelSettingsRecord } from '../../db/repositories/channelSettingsRepository.js';
+import type { ChannelRewardRepository, RewardKind as StoredRewardKind } from '../../db/repositories/channelRewardRepository.js';
+import type { PlaybackState } from '../../spotify/spotifyClient.js';
 import type { ChannelRepository } from '../../db/repositories/channelRepository.js';
 import type { ApiKeyRepository } from '../../db/repositories/apiKeyRepository.js';
 import type { AnalyticsRepository } from '../../db/repositories/analyticsRepository.js';
@@ -51,15 +63,45 @@ import type { SongQueueRepository } from '../../db/repositories/songQueueReposit
 
 export interface ResourceOptions {
     logger: Logger;
-    repositories: (channelId: string) => ChannelRepositories;
+    /**
+     * The channel's data layer, **minus its settings**.
+     *
+     * The omission is the fix for Task 0 and is structural on purpose. Writing
+     * settings straight through the repository leaves the running session's
+     * `SettingsService` holding a cached copy for up to a minute, so the owner
+     * flips a toggle in the app and the bot carries on as before — the content
+     * hole again, wearing a shorter clock. Removing the repository from what a
+     * route can reach means no future settings route can make that mistake by
+     * forgetting something; there is simply no uninvalidating write available
+     * to it. `settings` below is the only way in.
+     */
+    repositories: (channelId: string) => Omit<ChannelRepositories, 'settings'>;
+    /**
+     * Settings, read and written through the same cache the bot reads through.
+     *
+     * A `SettingsService` rather than the repository, because its `update`
+     * drops the cache key as part of writing. That is what makes the change
+     * take effect on the running session: one Redis, one key, and an
+     * invalidation the session cannot miss because it never held a private
+     * copy — which is why this needs no session seam of its own, unlike
+     * commands and emotes.
+     */
+    settings: (channelId: string) => SettingsService;
     /** The tenancy root, for the one route that writes to the channel itself. */
     channels: ChannelRepository;
     apiKeys: ApiKeyRepository;
     analytics: (channelId: string) => AnalyticsRepository;
     dashboard: (channelId: string) => DashboardRepository;
     songs: (channelId: string) => SongQueueRepository;
-    /** Notifies live sockets. Optional so tests can omit it. */
-    publish?: (channelId: string, event: { type: string }) => void;
+    /**
+     * Notifies live sockets. Optional so tests can omit it.
+     *
+     * Typed as the contract's own event minus the fields the bus stamps
+     * (`channelId`, `at`), so a publisher cannot omit a payload field the
+     * client is typed to read — which is how `queueLength` was declared and
+     * never sent.
+     */
+    publish?: (channelId: string, event: Omit<LiveSongQueueUpdated, 'channelId' | 'at'>) => void;
     /**
      * Whether a channel has Spotify linked.
      *
@@ -98,6 +140,79 @@ export interface ResourceOptions {
      * only place that can get it wrong.
      */
     reloadChannelContent: (channelId: string, kind: 'commands' | 'emotes') => Promise<void>;
+    /**
+     * Everything the songs screen needs from Spotify, for one channel.
+     *
+     * A seam for the same reason `spotifyConnected` is one: building a client
+     * needs the token cipher, and a route handler must not be within reach of
+     * the key to every stored credential. Optional, and absent means the whole
+     * surface reports "not connected" — a deployment without Spotify
+     * credentials under-reports rather than failing.
+     */
+    spotify?: (channelId: string) => SpotifySurface | null;
+    /**
+     * Resolves a playlist name to a Spotify id, creating one if needed.
+     *
+     * Separate from `spotify` because it is a *write* the settings screen
+     * triggers, and because it must answer null rather than throw: a streamer
+     * naming a playlist while Spotify is disconnected has made a reasonable
+     * request the server cannot honour yet, and the name is still worth
+     * keeping.
+     */
+    resolvePlaylist?: (channelId: string, name: string) => Promise<string | null>;
+    /** The three bot-managed rewards, for the notifications screen's trust card. */
+    rewards?: (channelId: string) => ChannelRewardRepository;
+}
+
+/**
+ * The Spotify reads the API makes on the app's behalf.
+ *
+ * Deliberately narrower than `SpotifyClient`: the API has no business queueing
+ * or skipping tracks through this seam — skip already has its own route against
+ * the bot's own queue — so those methods are simply not offered here.
+ */
+export interface SpotifySurface {
+    account: () => Promise<{ id: string; displayName: string } | null>;
+    playlist: (playlistId: string) => Promise<SpotifyPlaylist | null>;
+    playback: () => Promise<PlaybackState | null>;
+    /**
+     * Who requested the track now playing, or null when nobody here did.
+     *
+     * Synchronous because the answer is memory the running session holds: the
+     * queue row is deleted at the moment the track is handed to Spotify, so by
+     * the time it is playing there is nothing left to query.
+     */
+    requesterOf: (trackUri: string) => string | null;
+    /** Forgets the stored credential. @returns whether there was one. */
+    disconnect: () => Promise<boolean>;
+    connectedAt: () => Promise<Date | null>;
+}
+
+/**
+ * The settings payload, built in exactly one place.
+ *
+ * `/me` and `PATCH /me/settings` both answer with it, and they used to build it
+ * separately with a `satisfies` on each to stop them drifting. `satisfies`
+ * catches a *missing* field; it cannot catch two sites disagreeing about what a
+ * present one means. One function cannot disagree with itself.
+ */
+function toChannelSettings(
+    stored: ChannelSettingsRecord,
+    spotifyConnected: boolean
+): ChannelSettings {
+    return {
+        aiEnabled: stored.aiEnabled,
+        aiLimits: stored.aiLimits,
+        songRequestsEnabled: stored.songRequestsEnabled,
+        requestsPlaylistEnabled: stored.requestsPlaylistEnabled,
+        requestsPlaylistName: stored.requestsPlaylistName,
+        // Reported as a boolean, never as the URL: a webhook URL is a
+        // capability, and echoing it back would let a stolen token exfiltrate
+        // one.
+        discordWebhookConfigured: stored.discordWebhookUrl !== null,
+        // Same rule, same reason: presence, never the credential.
+        spotifyConnected
+    };
 }
 
 /** Wraps an async handler so a rejection becomes a 500 envelope, not a hang. */
@@ -112,7 +227,7 @@ const handle = (
 };
 
 export function createResourceRouter(options: ResourceOptions): Router {
-    const { logger, repositories, apiKeys, analytics, dashboard, songs } = options;
+    const { logger, repositories, settings, apiKeys, analytics, dashboard, songs } = options;
     const router = Router();
     const ok = handle.bind(null, logger);
 
@@ -128,7 +243,11 @@ export function createResourceRouter(options: ResourceOptions): Router {
 
         // `me` is the one route that tolerates having no channel: being signed
         // in without one is an ordinary state the client must be able to render.
-        const settings = channel ? await repositories(channel.id).settings.get() : null;
+        // Non-null whenever a channel is: `SettingsService.get` answers with
+        // the defaults where no row has been written yet, so a freshly
+        // onboarded channel renders its real (default) settings instead of the
+        // `null` that means "no channel connected".
+        const current = channel ? await settings(channel.id).get() : null;
         const spotify = channel ? await (options.spotifyConnected?.(channel.id) ?? false) : false;
 
         const body: MeResponse = {
@@ -143,18 +262,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
                     enabled: channel.enabled
                 }
                 : null,
-            settings: settings
-                ? {
-                    aiEnabled: settings.aiEnabled,
-                    songRequestsEnabled: settings.songRequestsEnabled,
-                    // Reported as a boolean, never as the URL: a webhook URL is
-                    // a capability, and echoing it back would let a stolen token
-                    // exfiltrate one.
-                    discordWebhookConfigured: settings.discordWebhookUrl !== null,
-                    // Same rule, same reason: presence, never the credential.
-                    spotifyConnected: spotify
-                }
-                : null
+            settings: current ? toChannelSettings(current, spotify) : null
         };
 
         res.status(200).json(apiSuccess(body));
@@ -171,18 +279,56 @@ export function createResourceRouter(options: ResourceOptions): Router {
                 return;
             }
 
-            await repositories(channel.id).settings.update(req.body);
-            const updated = await repositories(channel.id).settings.get();
+            const patch = req.body as UpdateSettingsRequest;
 
-            // `satisfies` rather than a bare literal: this and `/me` are two
-            // places that build the same contract type, and the compiler is
-            // what stops them drifting apart when a field is added to one.
-            res.status(200).json(apiSuccess({
-                aiEnabled: updated?.aiEnabled ?? true,
-                songRequestsEnabled: updated?.songRequestsEnabled ?? true,
-                discordWebhookConfigured: (updated?.discordWebhookUrl ?? null) !== null,
-                spotifyConnected: await (options.spotifyConnected?.(channel.id) ?? false)
-            } satisfies ChannelSettings));
+            /*
+             * Naming the playlist resolves it at Spotify, creating one if the
+             * streamer has no playlist by that name yet.
+             *
+             * Done here rather than lazily at redemption time, because this is
+             * the moment the streamer is looking at the screen: a name that
+             * cannot be resolved should say so on the field they just typed
+             * into, not fail silently three hours later when a viewer spends
+             * points. `null` clears the id along with the name — a name and the
+             * playlist it points at must not drift apart.
+             */
+            const named = patch.requestsPlaylistName;
+            const resolvedId = named === undefined
+                ? undefined
+                : named === null
+                    ? null
+                    : (await options.resolvePlaylist?.(channel.id, named)) ?? null;
+
+            /*
+             * Built key by key rather than spread.
+             *
+             * `exactOptionalPropertyTypes` is on, and a spread of a parsed body
+             * carries `key: undefined` for every field the client omitted — which
+             * a partial update must treat as "not mentioned", not as a value. The
+             * repository already distinguishes the two; this keeps the distinction
+             * intact on the way in.
+             */
+            await settings(channel.id).update({
+                ...(patch.aiEnabled === undefined ? {} : { aiEnabled: patch.aiEnabled }),
+                ...(patch.aiLimits === undefined ? {} : { aiLimits: patch.aiLimits }),
+                ...(patch.songRequestsEnabled === undefined
+                    ? {}
+                    : { songRequestsEnabled: patch.songRequestsEnabled }),
+                ...(patch.requestsPlaylistEnabled === undefined
+                    ? {}
+                    : { requestsPlaylistEnabled: patch.requestsPlaylistEnabled }),
+                ...(named === undefined ? {} : { requestsPlaylistName: named }),
+                ...(resolvedId === undefined ? {} : { requestsPlaylistId: resolvedId }),
+                ...(patch.discordWebhookUrl === undefined
+                    ? {}
+                    : { discordWebhookUrl: patch.discordWebhookUrl })
+            });
+            const updated = await settings(channel.id).get();
+
+            res.status(200).json(apiSuccess(toChannelSettings(
+                updated,
+                await (options.spotifyConnected?.(channel.id) ?? false)
+            )));
         })
     );
 
@@ -257,12 +403,16 @@ export function createResourceRouter(options: ResourceOptions): Router {
                 return;
             }
 
-            await repo.create({ ...body, handlerName: null });
+            // Static command: `responseText` is its own description, so the
+            // column stays null rather than repeating it.
+            await repo.create({ ...body, handlerName: null, description: null });
             // Before responding: the client types the command in chat the second
             // it sees the row appear, so a reload that trailed the response
             // would lose that race for no reason.
             await options.reloadChannelContent(req.channel!.id, 'commands');
-            res.status(201).json(apiSuccess({ ...body, handlerName: null } satisfies Command));
+            res.status(201).json(apiSuccess({
+                ...body, handlerName: null, description: null
+            } satisfies Command));
         })
     );
 
@@ -429,14 +579,155 @@ export function createResourceRouter(options: ResourceOptions): Router {
     }));
 
     router.delete('/api/v1/songs/head', ok(async (req, res) => {
-        const skipped = await songs(req.channel!.id).removeHead();
+        const queue = songs(req.channel!.id);
+        const skipped = await queue.removeHead();
         if (!skipped) {
             res.status(404).json(apiFailure('not_found', 'The queue is empty'));
             return;
         }
 
-        options.publish?.(req.channel!.id, { type: 'song_queue.updated' });
+        // Counted after the removal, so the number on the wire is the queue the
+        // client is about to render. The field was declared with this event and
+        // never sent until now - see the contract's note.
+        options.publish?.(req.channel!.id, {
+            type: 'song_queue.updated',
+            queueLength: (await queue.list()).length
+        });
         res.status(200).json(apiSuccess(skipped as QueuedSong));
+    }));
+
+    /**
+     * What Spotify is playing, for the now-playing card.
+     *
+     * Reachable by API key like the rest of the songs group: a Stream Deck
+     * button that shows the current track is the same scope as one that skips
+     * it, and narrower than one that does.
+     */
+    router.get('/api/v1/songs/playing', ok(async (req, res) => {
+        const surface = options.spotify?.(req.channel!.id) ?? null;
+        if (!surface) {
+            // Not an error. A channel without Spotify has a card with an empty
+            // state, and 404 here would make the client render a banner over a
+            // perfectly healthy bot.
+            res.status(200).json(apiSuccess(null));
+            return;
+        }
+
+        const state = await surface.playback();
+        if (!state || !state.trackUri || !state.trackName) {
+            res.status(200).json(apiSuccess(null));
+            return;
+        }
+
+        // Who asked for it, when it came from the request queue. The monitor
+        // hands tracks to Spotify and removes them from our queue, so a
+        // currently-playing request is no longer in the list - the played
+        // record is where the requester survives.
+        const requestedByLogin = surface.requesterOf(state.trackUri);
+
+        res.status(200).json(apiSuccess({
+            trackName: state.trackName,
+            artistName: state.artistName ?? 'Unknown artist',
+            albumArtUrl: state.albumArtUrl,
+            progressMs: state.progressMs,
+            durationMs: state.durationMs,
+            isPlaying: state.isPlaying,
+            requestedByLogin
+        } satisfies NowPlaying));
+    }));
+
+    // ---- spotify -----------------------------------------------------------
+
+    /**
+     * The Spotify card: an account name, a date, and the requests playlist.
+     *
+     * Nothing here can authenticate. The seam that answers it holds the
+     * credential; this handler sees a display name and a count.
+     */
+    router.get('/api/v1/spotify', rejectApiKey, ok(async (req, res) => {
+        const surface = options.spotify?.(req.channel!.id) ?? null;
+        const disconnected: SpotifyStatus = {
+            connected: false, accountName: null, connectedSince: null, playlist: null
+        };
+
+        if (!surface) {
+            res.status(200).json(apiSuccess(disconnected));
+            return;
+        }
+
+        const account = await surface.account();
+        if (!account) {
+            // A stored credential Spotify no longer honours. Reported as
+            // disconnected, because that is what it is from the streamer's
+            // side - and the screen's Connect button is the fix.
+            res.status(200).json(apiSuccess(disconnected));
+            return;
+        }
+
+        const stored = await settings(req.channel!.id).get();
+        const connectedAt = await surface.connectedAt();
+
+        res.status(200).json(apiSuccess({
+            connected: true,
+            accountName: account.displayName,
+            connectedSince: connectedAt ? connectedAt.toISOString() : null,
+            // Null when no playlist is set, and also when the one we recorded
+            // has since been deleted in the Spotify app - the card has nothing
+            // to count either way.
+            playlist: stored.requestsPlaylistId
+                ? await surface.playlist(stored.requestsPlaylistId)
+                : null
+        } satisfies SpotifyStatus));
+    }));
+
+    /**
+     * Unlinking Spotify.
+     *
+     * Song requests are switched off with it: the reward would otherwise stay
+     * redeemable against a bot that can no longer fulfil it, which takes a
+     * viewer's points for nothing.
+     */
+    router.delete('/api/v1/spotify', rejectApiKey, ok(async (req, res) => {
+        const surface = options.spotify?.(req.channel!.id) ?? null;
+        if (!surface || !await surface.disconnect()) {
+            res.status(404).json(apiFailure('not_found', 'No Spotify account is connected'));
+            return;
+        }
+
+        // The playlist id goes with the credential that could read it. Keeping
+        // it would leave a stale pointer for the next account to append to.
+        await settings(req.channel!.id).update({
+            songRequestsEnabled: false,
+            requestsPlaylistId: null
+        });
+
+        res.status(204).end();
+    }));
+
+    // ---- channel point rewards ---------------------------------------------
+
+    /**
+     * The three rewards this application manages, bound or not.
+     *
+     * The whole point of the card this feeds is the sentence beside it: no
+     * other reward is ever touched. That claim is only worth making if the list
+     * is closed, so the response enumerates the three kinds rather than
+     * whatever happens to be in the table - an unbound kind reports
+     * `bound: false` instead of vanishing.
+     */
+    router.get('/api/v1/rewards', rejectApiKey, ok(async (req, res) => {
+        const repository = options.rewards?.(req.channel!.id);
+        const stored = repository ? await repository.listAll() : [];
+        const byKind = new Map(stored.map((reward) => [reward.kind, reward]));
+
+        const kinds: StoredRewardKind[] = ['song_request', 'skip_queue', 'add_quote'];
+
+        res.status(200).json(apiSuccess({
+            items: kinds.map((kind): ManagedReward => {
+                const reward = byKind.get(kind);
+                return { kind, title: reward?.title ?? null, bound: reward !== undefined };
+            })
+        }));
     }));
 
     router.post(
@@ -444,7 +735,9 @@ export function createResourceRouter(options: ResourceOptions): Router {
         validateBody(toggleSongRequestsSchema),
         ok(async (req, res) => {
             const { enabled } = req.body as { enabled: boolean };
-            await repositories(req.channel!.id).settings.update({ songRequestsEnabled: enabled });
+            // The Stream Deck's one-press toggle writes the same row the
+            // settings screen does, so it takes the same invalidating path.
+            await settings(req.channel!.id).update({ songRequestsEnabled: enabled });
 
             res.status(200).json(apiSuccess({ songRequestsEnabled: enabled }));
         })
@@ -493,12 +786,20 @@ export function createResourceRouter(options: ResourceOptions): Router {
 
     // ---- analytics ---------------------------------------------------------
 
-    router.get('/api/v1/analytics/summary', rejectApiKey, ok(async (req, res) => {
-        // Correct over an empty dataset: a channel with no history reports
-        // zeroes rather than failing, which is the state every new tenant is in.
-        const summary = await analytics(req.channel!.id).summary();
-        res.status(200).json(apiSuccess(summary satisfies AnalyticsSummary));
-    }));
+    router.get(
+        '/api/v1/analytics/summary',
+        rejectApiKey,
+        validateQuery(analyticsQuerySchema),
+        ok(async (req, res) => {
+            // Correct over an empty dataset: a channel with no history reports
+            // zeroes rather than failing, which is the state every new tenant
+            // is in — and the screen renders those real small numbers rather
+            // than an apology.
+            const { range } = getValidatedQuery<{ range: AnalyticsRange }>(req);
+            const summary = await analytics(req.channel!.id).summary(range);
+            res.status(200).json(apiSuccess(summary satisfies AnalyticsSummary));
+        })
+    );
 
     // ---- api keys ----------------------------------------------------------
 

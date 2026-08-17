@@ -45,7 +45,7 @@ export function filterCommands(
         if (term === '') return true;
 
         const haystack = isBuiltIn(command)
-            ? `${command.name} ${describeHandler(command.handlerName as string)}`
+            ? `${command.name} ${describeHandler(command)}`
             : `${command.name} ${command.responseText ?? ''}`;
         return haystack.toLowerCase().includes(term);
     });
@@ -96,7 +96,7 @@ export function Commands({ storage }: CommandsProps): React.JSX.Element {
         void (async () => {
             const error = existing === null
                 ? await collection.mutate(
-                    (current) => [...current, { ...input, handlerName: null }],
+                    (current) => [...current, { ...input, handlerName: null, description: null }],
                     jsonRequest('/api/v1/commands', { method: 'POST', body: input }),
                     { totalDelta: 1 }
                 )
@@ -260,7 +260,7 @@ function CommandRow({ command, onEdit, onDelete }: {
                     <span className="chip chip--builtin">BUILT IN</span>
                 </span>
                 {/* The behaviour, not a reply: there is no stored text to show. */}
-                <span className="list-row__behaviour">{describeHandler(command.handlerName as string)}</span>
+                <span className="list-row__behaviour">{describeHandler(command)}</span>
                 <span className={`list-row__who${command.userLevel === 'mod' ? ' list-row__who--mod' : ''}`}>
                     {USER_LEVEL_LABELS[command.userLevel]}
                 </span>

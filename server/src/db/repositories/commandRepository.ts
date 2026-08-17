@@ -7,6 +7,8 @@ export interface CommandRecord {
     name: string;
     responseText: string | null;
     handlerName: string | null;
+    /** Handler-backed rows only; reconciled from the declaration at load. */
+    description: string | null;
     userLevel: UserLevel;
 }
 
@@ -17,6 +19,7 @@ export class CommandRepository extends ChannelScopedRepository {
                 name: commands.name,
                 responseText: commands.responseText,
                 handlerName: commands.handlerName,
+                description: commands.description,
                 userLevel: commands.userLevel
             })
             .from(commands)
@@ -31,6 +34,7 @@ export class CommandRepository extends ChannelScopedRepository {
             name: record.name.toLowerCase(),
             responseText: record.responseText,
             handlerName: record.handlerName,
+            description: record.description,
             userLevel: record.userLevel
         });
     }
@@ -46,6 +50,14 @@ export class CommandRepository extends ChannelScopedRepository {
     }
 
     /** Used to correct a DB row that disagrees with a handler's declared level. */
+    /** Corrects a row to match its handler's declared description. */
+    async updateDescription(name: string, description: string): Promise<void> {
+        await this.db
+            .update(commands)
+            .set({ description, updatedAt: new Date() })
+            .where(and(eq(commands.channelId, this.channelId), eq(commands.name, name.toLowerCase())));
+    }
+
     async updateUserLevel(name: string, userLevel: UserLevel): Promise<void> {
         await this.db
             .update(commands)

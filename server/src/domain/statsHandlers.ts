@@ -38,6 +38,7 @@ export function createStatsHandlers(deps: StatsHandlerDeps): HandlerRegistry {
         /* Handler names match the rows already in the owner's database. */
         combinedStats: {
             level: 'everyone',
+            description: 'Shows how much someone has chatted',
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = resolveTarget(context);
                 const totals = await deps.analytics.totalsForLogin(target);
@@ -58,6 +59,7 @@ export function createStatsHandlers(deps: StatsHandlerDeps): HandlerRegistry {
 
         topStats: {
             level: 'everyone',
+            description: 'Lists the most active chatters',
             handler: async (context: HandlerContext): Promise<void> => {
                 const top = await deps.analytics.topChatters(TOP_N);
 
@@ -75,6 +77,7 @@ export function createStatsHandlers(deps: StatsHandlerDeps): HandlerRegistry {
 
         followAge: {
             level: 'everyone',
+            description: 'Says how long someone has followed',
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = resolveTarget(context);
                 const record = await deps.roles.findByLogin(target);

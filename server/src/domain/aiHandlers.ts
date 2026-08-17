@@ -26,6 +26,7 @@ export function createAiHandlers(deps: AiHandlerDeps): HandlerRegistry {
          */
         toggleAI: {
             level: 'mod',
+            description: 'Turns AI replies on and off',
             handler: async (context: HandlerContext): Promise<void> => {
                 const arg = (context.args[0] ?? '').toLowerCase();
 

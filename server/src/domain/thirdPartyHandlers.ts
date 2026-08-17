@@ -95,6 +95,7 @@ export function createThirdPartyHandlers(deps: ThirdPartyHandlerDeps = {}): Hand
         /* Handler names match the rows already in the owner's database. */
         fursona: {
             level: 'everyone',
+            description: 'Generates a fursona image',
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = targetOf(context);
                 const seed = seedFor(target, FURSONA_SEED_MIN, FURSONA_SEED_MAX, salt);
@@ -108,6 +109,7 @@ export function createThirdPartyHandlers(deps: ThirdPartyHandlerDeps = {}): Hand
 
         waifu: {
             level: 'everyone',
+            description: 'Generates a waifu image',
             handler: async (context: HandlerContext): Promise<void> => {
                 const target = targetOf(context);
                 // Not padded: TWDNE's filenames are example-1, not example-00001.

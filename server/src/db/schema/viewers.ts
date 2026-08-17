@@ -74,7 +74,13 @@ export const streams = pgTable(
         category: text('category'),
         peakViewers: integer('peak_viewers').notNull().default(0),
         totalMessages: integer('total_messages').notNull().default(0),
-        uniqueChatters: integer('unique_chatters').notNull().default(0),
+        /*
+         * There is no `unique_chatters` here any more, and its absence is the
+         * decision. Nothing ever wrote it, so it read 0 for every stream — a
+         * figure two separate readers would have had no way to tell from a
+         * genuine zero. Distinct chatters are counted from `chat_messages`,
+         * which is the only place that actually knows. See migration 0006.
+         */
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
     },
     (table) => [

@@ -30,7 +30,10 @@ const channel = (over: Partial<ChannelSummary> = {}): ChannelSummary => ({
 
 const settings = (over: Partial<ChannelSettings> = {}): ChannelSettings => ({
     aiEnabled: true,
+    aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
     songRequestsEnabled: true,
+    requestsPlaylistEnabled: false,
+    requestsPlaylistName: null,
     discordWebhookConfigured: false,
     spotifyConnected: true,
     ...over

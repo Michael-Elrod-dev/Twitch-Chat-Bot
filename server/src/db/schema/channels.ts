@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, uuid, uniqueIndex, index, jsonb, primaryKey, check } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, uuid, uniqueIndex, index, jsonb, primaryKey, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -99,6 +99,22 @@ export const channelSettings = pgTable('channel_settings', {
         .primaryKey()
         .references(() => channels.id, { onDelete: 'cascade' }),
     aiEnabled: boolean('ai_enabled').notNull().default(true),
+    /*
+     * Per-tier AI budgets, one viewer, one stream.
+     *
+     * Columns rather than a jsonb blob: they are four integers with a fixed
+     * shape, the database can range-check them, and a settings screen editing
+     * one tier should not rewrite a document. Defaults mirror
+     * `DEFAULT_STREAM_LIMITS` exactly, so a channel that has never opened the
+     * screen behaves precisely as it did before the columns existed.
+     *
+     * No broadcaster column: the broadcaster is unlimited, and storing that as
+     * a number is an invitation to edit it.
+     */
+    aiLimitEveryone: integer('ai_limit_everyone').notNull().default(5),
+    aiLimitVip: integer('ai_limit_vip').notNull().default(10),
+    aiLimitSubscriber: integer('ai_limit_subscriber').notNull().default(15),
+    aiLimitModerator: integer('ai_limit_moderator').notNull().default(15),
     discordWebhookUrl: text('discord_webhook_url'),
     /** Last go-live post, for the notification cooldown. */
     lastDiscordNotificationAt: timestamp('last_discord_notification_at', { withTimezone: true }),
@@ -120,7 +136,17 @@ export const channelSettings = pgTable('channel_settings', {
     requestsPlaylistId: text('requests_playlist_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => [
+    // Zero is a legitimate setting; the ceiling is a stepper guard. In the
+    // database as well as in zod, because the ETL and any manual fix bypass zod.
+    check(
+        'channel_settings_ai_limits_check',
+        sql`${table.aiLimitEveryone} between 0 and 10000
+            and ${table.aiLimitVip} between 0 and 10000
+            and ${table.aiLimitSubscriber} between 0 and 10000
+            and ${table.aiLimitModerator} between 0 and 10000`
+    )
+]);
 
 /**
  * The shared bot account's authorization record.

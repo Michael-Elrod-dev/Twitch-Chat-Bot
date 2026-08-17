@@ -43,6 +43,13 @@
       "when": 1786950000000,
       "tag": "0005_channel_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0006_ai_limits_and_dead_column",
+      "breakpoints": true
     }
   ]
 }

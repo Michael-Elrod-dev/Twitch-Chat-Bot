@@ -141,8 +141,8 @@ describe('two channels, one process', () => {
             channelId: 'channel-alpha',
             broadcasterTwitchId: '1001',
             commands: [
-                { name: '!discord', responseText: 'ALPHA discord link', handlerName: null, userLevel: 'everyone' },
-                { name: '!alphaonly', responseText: 'alpha secret', handlerName: null, userLevel: 'everyone' }
+                { name: '!discord', responseText: 'ALPHA discord link', handlerName: null, description: null, userLevel: 'everyone' },
+                { name: '!alphaonly', responseText: 'alpha secret', handlerName: null, description: null, userLevel: 'everyone' }
             ],
             emotes: [{ triggerText: 'hello', responseText: 'ALPHA waves' }]
         });
@@ -151,8 +151,8 @@ describe('two channels, one process', () => {
             channelId: 'channel-beta',
             broadcasterTwitchId: '2002',
             commands: [
-                { name: '!discord', responseText: 'BETA discord link', handlerName: null, userLevel: 'everyone' },
-                { name: '!betaonly', responseText: 'beta secret', handlerName: null, userLevel: 'mod' }
+                { name: '!discord', responseText: 'BETA discord link', handlerName: null, description: null, userLevel: 'everyone' },
+                { name: '!betaonly', responseText: 'beta secret', handlerName: null, description: null, userLevel: 'mod' }
             ],
             emotes: [{ triggerText: 'hello', responseText: 'BETA nods' }]
         });

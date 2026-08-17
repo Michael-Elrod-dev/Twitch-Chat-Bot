@@ -15,6 +15,7 @@ import { TwitchOAuthClient, CHANNEL_SCOPES, BOT_SCOPES } from '../twitch/oauth.j
 import type { OnboardingService } from '../auth/onboarding.js';
 import type { AppSessionRepository, AppSession } from '../db/repositories/appSessionRepository.js';
 import type { ChannelRepository } from '../db/repositories/channelRepository.js';
+import type { SettingsService } from './../domain/settings.js';
 import type { ChannelRepositories } from '../bootstrap.js';
 import type { CacheManager } from '../cache/cacheManager.js';
 import { signJwt, hashRefreshToken } from '../auth/jwt.js';
@@ -165,9 +166,19 @@ function buildHarness(overrides: {
     apiRouter.use(createRequireChannelExceptMe(channels));
     apiRouter.use(createResourceRouter({
         logger,
-        repositories: () => ({
-            settings: { get: async () => null }
-        }) as unknown as ChannelRepositories,
+        repositories: () => ({}) as unknown as ChannelRepositories,
+        // `/me` asks for settings; nothing here writes them. Defaults are what
+        // a channel with no settings row genuinely has.
+        settings: () => ({
+            get: async () => ({
+                aiEnabled: true,
+                songRequestsEnabled: true,
+                discordWebhookUrl: null,
+                requestsPlaylistEnabled: false,
+                requestsPlaylistName: null,
+                requestsPlaylistId: null
+            })
+        }) as unknown as SettingsService,
         channels,
         apiKeys: {} as never,
         analytics: () => ({}) as never,

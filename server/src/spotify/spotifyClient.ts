@@ -75,6 +75,11 @@ import { TwitchError } from '../twitch/errors.js';
 
 const API_BASE = 'https://api.spotify.com/v1';
 
+/** Spotify's own maximum for `/me/playlists`. */
+const PLAYLIST_PAGE_SIZE = 50;
+/** See `findPlaylistByName`: a bound with a visible, fixable failure mode. */
+const MAX_PLAYLIST_PAGES = 10;
+
 export interface SpotifyTrack {
     uri: string;
     id: string;
@@ -88,6 +93,23 @@ export interface PlaybackState {
     trackUri: string | null;
     progressMs: number;
     durationMs: number;
+    /*
+     * The three fields the now-playing card renders. Added with that card, not
+     * before it: the monitor only ever needed the uri and the clock, and a
+     * payload carrying names nothing read would have been a shape to keep
+     * right for no reader.
+     */
+    trackName: string | null;
+    artistName: string | null;
+    /** Largest available cover, or null when Spotify offers none. */
+    albumArtUrl: string | null;
+}
+
+/** A playlist as Spotify holds it, for the settings screen's playlist card. */
+export interface SpotifyPlaylistInfo {
+    id: string;
+    name: string;
+    trackCount: number;
 }
 
 export class SpotifyError extends TwitchError {
@@ -132,6 +154,14 @@ export interface SpotifyClient {
     queueTrack: (uri: string) => Promise<void>;
     skipTrack: () => Promise<void>;
     addToPlaylist: (playlistId: string, uri: string) => Promise<void>;
+    /** The linked account's display name, for the Spotify card. */
+    getCurrentUser: () => Promise<{ id: string; displayName: string } | null>;
+    /** @returns null when the playlist no longer exists — a deletion in the Spotify app. */
+    getPlaylist: (playlistId: string) => Promise<SpotifyPlaylistInfo | null>;
+    /** Creates a private playlist owned by the linked account. */
+    createPlaylist: (userId: string, name: string) => Promise<SpotifyPlaylistInfo>;
+    /** @returns the account's own playlist with this name, or null. Case-insensitive. */
+    findPlaylistByName: (name: string) => Promise<SpotifyPlaylistInfo | null>;
 }
 
 export class HttpSpotifyClient implements SpotifyClient {
@@ -166,16 +196,29 @@ export class HttpSpotifyClient implements SpotifyClient {
         const state = await this.request<{
             is_playing?: boolean;
             progress_ms?: number;
-            item?: { uri?: string; duration_ms?: number } | null;
+            item?: {
+                uri?: string;
+                name?: string;
+                duration_ms?: number;
+                artists?: { name?: string }[];
+                album?: { images?: { url?: string; width?: number }[] };
+            } | null;
         } | null>('/me/player');
 
         if (!state) return null;
 
+        const item = state.item ?? null;
+
         return {
             isPlaying: state.is_playing ?? false,
-            trackUri: state.item?.uri ?? null,
+            trackUri: item?.uri ?? null,
             progressMs: state.progress_ms ?? 0,
-            durationMs: state.item?.duration_ms ?? 0
+            durationMs: item?.duration_ms ?? 0,
+            trackName: item?.name ?? null,
+            artistName: item
+                ? ((item.artists ?? []).map((a) => a.name ?? '').filter(Boolean).join(', ') || null)
+                : null,
+            albumArtUrl: largestImage(item?.album?.images)
         };
     }
 
@@ -189,6 +232,96 @@ export class HttpSpotifyClient implements SpotifyClient {
 
     async skipTrack(): Promise<void> {
         await this.request('/me/player/next', { method: 'POST', expects: 'none' });
+    }
+
+    async getCurrentUser(): Promise<{ id: string; displayName: string } | null> {
+        const me = await this.request<{ id?: string; display_name?: string | null } | null>('/me');
+        if (!me?.id) return null;
+
+        // Spotify allows an account with no display name. Falling back to the
+        // id keeps the card from rendering an empty line where a name goes.
+        return { id: me.id, displayName: me.display_name ?? me.id };
+    }
+
+    async getPlaylist(playlistId: string): Promise<SpotifyPlaylistInfo | null> {
+        /*
+         * `fields` keeps this to what the card shows. A requests playlist grows
+         * without bound, and the default response embeds the first hundred
+         * tracks — a payload that would grow all season for a name and a count.
+         */
+        const playlist = await this.request<{
+            id?: string; name?: string; tracks?: { total?: number };
+        } | null>(
+            `/playlists/${encodeURIComponent(playlistId)}?fields=id,name,tracks(total)`
+        );
+
+        // A 404 arrives here as null: the streamer deleted the playlist in the
+        // Spotify app, which is an ordinary thing to have done, not an error.
+        if (!playlist?.id) return null;
+
+        return {
+            id: playlist.id,
+            name: playlist.name ?? 'Untitled playlist',
+            trackCount: playlist.tracks?.total ?? 0
+        };
+    }
+
+    /**
+     * Looks for one of the account's playlists by name.
+     *
+     * Paged, and **bounded**. `MAX_PLAYLIST_PAGES` pages of fifty is 500
+     * playlists; past that this answers null and the caller creates a new one.
+     * Stated rather than hidden: an unbounded walk of somebody's library on a
+     * settings save is a request that can take a minute, and the failure mode
+     * of the bound — a duplicate playlist for a streamer with 500+ of them — is
+     * visible and fixable, where a hung save is neither.
+     *
+     * Matched case-insensitively, because "Song Requests" and "song requests"
+     * are the same playlist to the person who named it.
+     */
+    async findPlaylistByName(name: string): Promise<SpotifyPlaylistInfo | null> {
+        const wanted = name.trim().toLowerCase();
+
+        for (let page = 0; page < MAX_PLAYLIST_PAGES; page++) {
+            const response = await this.request<{
+                items?: { id?: string; name?: string; tracks?: { total?: number } }[];
+                next?: string | null;
+            } | null>(`/me/playlists?limit=${PLAYLIST_PAGE_SIZE}&offset=${page * PLAYLIST_PAGE_SIZE}`);
+
+            const items = response?.items ?? [];
+            for (const item of items) {
+                if (!item.id) continue;
+                if ((item.name ?? '').trim().toLowerCase() !== wanted) continue;
+                return { id: item.id, name: item.name ?? name, trackCount: item.tracks?.total ?? 0 };
+            }
+
+            if (!response?.next) return null;
+        }
+
+        this.options.logger.warn(
+            { name },
+            'Gave up looking for an existing playlist after the page bound - a new one will be created'
+        );
+        return null;
+    }
+
+    async createPlaylist(userId: string, name: string): Promise<SpotifyPlaylistInfo> {
+        const created = await this.request<{ id?: string; name?: string; tracks?: { total?: number } }>(
+            `/users/${encodeURIComponent(userId)}/playlists`,
+            {
+                method: 'POST',
+                // Private by default: this is the streamer's library, and a
+                // public playlist appearing on their profile is not something
+                // naming a playlist in our settings screen should decide.
+                body: { name, public: false, description: 'Song requests from chat' }
+            }
+        );
+
+        if (!created?.id) {
+            throw new SpotifyError('/users/{id}/playlists', 200, 'create returned no playlist id');
+        }
+
+        return { id: created.id, name: created.name ?? name, trackCount: created.tracks?.total ?? 0 };
     }
 
     /** `/items`, not `/tracks` — the old path was removed in February 2026. */
@@ -282,6 +415,23 @@ function toTrack(track: SpotifyTrackResponse): SpotifyTrack {
         artist: (track.artists ?? []).map((a) => a.name ?? '').filter(Boolean).join(', ') || 'Unknown artist',
         durationMs: track.duration_ms ?? 0
     };
+}
+
+/**
+ * Spotify returns album art largest-first, but says so in documentation rather
+ * than in the payload, so this picks by width instead of trusting the order.
+ * A 62px card would rather scale one down than up.
+ */
+function largestImage(images: { url?: string; width?: number }[] | undefined): string | null {
+    let best: { url: string; width: number } | null = null;
+
+    for (const image of images ?? []) {
+        if (!image.url) continue;
+        const width = image.width ?? 0;
+        if (!best || width > best.width) best = { url: image.url, width };
+    }
+
+    return best?.url ?? null;
 }
 
 function extractMessage(raw: string): string {

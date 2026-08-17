@@ -63,6 +63,24 @@ export interface LiveSongQueueUpdated {
     type: 'song_queue.updated';
     channelId: string;
     at: string;
+    /**
+     * How many songs are waiting after this change.
+     *
+     * **Wired, not dropped** — the flag carried since the dashboard package,
+     * resolved here with its reasoning. The field was declared and never put on
+     * the wire: the one publisher sent a bare `{ type }`, so every client read
+     * `undefined` and the type said otherwise.
+     *
+     * Wiring it rather than amending the contract, because the number is what
+     * two headers actually render (`6 waiting` on the songs screen, the queue
+     * card's meta on the dashboard) and the server already holds it at the
+     * moment it publishes. Dropping the field would have made every queue
+     * change cost a refetch to learn a count the emitter knew.
+     *
+     * The same pass fixed the larger half of the gap: the event only ever fired
+     * on skip, so a viewer redeeming a song left the queue card stale until
+     * something else happened to it. It now fires wherever the queue changes.
+     */
     queueLength: number;
 }
 

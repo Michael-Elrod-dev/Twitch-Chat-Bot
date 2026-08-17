@@ -27,7 +27,12 @@ const session = () => memorySessionStorage({ accessToken: 'token', refreshToken:
  * "the row is gone" unassertable.
  */
 const command = (over: Partial<Command> = {}): Command => ({
-    name: '!links', responseText: 'discord.gg/example', handlerName: null, userLevel: 'everyone', ...over
+    name: '!links',
+    responseText: 'discord.gg/example',
+    handlerName: null,
+    description: null,
+    userLevel: 'everyone',
+    ...over
 });
 
 const page = <T,>(items: T[]) => ({ ok: true, data: { items, total: items.length, limit: 200, offset: 0 } });
@@ -115,7 +120,12 @@ describe('Commands', () => {
 
     it('searches the behaviour text of a built-in, not just its name', () => {
         // People look for "the one about uptime" as often as for `!uptime`.
-        const all = [command({ name: '!u', responseText: null, handlerName: 'uptime' })];
+        // The text is the server's now, not a map in this workspace — so the
+        // fixture supplies it the way the API does.
+        const all = [command({
+            name: '!u', responseText: null,
+            handlerName: 'uptime', description: 'Says how long the stream has been live'
+        })];
         expect(filterCommands(all, 'all', 'how long the stream')).toHaveLength(1);
     });
 
@@ -123,7 +133,10 @@ describe('Commands', () => {
         // A static command too, so the list renders rather than the empty state.
         stubApi({ commands: [
             command(),
-            command({ name: '!uptime', responseText: null, handlerName: 'uptime' })
+            command({
+                name: '!uptime', responseText: null,
+                handlerName: 'uptime', description: 'Says how long the stream has been live'
+            })
         ] });
         render(<Commands storage={session()} />);
 

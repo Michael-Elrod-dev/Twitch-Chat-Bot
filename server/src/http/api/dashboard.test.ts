@@ -17,6 +17,8 @@ import { ChatHistoryRepository } from '../../db/repositories/chatHistoryReposito
 import { ChannelRoleRepository } from '../../db/repositories/channelRoleRepository.js';
 import { ChannelSettingsRepository } from '../../db/repositories/channelSettingsRepository.js';
 import { createChannelRepositories } from '../../bootstrap.js';
+import { SettingsService } from '../../domain/settings.js';
+import { nullCache } from '../../cache/testing.js';
 import { signJwt } from '../../auth/jwt.js';
 import { apiUsage } from '../../db/schema/index.js';
 
@@ -106,6 +108,12 @@ describeDb('dashboard', () => {
         router.use(createResourceRouter({
             logger,
             repositories: (channelId) => createChannelRepositories(handle.db, channelId),
+            settings: (channelId) => new SettingsService({
+                channelId,
+                repository: createChannelRepositories(handle.db, channelId).settings,
+                cache: nullCache(),
+                logger
+            }),
             channels,
             apiKeys: {} as never,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),

@@ -365,9 +365,11 @@ function buildRepositories(handle: DbHandle, channelId: string, handlers: string
     return {
         commands: {
             listAll: async () => handlers.map((handlerName) => ({
-                name: `!gate-${handlerName}`, responseText: null, handlerName, userLevel: 'everyone'
+                name: `!gate-${handlerName}`, responseText: null, handlerName,
+                description: null, userLevel: 'everyone'
             })),
             updateUserLevel: async () => undefined,
+            updateDescription: async () => undefined,
             create: async () => undefined,
             updateResponse: async () => false,
             delete: async () => false
@@ -375,7 +377,9 @@ function buildRepositories(handle: DbHandle, channelId: string, handlers: string
         emotes: { listAll: async () => [] },
         settings: {
             get: async () => ({
-                aiEnabled: true, songRequestsEnabled: true, discordWebhookUrl: null,
+                aiEnabled: true,
+                aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
+                songRequestsEnabled: true, discordWebhookUrl: null,
                 requestsPlaylistEnabled: false, requestsPlaylistName: null, requestsPlaylistId: null
             })
         },

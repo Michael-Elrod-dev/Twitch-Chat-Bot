@@ -50,7 +50,7 @@ describeDb('repositories', () => {
             const repoA = new CommandRepository(handle.db, channelA);
             const repoB = new CommandRepository(handle.db, channelB);
 
-            await repoA.create({ name: '!only-a', responseText: 'a', handlerName: null, userLevel: 'everyone' });
+            await repoA.create({ name: '!only-a', responseText: 'a', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect((await repoA.listAll()).map((c) => c.name)).toContain('!only-a');
             expect((await repoB.listAll()).map((c) => c.name)).not.toContain('!only-a');
@@ -60,8 +60,8 @@ describeDb('repositories', () => {
             const repoA = new CommandRepository(handle.db, channelA);
             const repoB = new CommandRepository(handle.db, channelB);
 
-            await repoA.create({ name: '!shared', responseText: 'from A', handlerName: null, userLevel: 'everyone' });
-            await repoB.create({ name: '!shared', responseText: 'from B', handlerName: null, userLevel: 'everyone' });
+            await repoA.create({ name: '!shared', responseText: 'from A', handlerName: null, description: null, userLevel: 'everyone' });
+            await repoB.create({ name: '!shared', responseText: 'from B', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect((await repoA.listAll()).find((c) => c.name === '!shared')?.responseText).toBe('from A');
             expect((await repoB.listAll()).find((c) => c.name === '!shared')?.responseText).toBe('from B');
@@ -71,7 +71,7 @@ describeDb('repositories', () => {
             const repoA = new CommandRepository(handle.db, channelA);
             const repoB = new CommandRepository(handle.db, channelB);
 
-            await repoA.create({ name: '!guarded', responseText: 'original', handlerName: null, userLevel: 'everyone' });
+            await repoA.create({ name: '!guarded', responseText: 'original', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect(await repoB.updateResponse('!guarded', 'hijacked')).toBe(false);
             expect((await repoA.listAll()).find((c) => c.name === '!guarded')?.responseText).toBe('original');
@@ -81,7 +81,7 @@ describeDb('repositories', () => {
             const repoA = new CommandRepository(handle.db, channelA);
             const repoB = new CommandRepository(handle.db, channelB);
 
-            await repoA.create({ name: '!undeletable', responseText: 'x', handlerName: null, userLevel: 'everyone' });
+            await repoA.create({ name: '!undeletable', responseText: 'x', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect(await repoB.delete('!undeletable')).toBe(false);
             expect((await repoA.listAll()).map((c) => c.name)).toContain('!undeletable');
@@ -89,14 +89,14 @@ describeDb('repositories', () => {
 
         it('normalises names to lowercase', async () => {
             const repoA = new CommandRepository(handle.db, channelA);
-            await repoA.create({ name: '!MiXeD', responseText: 'x', handlerName: null, userLevel: 'everyone' });
+            await repoA.create({ name: '!MiXeD', responseText: 'x', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect((await repoA.listAll()).map((c) => c.name)).toContain('!mixed');
         });
 
         it('updates a user level', async () => {
             const repoA = new CommandRepository(handle.db, channelA);
-            await repoA.create({ name: '!lvl', responseText: 'x', handlerName: 'h', userLevel: 'everyone' });
+            await repoA.create({ name: '!lvl', responseText: 'x', handlerName: 'h', description: null, userLevel: 'everyone' });
 
             await repoA.updateUserLevel('!lvl', 'mod');
 

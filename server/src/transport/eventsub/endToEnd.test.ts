@@ -74,14 +74,14 @@ function fakeRepositories(fixture: ChannelFixture): ChannelRepositories {
 
 const FIXTURES: Record<string, ChannelFixture> = {
     [ALPHA.id]: {
-        commands: [{ name: '!discord', responseText: 'ALPHA discord link', handlerName: null, userLevel: 'everyone' }],
+        commands: [{ name: '!discord', responseText: 'ALPHA discord link', handlerName: null, description: null, userLevel: 'everyone' }],
         emotes: [{ triggerText: 'hello', responseText: 'ALPHA waves' }],
         aiEnabled: true
     },
     [BETA.id]: {
         commands: [
-            { name: '!discord', responseText: 'BETA discord link', handlerName: null, userLevel: 'everyone' },
-            { name: '!mods', responseText: 'beta mods only', handlerName: null, userLevel: 'mod' }
+            { name: '!discord', responseText: 'BETA discord link', handlerName: null, description: null, userLevel: 'everyone' },
+            { name: '!mods', responseText: 'beta mods only', handlerName: null, description: null, userLevel: 'mod' }
         ],
         emotes: [{ triggerText: 'hello', responseText: 'BETA nods' }],
         aiEnabled: true

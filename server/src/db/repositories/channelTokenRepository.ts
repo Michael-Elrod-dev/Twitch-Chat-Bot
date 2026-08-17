@@ -114,6 +114,25 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
         return row !== undefined;
     }
 
+    /**
+     * When the link was made — the Spotify card's "since 4 Aug".
+     *
+     * `created_at` and deliberately not `updated_at`: the row is rewritten on
+     * every token refresh, so the card would otherwise report the connection as
+     * an hour old for an account linked in July.
+     *
+     * Like `has`, this never touches the cipher: a date is not a credential.
+     */
+    async connectedAt(provider: TokenProvider): Promise<Date | null> {
+        const [row] = await this.db
+            .select({ createdAt: channelTokens.createdAt })
+            .from(channelTokens)
+            .where(and(eq(channelTokens.channelId, this.channelId), eq(channelTokens.provider, provider)))
+            .limit(1);
+
+        return row?.createdAt ?? null;
+    }
+
     async delete(provider: TokenProvider): Promise<boolean> {
         const removed = await this.db
             .delete(channelTokens)

@@ -25,6 +25,15 @@ export interface StreamLimits {
     everyone: number;
 }
 
+/**
+ * The out-of-the-box budget.
+ *
+ * Also the source of the `channel_settings` column defaults, which migration
+ * 0006 restates as SQL literals because a migration cannot import TypeScript.
+ * `aiLimits.test.ts` reads a fresh channel's limit back through the whole stack
+ * and asserts it against this object, so the two restatements cannot drift
+ * apart without a test saying so.
+ */
 export const DEFAULT_STREAM_LIMITS: StreamLimits = {
     broadcaster: 999_999,
     mod: 15,
@@ -32,6 +41,20 @@ export const DEFAULT_STREAM_LIMITS: StreamLimits = {
     vip: 10,
     everyone: 5
 };
+
+/** The four stored tiers, plus the broadcaster's unstored and unlimited one. */
+export function streamLimitsFrom(
+    stored: { everyone: number; vip: number; subscriber: number; moderator: number }
+): StreamLimits {
+    return {
+        // Never stored, never editable — see the schema and the contract.
+        broadcaster: DEFAULT_STREAM_LIMITS.broadcaster,
+        mod: stored.moderator,
+        subscriber: stored.subscriber,
+        vip: stored.vip,
+        everyone: stored.everyone
+    };
+}
 
 export interface RateLimitDecision {
     allowed: boolean;
@@ -54,7 +77,19 @@ export function limitFor(roles: ChatterRoles, limits: StreamLimits = DEFAULT_STR
 export interface AiRateLimiterOptions {
     db: Database;
     channelId: string;
-    limits?: StreamLimits;
+    /**
+     * Read per check, not captured at construction.
+     *
+     * A value frozen into the limiter when the session started is the exact
+     * shape of the bug the content screens shipped: the owner edits a number in
+     * the app, the database agrees, and the running bot keeps enforcing what it
+     * was built with until a restart. Asking for the limits at decision time
+     * means the only staleness left is the settings cache's own, which the
+     * write invalidates.
+     *
+     * Omitted means the defaults, for callers with no settings to read.
+     */
+    limits?: () => Promise<StreamLimits>;
 }
 
 const SERVICE = 'claude';
@@ -62,12 +97,12 @@ const SERVICE = 'claude';
 export class AiRateLimiter {
     private readonly db: Database;
     private readonly channelId: string;
-    private readonly limits: StreamLimits;
+    private readonly limits: () => Promise<StreamLimits>;
 
     constructor(options: AiRateLimiterOptions) {
         this.db = options.db;
         this.channelId = options.channelId;
-        this.limits = options.limits ?? DEFAULT_STREAM_LIMITS;
+        this.limits = options.limits ?? (async () => DEFAULT_STREAM_LIMITS);
     }
 
     /**
@@ -76,7 +111,7 @@ export class AiRateLimiter {
      * one long stream, and the same applies here.
      */
     async check(twitchUserId: string, roles: ChatterRoles, streamId: string | null): Promise<RateLimitDecision> {
-        const limit = limitFor(roles, this.limits);
+        const limit = limitFor(roles, await this.limits());
         const used = await this.currentUsage(twitchUserId, streamId);
 
         return { allowed: used < limit, used, limit };

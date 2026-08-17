@@ -141,6 +141,12 @@ describeDb('content reaches the running bot', () => {
         router.use(createResourceRouter({
             logger,
             repositories: (channelId) => createChannelRepositories(handle.db, channelId),
+            settings: (channelId) => new SettingsService({
+                channelId,
+                repository: createChannelRepositories(handle.db, channelId).settings,
+                cache: nullCache(),
+                logger
+            }),
             channels,
             apiKeys: {} as never,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),

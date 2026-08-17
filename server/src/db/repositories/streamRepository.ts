@@ -170,12 +170,12 @@ export class StreamRepository extends ChannelScopedRepository {
             .where(and(eq(streams.id, streamId), eq(streams.channelId, this.channelId)));
     }
 
-    async setUniqueChatters(streamId: string, count: number): Promise<void> {
-        await this.db
-            .update(streams)
-            .set({ uniqueChatters: count })
-            .where(and(eq(streams.id, streamId), eq(streams.channelId, this.channelId)));
-    }
+    /*
+     * There was a `setUniqueChatters` here. It never had a caller, so the
+     * column it wrote read 0 for every stream in the database — see migration
+     * 0006, which drops both. Distinct chatters come from `chat_messages`,
+     * counted by whoever is asking, because that is the only table that knows.
+     */
 }
 
 function toRecord(row: typeof streams.$inferSelect | undefined): StreamRecord {

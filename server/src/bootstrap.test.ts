@@ -38,10 +38,15 @@ function repositoriesFor(commandName: string, response: string): ChannelReposito
     return {
         commands: {
             listAll: async () => [{ name: commandName, responseText: response, handlerName: null, userLevel: 'everyone' }],
-            updateUserLevel: vi.fn()
+            updateUserLevel: vi.fn(), updateDescription: vi.fn()
         },
         emotes: { listAll: async () => [] },
-        settings: { get: async () => ({ aiEnabled: true, songRequestsEnabled: true, discordWebhookUrl: null }) },
+        settings: { get: async () => ({
+            aiEnabled: true,
+            aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
+            songRequestsEnabled: true,
+            discordWebhookUrl: null
+        }) },
         roles: { upsertRoles: vi.fn(async () => undefined), get: async () => null }
     } as unknown as ChannelRepositories;
 }
@@ -397,9 +402,14 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
                 }
             } as unknown as NonNullable<ChannelDependencies['claude']>,
             repositories: () => ({
-                commands: { listAll: async () => [], updateUserLevel: vi.fn() },
+                commands: { listAll: async () => [], updateUserLevel: vi.fn(), updateDescription: vi.fn() },
                 emotes: { listAll: async () => [] },
-                settings: { get: async () => ({ aiEnabled: true, songRequestsEnabled: true, discordWebhookUrl: null }) },
+                settings: { get: async () => ({
+                    aiEnabled: true,
+                    aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
+                    songRequestsEnabled: true,
+                    discordWebhookUrl: null
+                }) },
                 roles: { upsertRoles: vi.fn(async () => undefined), get: async () => null },
                 quotes: { add: vi.fn(async () => undefined) }
             }) as unknown as ChannelRepositories
@@ -461,11 +471,16 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
                     listAll: async () => [
                         { name: '!songs', responseText: null, handlerName: 'toggleSongs', userLevel: 'mod' }
                     ],
-                    updateUserLevel: vi.fn()
+                    updateUserLevel: vi.fn(), updateDescription: vi.fn()
                 },
                 emotes: { listAll: async () => [] },
                 settings: {
-                    get: async () => ({ aiEnabled: true, songRequestsEnabled: true, discordWebhookUrl: null }),
+                    get: async () => ({
+                        aiEnabled: true,
+                        aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
+                        songRequestsEnabled: true,
+                        discordWebhookUrl: null
+                    }),
                     update: vi.fn(async () => undefined)
                 },
                 roles: { upsertRoles: vi.fn(async () => undefined), get: async () => null },

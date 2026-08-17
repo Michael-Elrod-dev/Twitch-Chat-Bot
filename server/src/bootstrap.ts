@@ -9,7 +9,7 @@ import type { HandlerRegistry } from './domain/handlers.js';
 import type { EventBus } from './live/eventBus.js';
 import type { ClaudeClient } from './ai/claudeClient.js';
 import { ChannelAiService } from './ai/aiService.js';
-import { AiRateLimiter } from './ai/rateLimiter.js';
+import { AiRateLimiter, streamLimitsFrom } from './ai/rateLimiter.js';
 import { ChatHistoryRepository } from './db/repositories/chatHistoryRepository.js';
 import { createAiHandlers } from './domain/aiHandlers.js';
 import { createSongHandlers } from './domain/songHandlers.js';
@@ -272,7 +272,14 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             client: deps.claude,
             settings,
             history: new ChatHistoryRepository(deps.db, channelId),
-            rateLimiter: new AiRateLimiter({ db: deps.db, channelId }),
+            rateLimiter: new AiRateLimiter({
+                db: deps.db,
+                channelId,
+                // Asked at the moment of the decision, through the same cache
+                // the API invalidates on write — so the owner's stepper reaches
+                // the running bot without a restart.
+                limits: async () => streamLimitsFrom((await settings.get()).aiLimits)
+            }),
             logger: channelLogger,
             // The P1-WP4.1 flag, closed: buckets are per stream and the
             // prompt carries the real title and category.

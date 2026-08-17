@@ -11,6 +11,7 @@ export interface CommandLookup {
     name: string;
     responseText: string | null;
     handlerName: string | null;
+    description: string | null;
     userLevel: UserLevel;
 }
 
@@ -55,7 +56,8 @@ export class CommandManager {
         const next = new Map<string, CommandLookup>();
 
         for (const row of rows) {
-            const declared = row.handlerName ? this.handlers[row.handlerName]?.level : undefined;
+            const registration = row.handlerName ? this.handlers[row.handlerName] : undefined;
+            const declared = registration?.level;
 
             // The declaration wins. Phase 0 found handler commands whose stored
             // level said 'everyone' while the real check lived inside the handler.
@@ -67,8 +69,27 @@ export class CommandManager {
                 await this.repository.updateUserLevel(row.name, declared);
             }
 
+            /*
+             * The same rule, applied to the sentence the app shows.
+             *
+             * Written here rather than served from the registry at request
+             * time because the API has no registry to consult — the handlers
+             * are built per session, and a channel whose bot is switched off
+             * has none. Reconciling onto the row means the description is a
+             * fact about the command wherever it is read from, and a built-in
+             * whose wording changes is corrected on the next start.
+             */
+            const description = registration?.description;
+            if (description !== undefined && description !== row.description) {
+                await this.repository.updateDescription(row.name, description);
+            }
+
             const level = declared ?? (isUserLevel(row.userLevel) ? row.userLevel : 'everyone');
-            next.set(row.name.toLowerCase(), { ...row, userLevel: level });
+            next.set(row.name.toLowerCase(), {
+                ...row,
+                userLevel: level,
+                description: description ?? row.description
+            });
         }
 
         this.commands = next;

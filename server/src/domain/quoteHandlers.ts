@@ -36,6 +36,7 @@ export function createQuoteHandlers(deps: QuoteHandlerDeps): HandlerRegistry {
     return {
         quoteHandler: {
             level: 'everyone',
+            description: 'Returns a saved quote',
             handler: async (context: HandlerContext): Promise<void> => {
                 const total = await deps.quotes.count();
                 if (total === 0) {
@@ -74,6 +75,7 @@ export function createQuoteHandlers(deps: QuoteHandlerDeps): HandlerRegistry {
          */
         modCommands: {
             level: 'mod',
+            description: 'Adds, edits and removes commands from chat',
             handler: async (context: HandlerContext): Promise<void> => {
                 const [action, rawName, ...rest] = context.args;
 
@@ -102,7 +104,10 @@ export function createQuoteHandlers(deps: QuoteHandlerDeps): HandlerRegistry {
                     }
 
                     await deps.commands().create({
-                        name, responseText: message, handlerName: null, userLevel: 'everyone'
+                        // A command written from chat is static: its reply is
+                        // its own description.
+                        name, responseText: message, handlerName: null,
+                        description: null, userLevel: 'everyone'
                     });
                     await context.reply(`Added ${name}`);
                     return;

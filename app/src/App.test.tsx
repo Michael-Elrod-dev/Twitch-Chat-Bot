@@ -21,7 +21,10 @@ const ME: MeResponse = {
     channel: { id: 'c1', login: 'streamer', displayName: null, status: 'active', enabled: true },
     settings: {
         aiEnabled: true,
+        aiLimits: { everyone: 5, vip: 10, subscriber: 15, moderator: 15 },
         songRequestsEnabled: true,
+        requestsPlaylistEnabled: false,
+        requestsPlaylistName: null,
         discordWebhookConfigured: false,
         spotifyConnected: false
     }

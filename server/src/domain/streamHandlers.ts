@@ -20,6 +20,7 @@ export function createStreamHandlers(deps: StreamHandlerDeps): HandlerRegistry {
         /* Matches the handler_name already in the owner's imported rows. */
         uptime: {
             level: 'everyone',
+            description: 'Says how long the stream has been live',
             handler: async (context: HandlerContext): Promise<void> => {
                 const elapsed = deps.streams.uptime();
 

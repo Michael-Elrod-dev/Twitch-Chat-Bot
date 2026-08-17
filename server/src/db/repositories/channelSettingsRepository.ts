@@ -2,8 +2,17 @@ import { eq } from 'drizzle-orm';
 import { channelSettings } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
 
+/** The four editable tiers. The broadcaster is unlimited and is not stored. */
+export interface AiLimitsRecord {
+    everyone: number;
+    vip: number;
+    subscriber: number;
+    moderator: number;
+}
+
 export interface ChannelSettingsRecord {
     aiEnabled: boolean;
+    aiLimits: AiLimitsRecord;
     songRequestsEnabled: boolean;
     discordWebhookUrl: string | null;
     /** See the schema: the requests-playlist feature, foundation shipped in P1-WP4.3. */
@@ -17,6 +26,10 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
         const [row] = await this.db
             .select({
                 aiEnabled: channelSettings.aiEnabled,
+                aiLimitEveryone: channelSettings.aiLimitEveryone,
+                aiLimitVip: channelSettings.aiLimitVip,
+                aiLimitSubscriber: channelSettings.aiLimitSubscriber,
+                aiLimitModerator: channelSettings.aiLimitModerator,
                 songRequestsEnabled: channelSettings.songRequestsEnabled,
                 discordWebhookUrl: channelSettings.discordWebhookUrl,
                 requestsPlaylistEnabled: channelSettings.requestsPlaylistEnabled,
@@ -26,7 +39,25 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
             .from(channelSettings)
             .where(eq(channelSettings.channelId, this.channelId));
 
-        return row ?? null;
+        if (!row) return null;
+
+        // Four flat columns become one nested object here rather than at every
+        // reader: the limits travel together everywhere they are used, and a
+        // shape that matches the contract is one fewer place to reassemble it.
+        return {
+            aiEnabled: row.aiEnabled,
+            aiLimits: {
+                everyone: row.aiLimitEveryone,
+                vip: row.aiLimitVip,
+                subscriber: row.aiLimitSubscriber,
+                moderator: row.aiLimitModerator
+            },
+            songRequestsEnabled: row.songRequestsEnabled,
+            discordWebhookUrl: row.discordWebhookUrl,
+            requestsPlaylistEnabled: row.requestsPlaylistEnabled,
+            requestsPlaylistName: row.requestsPlaylistName,
+            requestsPlaylistId: row.requestsPlaylistId
+        };
     }
 
     async setAiEnabled(enabled: boolean): Promise<void> {
@@ -49,6 +80,16 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
     async update(patch: Partial<ChannelSettingsRecord>): Promise<void> {
         const changes: Record<string, unknown> = {};
         if (patch.aiEnabled !== undefined) changes['aiEnabled'] = patch.aiEnabled;
+        if (patch.aiLimits !== undefined) {
+            // All four or none. A partial set would have to be merged against a
+            // read, and two edits in flight would resolve to whichever landed
+            // second — with the other tier's change lost inside a write that
+            // never mentioned it.
+            changes['aiLimitEveryone'] = patch.aiLimits.everyone;
+            changes['aiLimitVip'] = patch.aiLimits.vip;
+            changes['aiLimitSubscriber'] = patch.aiLimits.subscriber;
+            changes['aiLimitModerator'] = patch.aiLimits.moderator;
+        }
         if (patch.songRequestsEnabled !== undefined) changes['songRequestsEnabled'] = patch.songRequestsEnabled;
         if (patch.discordWebhookUrl !== undefined) changes['discordWebhookUrl'] = patch.discordWebhookUrl;
         if (patch.requestsPlaylistEnabled !== undefined) {

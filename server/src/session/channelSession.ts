@@ -111,6 +111,18 @@ export class ChannelSession {
      * So a command created in the app saved fine and never fired in chat. The
      * screens were writing to storage the bot had stopped reading.
      */
+    /**
+     * Who requested the track Spotify is playing, when this session handed it
+     * over. Null otherwise, including after a restart.
+     *
+     * Exposed on the session rather than reached for through the monitor,
+     * because the monitor is optional and its absence ("this channel has no
+     * Spotify") is the same answer as "we did not queue this track".
+     */
+    nowPlayingRequester(trackUri: string): string | null {
+        return this.monitor?.requesterOf(trackUri) ?? null;
+    }
+
     async reloadContent(kind: 'commands' | 'emotes'): Promise<void> {
         if (kind === 'commands') await this.commands.load();
         else await this.emotes.load();

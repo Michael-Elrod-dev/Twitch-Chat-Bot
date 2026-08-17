@@ -5,11 +5,21 @@ import type {
     ChannelSettingsRepository,
     ChannelSettingsRecord
 } from '../db/repositories/channelSettingsRepository.js';
+import { DEFAULT_STREAM_LIMITS } from '../ai/rateLimiter.js';
 
 const CACHE_TTL_SECONDS = 60;
 
 const DEFAULTS: ChannelSettingsRecord = {
     aiEnabled: true,
+    // Derived, never restated: the limiter's constant is the one definition of
+    // what "no preference" means, and the database columns default to the same
+    // numbers (migration 0006, asserted by test).
+    aiLimits: {
+        everyone: DEFAULT_STREAM_LIMITS.everyone,
+        vip: DEFAULT_STREAM_LIMITS.vip,
+        subscriber: DEFAULT_STREAM_LIMITS.subscriber,
+        moderator: DEFAULT_STREAM_LIMITS.mod
+    },
     songRequestsEnabled: true,
     discordWebhookUrl: null,
     // Off until the streamer turns it on and names a playlist: saving a

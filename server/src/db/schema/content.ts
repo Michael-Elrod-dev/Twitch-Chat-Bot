@@ -15,6 +15,15 @@ export const commands = pgTable(
         responseText: text('response_text'),
         /** Set when the command is backed by a handler module rather than static text. */
         handlerName: text('handler_name'),
+        /**
+         * What a handler-backed command does, for the app's reply column.
+         *
+         * Null for a static command, whose reply already says it. Written from
+         * the handler's own registration at session load, the same
+         * declaration-wins reconciliation `user_level` gets — so the table
+         * cannot drift from the code that decides the behaviour.
+         */
+        description: text('description'),
         userLevel: text('user_level', { enum: ['everyone', 'vip', 'mod', 'broadcaster'] })
             .notNull()
             .default('everyone'),

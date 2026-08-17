@@ -5,7 +5,10 @@ import { connectTestDatabase } from '../db/testing.js';
 import { ChannelRepository } from '../db/repositories/channelRepository.js';
 import { SongQueueRepository } from '../db/repositories/songQueueRepository.js';
 import { PlaybackMonitor } from './playbackMonitor.js';
-import { parseTrackId, HttpSpotifyClient, type SpotifyClient, type SpotifyTrack, type PlaybackState } from './spotifyClient.js';
+import {
+    parseTrackId, HttpSpotifyClient,
+    type SpotifyClient, type SpotifyTrack, type PlaybackState, type SpotifyPlaylistInfo
+} from './spotifyClient.js';
 import { buildSpotifyAuthorizeUrl, SPOTIFY_SCOPES } from './spotifyAuth.js';
 import { createSongRequestHandler, createSkipQueueHandler } from '../domain/songRedemption.js';
 import { ChannelSession } from '../session/channelSession.js';
@@ -66,6 +69,21 @@ class FakeSpotify implements SpotifyClient {
 
     async skipTrack(): Promise<void> { this.skips++; }
     async addToPlaylist(): Promise<void> { /* unused here */ }
+
+    // The songs-screen reads. Present because the interface requires them, and
+    // answering honestly (an account, no playlist) rather than throwing keeps a
+    // future test that wanders in from failing for the wrong reason.
+    async getCurrentUser(): Promise<{ id: string; displayName: string } | null> {
+        return { id: 'spotify-user', displayName: 'Fake Account' };
+    }
+
+    async getPlaylist(): Promise<SpotifyPlaylistInfo | null> { return null; }
+
+    async findPlaylistByName(): Promise<SpotifyPlaylistInfo | null> { return null; }
+
+    async createPlaylist(_userId: string, name: string): Promise<SpotifyPlaylistInfo> {
+        return { id: 'created-playlist', name, trackCount: 0 };
+    }
 }
 
 // ---- pure units -------------------------------------------------------------
@@ -171,7 +189,8 @@ describeDb('Spotify integration', () => {
             // while nobody was listening. The viewers paid for songs nobody heard.
             const spotify = new FakeSpotify();
             spotify.playback = {
-                isPlaying: false, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000
+                isPlaying: false, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(alphaId).add({
@@ -191,7 +210,8 @@ describeDb('Spotify integration', () => {
         it('advances when playback resumes near the end', async () => {
             const spotify = new FakeSpotify();
             spotify.playback = {
-                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000
+                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(alphaId).add({
@@ -210,7 +230,8 @@ describeDb('Spotify integration', () => {
         it('waits while the current track is only halfway through', async () => {
             const spotify = new FakeSpotify();
             spotify.playback = {
-                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 100_000, durationMs: 200_000
+                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 100_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(alphaId).add({
@@ -246,7 +267,8 @@ describeDb('Spotify integration', () => {
             // was just handed to Spotify, every subsequent tick queues it again.
             const spotify = new FakeSpotify();
             spotify.playback = {
-                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000
+                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(alphaId).add({
@@ -460,7 +482,8 @@ describeDb('Spotify integration', () => {
         it('one channel monitor never drains another channel queue', async () => {
             const alphaSpotify = new FakeSpotify();
             alphaSpotify.playback = {
-                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000
+                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(alphaId).add({
@@ -483,7 +506,8 @@ describeDb('Spotify integration', () => {
             broken.failWith = new Error('alpha spotify down');
             const working = new FakeSpotify();
             working.playback = {
-                isPlaying: true, trackUri: 'x', progressMs: 195_000, durationMs: 200_000
+                isPlaying: true, trackUri: 'x', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
             };
 
             await queueFor(betaId).add({
@@ -542,6 +566,153 @@ describe('February 2026 platform changes', () => {
 
         expect(calls[0]).toContain('/playlists/playlist-1/items');
         expect(calls[0]).not.toContain('/tracks');
+    });
+
+    /*
+     * The songs-screen reads, at the fetch layer.
+     *
+     * These share the failure mode that already cost this file a production
+     * incident: a call can be spelled almost right, answer 2xx, and be read
+     * wrong. The seam double the route tests use cannot catch that — it is the
+     * thing standing in for these — so the paths, the query strings and the
+     * field names get asserted here against Spotify's real response shapes.
+     */
+    const recordingClient = (
+        respond: (url: string) => Response
+    ): { client: HttpSpotifyClient; calls: string[] } => {
+        const calls: string[] = [];
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async (url: string | URL) => {
+                calls.push(String(url));
+                return respond(String(url));
+            }) as unknown as typeof fetch
+        });
+        return { client, calls };
+    };
+
+    const json = (body: unknown): Response =>
+        new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+
+    it('reads the linked account from /me', async () => {
+        const { client, calls } = recordingClient(() => json({ id: 'user-1', display_name: 'Owner' }));
+
+        expect(await client.getCurrentUser()).toEqual({ id: 'user-1', displayName: 'Owner' });
+        expect(calls[0]).toContain('/me');
+    });
+
+    it('falls back to the account id when Spotify holds no display name', async () => {
+        const { client } = recordingClient(() => json({ id: 'user-1', display_name: null }));
+
+        // An account with no display name is allowed. The card would otherwise
+        // render an empty line where a name goes.
+        expect(await client.getCurrentUser()).toEqual({ id: 'user-1', displayName: 'user-1' });
+    });
+
+    it('asks for only the playlist fields the card shows', async () => {
+        const { client, calls } = recordingClient(() =>
+            json({ id: 'p1', name: 'Chat Requests', tracks: { total: 312 } }));
+
+        expect(await client.getPlaylist('p1')).toEqual({
+            id: 'p1', name: 'Chat Requests', trackCount: 312
+        });
+        // Without `fields`, the default response embeds the first hundred
+        // tracks — a payload that grows all season for a name and a count.
+        expect(calls[0]).toContain('fields=id,name,tracks(total)');
+    });
+
+    it('reports a deleted playlist as absent rather than failing', async () => {
+        const { client } = recordingClient(() => new Response('{}', { status: 404 }));
+
+        // Deleting a playlist in the Spotify app is an ordinary thing to have
+        // done. The card shows nothing; it does not show an error.
+        expect(await client.getPlaylist('gone')).toBeNull();
+    });
+
+    it('finds an existing playlist by name, case-insensitively', async () => {
+        const { client } = recordingClient(() => json({
+            items: [
+                { id: 'other', name: 'Road Trip', tracks: { total: 4 } },
+                { id: 'p1', name: 'Chat Requests', tracks: { total: 12 } }
+            ],
+            next: null
+        }));
+
+        // "chat requests" and "Chat Requests" are the same playlist to the
+        // person who named it — and creating a second one is the failure this
+        // lookup exists to prevent.
+        expect(await client.findPlaylistByName('chat requests')).toEqual({
+            id: 'p1', name: 'Chat Requests', trackCount: 12
+        });
+    });
+
+    it('walks pages while Spotify says there are more', async () => {
+        const pages = [
+            json({ items: [{ id: 'a', name: 'A', tracks: { total: 1 } }], next: 'more' }),
+            json({ items: [{ id: 'b', name: 'Wanted', tracks: { total: 2 } }], next: null })
+        ];
+        let page = 0;
+        const { client, calls } = recordingClient(() => pages[page++] as Response);
+
+        expect(await client.findPlaylistByName('wanted')).toMatchObject({ id: 'b' });
+        expect(calls[1]).toContain('offset=50');
+    });
+
+    it('gives up at the page bound rather than walking forever', async () => {
+        // Every page claims another follows. An unbounded walk here is a
+        // settings save that never returns.
+        const { client, calls } = recordingClient(() => json({ items: [], next: 'more' }));
+
+        expect(await client.findPlaylistByName('never')).toBeNull();
+        expect(calls).toHaveLength(10);
+    });
+
+    it('creates a private playlist under the account', async () => {
+        const bodies: string[] = [];
+        const client = new HttpSpotifyClient({
+            accessToken: async () => 'token',
+            logger,
+            fetchImpl: (async (url: string | URL, init?: RequestInit) => {
+                bodies.push(String(init?.body));
+                return json({ id: 'new-1', name: 'Chat Requests', tracks: { total: 0 } });
+            }) as unknown as typeof fetch
+        });
+
+        expect(await client.createPlaylist('user-1', 'Chat Requests'))
+            .toEqual({ id: 'new-1', name: 'Chat Requests', trackCount: 0 });
+
+        // Private by default: naming a playlist in our settings screen must not
+        // decide that it appears on the streamer's public profile.
+        expect(JSON.parse(bodies[0] as string)).toMatchObject({ name: 'Chat Requests', public: false });
+    });
+
+    it('reads the track name, artists and largest cover off the player', async () => {
+        const { client } = recordingClient(() => json({
+            is_playing: true,
+            progress_ms: 94_000,
+            item: {
+                uri: 'spotify:track:abc',
+                name: 'A Song',
+                duration_ms: 243_000,
+                artists: [{ name: 'One' }, { name: 'Two' }],
+                album: { images: [{ url: 'small.jpg', width: 64 }, { url: 'big.jpg', width: 640 }] }
+            }
+        }));
+
+        expect(await client.getPlaybackState()).toEqual({
+            isPlaying: true,
+            trackUri: 'spotify:track:abc',
+            progressMs: 94_000,
+            durationMs: 243_000,
+            trackName: 'A Song',
+            // Joined, not first-only: a collaboration listing one artist reads
+            // as wrong to whoever requested it.
+            artistName: 'One, Two',
+            // Picked by width, not by position: the order is documented rather
+            // than guaranteed in the payload.
+            albumArtUrl: 'big.jpg'
+        });
     });
 
     /**

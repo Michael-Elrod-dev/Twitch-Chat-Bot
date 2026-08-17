@@ -27,6 +27,13 @@ const makeRepo = (rows: CommandRecord[]) => {
             const row = store.find((r) => r.name === name);
             if (row) row.userLevel = level;
         }),
+        // Mutates the store like its sibling does. A no-op stub here would let
+        // `load` write the same correction on every call and no test would see
+        // it — the reconciliation is only observable if the row changes.
+        updateDescription: vi.fn(async (name: string, description: string) => {
+            const row = store.find((r) => r.name === name);
+            if (row) row.description = description;
+        }),
         delete: vi.fn(async () => true)
     } as unknown as CommandRepository & { updateUserLevel: ReturnType<typeof vi.fn> };
 };
@@ -52,7 +59,7 @@ describe('CommandManager', () => {
         it('finds a command case-insensitively', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!discord', responseText: 'link', handlerName: null, userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!discord', responseText: 'link', handlerName: null, description: null, userLevel: 'everyone' }]),
                 cache, logger
             });
 
@@ -82,13 +89,13 @@ describe('CommandManager', () => {
 
     describe('handler declarations beat the database row', () => {
         const handlers: HandlerRegistry = {
-            skipSong: { handler: vi.fn(), level: 'mod' }
+            skipSong: { handler: vi.fn(), level: 'mod', description: 'A test handler' }
         };
 
         it('resolves the declared level, not the stored one', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'everyone' }]),
                 cache, logger, handlers
             });
             await manager.load();
@@ -99,7 +106,7 @@ describe('CommandManager', () => {
 
         it('corrects the stale row at load so the table stops lying', async () => {
             const repository = makeRepo([
-                { name: '!skip', responseText: null, handlerName: 'skipSong', userLevel: 'everyone' }
+                { name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'everyone' }
             ]);
             const manager = new CommandManager({ channelId: 'c1', repository, cache, logger, handlers });
 
@@ -110,7 +117,7 @@ describe('CommandManager', () => {
 
         it('leaves an already-correct row alone', async () => {
             const repository = makeRepo([
-                { name: '!skip', responseText: null, handlerName: 'skipSong', userLevel: 'mod' }
+                { name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'mod' }
             ]);
             const manager = new CommandManager({ channelId: 'c1', repository, cache, logger, handlers });
 
@@ -119,9 +126,44 @@ describe('CommandManager', () => {
             expect(repository.updateUserLevel).not.toHaveBeenCalled();
         });
 
+        it('writes the handler description onto the row so the API can serve it', async () => {
+            const repository = makeRepo([
+                { name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'mod' }
+            ]);
+            const manager = new CommandManager({ channelId: 'c1', repository, cache, logger, handlers });
+
+            await manager.load();
+
+            /*
+             * The reply column has nothing else to show for a handler-backed
+             * row. The description reaches the API through the row rather than
+             * through the registry, because the API has no registry to
+             * consult — the handlers are built per session, and a channel whose
+             * bot is switched off has none.
+             */
+            expect(repository.updateDescription).toHaveBeenCalledWith('!skip', 'A test handler');
+            expect((await manager.get('!skip'))?.description).toBe('A test handler');
+        });
+
+        it('leaves a description that already matches alone', async () => {
+            const repository = makeRepo([
+                {
+                    name: '!skip', responseText: null, handlerName: 'skipSong',
+                    description: 'A test handler', userLevel: 'mod'
+                }
+            ]);
+            const manager = new CommandManager({ channelId: 'c1', repository, cache, logger, handlers });
+
+            await manager.load();
+
+            // Every session start loads; writing an unchanged row each time
+            // would be one pointless UPDATE per built-in per boot.
+            expect(repository.updateDescription).not.toHaveBeenCalled();
+        });
+
         it('does not touch static commands', async () => {
             const repository = makeRepo([
-                { name: '!discord', responseText: 'link', handlerName: null, userLevel: 'everyone' }
+                { name: '!discord', responseText: 'link', handlerName: null, description: null, userLevel: 'everyone' }
             ]);
             const manager = new CommandManager({ channelId: 'c1', repository, cache, logger, handlers });
 
@@ -133,7 +175,7 @@ describe('CommandManager', () => {
         it('falls back to the stored level for a static command', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!x', responseText: 'y', handlerName: null, userLevel: 'broadcaster' }]),
+                repository: makeRepo([{ name: '!x', responseText: 'y', handlerName: null, description: null, userLevel: 'broadcaster' }]),
                 cache, logger, handlers
             });
             await manager.load();
@@ -143,12 +185,12 @@ describe('CommandManager', () => {
     });
 
     describe('permission enforcement', () => {
-        const handlers: HandlerRegistry = { skipSong: { handler: vi.fn(), level: 'mod' } };
+        const handlers: HandlerRegistry = { skipSong: { handler: vi.fn(), level: 'mod', description: 'A test handler' } };
 
         it('blocks a viewer from a handler command declaring mod', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'everyone' }]),
                 cache, logger, handlers
             });
             await manager.load();
@@ -159,7 +201,7 @@ describe('CommandManager', () => {
         it('allows a mod', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!skip', responseText: null, handlerName: 'skipSong', description: null, userLevel: 'everyone' }]),
                 cache, logger, handlers
             });
             await manager.load();
@@ -170,7 +212,7 @@ describe('CommandManager', () => {
         it('lets anyone run an everyone command', async () => {
             const manager = new CommandManager({
                 channelId: 'c1',
-                repository: makeRepo([{ name: '!discord', responseText: 'l', handlerName: null, userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!discord', responseText: 'l', handlerName: null, description: null, userLevel: 'everyone' }]),
                 cache, logger
             });
             await manager.load();
@@ -183,7 +225,7 @@ describe('CommandManager', () => {
         it('rewrites the channel-scoped hash on load', async () => {
             const manager = new CommandManager({
                 channelId: 'chan-1',
-                repository: makeRepo([{ name: '!a', responseText: 'x', handlerName: null, userLevel: 'everyone' }]),
+                repository: makeRepo([{ name: '!a', responseText: 'x', handlerName: null, description: null, userLevel: 'everyone' }]),
                 cache, logger
             });
 
@@ -200,7 +242,7 @@ describe('CommandManager', () => {
             const repository = makeRepo([]);
             const manager = new CommandManager({ channelId: 'c1', repository, cache, logger });
 
-            await manager.create({ name: '!new', responseText: 'hi', handlerName: null, userLevel: 'everyone' });
+            await manager.create({ name: '!new', responseText: 'hi', handlerName: null, description: null, userLevel: 'everyone' });
 
             expect(repository.listAll).toHaveBeenCalled();
             expect(await manager.get('!new')).toMatchObject({ name: '!new' });

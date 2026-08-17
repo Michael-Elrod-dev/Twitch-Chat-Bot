@@ -113,7 +113,7 @@ describe('ChatPipeline', () => {
 
     describe('commands beat the AI mention path', () => {
         const commands: CommandRecord[] = [
-            { name: '!stats', responseText: 'your stats', handlerName: null, userLevel: 'everyone' }
+            { name: '!stats', responseText: 'your stats', handlerName: null, description: null, userLevel: 'everyone' }
         ];
 
         it('runs a command that happens to name the bot', async () => {
@@ -162,7 +162,7 @@ describe('ChatPipeline', () => {
 
     describe('permission enforcement', () => {
         const commands: CommandRecord[] = [
-            { name: '!modonly', responseText: 'secret', handlerName: null, userLevel: 'mod' }
+            { name: '!modonly', responseText: 'secret', handlerName: null, description: null, userLevel: 'mod' }
         ];
 
         it('blocks a viewer', async () => {
@@ -242,7 +242,7 @@ describe('ChatPipeline', () => {
         });
 
         it('classifies a command as a command interaction', async () => {
-            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, userLevel: 'everyone' }]);
+            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, description: null, userLevel: 'everyone' }]);
             await pipeline.handle(event('!x'));
 
             expect(analytics.recorded[0]?.type).toBe('command');
@@ -256,7 +256,7 @@ describe('ChatPipeline', () => {
         });
 
         it('still answers when role bookkeeping fails', async () => {
-            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, userLevel: 'everyone' }]);
+            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, description: null, userLevel: 'everyone' }]);
             (roles.upsertRoles as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB down'));
 
             await pipeline.handle(event('!x'));
@@ -265,7 +265,7 @@ describe('ChatPipeline', () => {
         });
 
         it('still answers when the analytics hook fails', async () => {
-            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, userLevel: 'everyone' }]);
+            const pipeline = build([{ name: '!x', responseText: 'y', handlerName: null, description: null, userLevel: 'everyone' }]);
             vi.spyOn(analytics, 'recordInteraction').mockRejectedValue(new Error('queue down'));
 
             await pipeline.handle(event('!x'));

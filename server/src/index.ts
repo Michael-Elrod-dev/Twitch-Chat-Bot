@@ -37,7 +37,10 @@ import { createTokenCipher, createDisabledTokenCipher, type TokenCipher } from '
 import { createStateStore } from './auth/stateStore.js';
 import { OnboardingService } from './auth/onboarding.js';
 import { createAuthRouter, AUTH_CALLBACK_PATH } from './http/authRoutes.js';
-import { createResourceRouter } from './http/api/resources.js';
+import { createResourceRouter, type SpotifySurface } from './http/api/resources.js';
+import { HttpSpotifyClient, type SpotifyClient } from './spotify/spotifyClient.js';
+import { SpotifyTokenProvider } from './spotify/spotifyAuth.js';
+import { SettingsService } from './domain/settings.js';
 import {
     createRequireJwt,
     createApiKeyAuth,
@@ -462,6 +465,156 @@ async function main(): Promise<void> {
         } : {})
     });
 
+    /**
+     * A Spotify client for one channel, or null.
+     *
+     * Null in two distinct cases that the songs screen renders identically —
+     * the deployment has no Spotify credentials, and this channel has not
+     * linked an account. Both mean "no Spotify surface", and neither is worth a
+     * different empty state.
+     *
+     * Built per call rather than cached: the token provider it wraps holds the
+     * refresh state, and a second long-lived provider racing the session's own
+     * would be two paths rotating one refresh token. A provider that lives for
+     * the length of one request cannot lose that race, because it refreshes at
+     * most once and writes what it got.
+     */
+    const spotifyClientFor = (channelId: string): SpotifyClient | null => {
+        if (!spotifyConfigured) return null;
+
+        const tokens = new SpotifyTokenProvider({
+            config: {
+                clientId: env.SPOTIFY_CLIENT_ID as string,
+                clientSecret: env.SPOTIFY_CLIENT_SECRET as string,
+                redirectUri: `${publicUrl}/auth/spotify/callback`
+            },
+            channelId,
+            repository: new ChannelTokenRepository(database.db, channelId, cipher),
+            logger
+        });
+
+        return new HttpSpotifyClient({ accessToken: () => tokens.get(), logger });
+    };
+
+    const spotifySurfaceFor = (channelId: string): SpotifySurface | null => {
+        const client = spotifyClientFor(channelId);
+        if (!client) return null;
+
+        const tokenRepository = new ChannelTokenRepository(database.db, channelId, cipher);
+
+        return {
+            /*
+             * Every read answers null on failure rather than throwing.
+             *
+             * The card asking these questions sits on a screen the streamer
+             * opened to fix Spotify. A 500 there would replace the Connect
+             * button with an error wall — the `4b` rule, applied to a panel
+             * rather than a page.
+             */
+            account: async () => {
+                try {
+                    return await client.getCurrentUser();
+                } catch (err) {
+                    logger.warn(
+                        { channelId, err: (err as Error).message },
+                        'Could not read the linked Spotify account'
+                    );
+                    return null;
+                }
+            },
+            playlist: async (playlistId) => {
+                try {
+                    return await client.getPlaylist(playlistId);
+                } catch (err) {
+                    logger.warn(
+                        { channelId, err: (err as Error).message },
+                        'Could not read the requests playlist'
+                    );
+                    return null;
+                }
+            },
+            playback: async () => {
+                try {
+                    return await client.getPlaybackState();
+                } catch (err) {
+                    logger.warn(
+                        { channelId, err: (err as Error).message },
+                        'Could not read Spotify playback state'
+                    );
+                    return null;
+                }
+            },
+            requesterOf: (trackUri) =>
+                sessionManager.get(channelId)?.nowPlayingRequester(trackUri) ?? null,
+            disconnect: async () => {
+                const removed = await tokenRepository.delete('spotify');
+                if (!removed) return false;
+
+                /*
+                 * Rebuild, so the running session drops the client it captured
+                 * at start. Without it the playback monitor keeps polling with
+                 * a token that has been deleted from under it — the mirror of
+                 * the connect path, which rebuilds for the same reason.
+                 */
+                try {
+                    await rebuildSession(channelId);
+                } catch (err) {
+                    logger.error(
+                        { channelId, err: (err as Error).message },
+                        'Spotify disconnected but the session could not be rebuilt - restart to stop the playback monitor'
+                    );
+                }
+
+                return true;
+            },
+            connectedAt: () => tokenRepository.connectedAt('spotify')
+        };
+    };
+
+    /**
+     * Turns a playlist name into a Spotify id, creating the playlist if the
+     * account has none by that name.
+     *
+     * Missing means missing **at Spotify**, not missing from our row: the
+     * account's own playlists are searched by name first, and only a name that
+     * matches nothing becomes a new private playlist. Creating unconditionally
+     * would leave a second "Song Requests" behind every time the streamer
+     * re-typed the same name — including on a save that changed nothing else.
+     *
+     * Answers null rather than throwing on any failure. The streamer has named
+     * a playlist; the name is worth keeping even when Spotify cannot be reached
+     * to resolve it, and the songs path already skips the append when the id is
+     * null.
+     */
+    const resolvePlaylist = async (channelId: string, name: string): Promise<string | null> => {
+        const client = spotifyClientFor(channelId);
+        if (!client) return null;
+
+        try {
+            const existing = await client.findPlaylistByName(name);
+            if (existing) {
+                logger.info(
+                    { channelId, playlist: existing.name, tracks: existing.trackCount },
+                    'Requests playlist matched an existing one'
+                );
+                return existing.id;
+            }
+
+            const account = await client.getCurrentUser();
+            if (!account) return null;
+
+            const created = await client.createPlaylist(account.id, name);
+            logger.info({ channelId, playlist: created.name }, 'Requests playlist created');
+            return created.id;
+        } catch (err) {
+            logger.warn(
+                { channelId, err: (err as Error).message },
+                'Could not resolve the requests playlist - the name is saved, the append stays off'
+            );
+            return null;
+        }
+    };
+
     // The v1 API. Order is the security contract: credentials resolve first,
     // then the tenant, then the rate limit, then the handlers. A handler is
     // never reached without a channel already bound to the request.
@@ -487,6 +640,15 @@ async function main(): Promise<void> {
     apiRouter.use(createResourceRouter({
         logger,
         repositories: (channelId) => createChannelRepositories(database.db, channelId),
+        // Built with the same cache every session reads through, so a toggle
+        // saved in the app invalidates the copy the bot is holding. The router
+        // has no other way to write settings — see `ResourceOptions`.
+        settings: (channelId) => new SettingsService({
+            channelId,
+            repository: createChannelRepositories(database.db, channelId).settings,
+            cache,
+            logger
+        }),
         channels: channelRepository,
         applyChannelEnabled,
         // The write lands in the database; this is what makes the running bot
@@ -504,9 +666,12 @@ async function main(): Promise<void> {
         // stored credential.
         spotifyConnected: (channelId) =>
             new ChannelTokenRepository(database.db, channelId, cipher).has('spotify'),
+        spotify: spotifySurfaceFor,
+        resolvePlaylist,
+        rewards: (channelId) => new ChannelRewardRepository(database.db, channelId),
         publish: (channelId, event) => bus.publish(channelId, {
             ...event, channelId, at: new Date().toISOString()
-        } as never)
+        })
     }));
 
     const app = createApp({

@@ -31,9 +31,16 @@ export interface GameHandlerDeps {
     logger: Logger;
 }
 
+/** One phrase per game type, kept beside the handler they describe. */
+const GAME_DESCRIPTIONS: Readonly<Record<GamePromptType, string>> = {
+    advice: 'Asks the AI for advice',
+    roast: 'Asks the AI to roast someone'
+};
+
 function createGameHandler(type: GamePromptType, deps: GameHandlerDeps): HandlerRegistry[string] {
     return {
         level: 'everyone',
+        description: GAME_DESCRIPTIONS[type],
         handler: async (context: HandlerContext): Promise<void> => {
             // `!roast @name`, or the caller when no target is given.
             const requested = (context.args[0] ?? '').replace('@', '').trim();
