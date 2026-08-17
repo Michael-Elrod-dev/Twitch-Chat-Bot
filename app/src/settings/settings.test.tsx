@@ -467,7 +467,10 @@ describe('Settings · Stream Deck (3f)', () => {
          * exists. This asserts both halves: it IS rendered once, and after Done
          * it is nowhere in the document and nothing brings it back.
          */
-        const secret = 'ahai_7x2fK9pQwZ3mLd8RtV6yNc1B';
+        // Obviously fake and low entropy on purpose. A realistic-looking value
+        // here gets flagged by secret scanners forever, and the test only needs
+        // a unique string to track through the document.
+        const secret = 'ahai_7x2f_fake_fixture_key_not_a_secret';
         stubApi({
             keys: [],
             onWrite: () => json({
