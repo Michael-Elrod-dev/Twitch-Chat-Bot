@@ -52,20 +52,19 @@ export interface HandlerRegistration {
 
 export type HandlerRegistry = Readonly<Record<string, HandlerRegistration>>;
 
-/** Levels only, for callers that reconcile the database against declarations. */
-export function declaredLevels(registry: HandlerRegistry): Record<string, UserLevel> {
-    return Object.fromEntries(Object.entries(registry).map(([name, reg]) => [name, reg.level]));
-}
-
 /*
- * There is deliberately no `declaredDescriptions` companion to the above.
+ * There is deliberately no `declaredLevels` or `declaredDescriptions` helper
+ * here.
  *
- * One was written and removed: nothing would have called it. The description
- * reaches the app through the reconciliation in `CommandManager.load`, which
- * reads `registration.description` directly, and an exported helper with a test
- * and no caller is dead code wearing a green tick.
+ * Both were written; neither had a production caller. `CommandManager.load`
+ * reconciles the database against the registry by reading `registration.level`
+ * and `registration.description` directly off each entry, so a module-level
+ * projection of the same two fields exists only to be exported — and an exported
+ * helper with a test and no caller is dead code wearing a green tick. The test
+ * passes, the coverage counts, and nothing it covers runs.
  *
- * (`declaredLevels` has no production caller either. That predates this
- * package; it is noted rather than deleted here, because removing it is not
- * this change's business.)
+ * `declaredLevels` outlived its companion by one package, on the reasoning that
+ * deleting it was not that change's business. It is this one's: a second
+ * reconciliation path nobody calls is precisely where the registry and the rows
+ * would be free to drift, because no failing test would ever say so.
  */

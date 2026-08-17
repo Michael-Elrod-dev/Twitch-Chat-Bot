@@ -25,6 +25,8 @@ import { SessionManager } from '../../session/sessionManager.js';
 import { FakeTransport } from '../../transport/fakeTransport.js';
 import { ChannelSession } from '../../session/channelSession.js';
 import { applyChannelEnabled, type ChannelSwitchPorts } from '../../session/channelSwitch.js';
+import { ChannelRewardRepository } from '../../db/repositories/channelRewardRepository.js';
+import { releaseManagedRewards } from '../../services/rewardRelease.js';
 
 /**
  * The bot master switch, end to end.
@@ -56,6 +58,10 @@ describeDb('channel master switch', () => {
     let transport: FakeTransport;
     let alpha: { id: string; broadcasterId: string; token: string };
     let beta: { id: string; broadcasterId: string; token: string };
+    /** Every reward the release switched OFF at Twitch, in order. Never deleted. */
+    const disabledRewards: { channelId: string; rewardId: string }[] = [];
+    /** Flipped by the test that checks a Twitch refusal cannot block a disconnect. */
+    let rewardDisableFails = false;
 
     const buildSession = (channel: { id: string; twitchBroadcasterId: string }): ChannelSession =>
         new ChannelSession({
@@ -120,10 +126,29 @@ describeDb('channel master switch', () => {
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            songs: (channelId) => new SongQueueRepository(handle.db, channelId, () => undefined),
             // No session in this suite; the reload has nothing to tell.
             reloadChannelContent: async () => undefined,
-            applyChannelEnabled: (channelId, enabled) => applyChannelEnabled(ports, channelId, enabled)
+            applyChannelEnabled: (channelId, enabled) => applyChannelEnabled(ports, channelId, enabled),
+            rewards: (channelId) => new ChannelRewardRepository(handle.db, channelId),
+            /*
+             * The real release service over a recording Twitch double.
+             *
+             * Deliberately not a spy on the seam: "the seam was called" stays
+             * green against a release that disables nothing and forgets no rows,
+             * which is the shape of vacuous test this project has caught seven
+             * times. The repository here is real, so the rows genuinely have to
+             * go, and `disabledRewards` records what would have reached Twitch.
+             */
+            releaseManagedRewards: (channelId) => releaseManagedRewards({
+                channelId,
+                logger,
+                rewards: new ChannelRewardRepository(handle.db, channelId),
+                disableReward: async (rewardId) => {
+                    disabledRewards.push({ channelId, rewardId });
+                    if (rewardDisableFails) throw new Error('Twitch said no');
+                }
+            }).then(() => undefined)
         }));
 
         app = createApp({ logger, version: 'test', routers: [router] });
@@ -142,9 +167,12 @@ describeDb('channel master switch', () => {
         for (const c of [alpha, beta]) {
             await handle.sql`
                 update channels set enabled = true, status = 'active' where id = ${c.id}`;
+            await handle.sql`delete from channel_rewards where channel_id = ${c.id}`;
             await manager.remove(c.id);
             await manager.add(buildSession({ id: c.id, twitchBroadcasterId: c.broadcasterId }));
         }
+        disabledRewards.length = 0;
+        rewardDisableFails = false;
     });
 
     describe('the flip drives the session', () => {
@@ -313,6 +341,165 @@ describeDb('channel master switch', () => {
             await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
                 .send({}).expect(400);
 
+            expect(manager.get(alpha.id)).toBeDefined();
+        });
+    });
+
+    /**
+     * The danger zone (`5c`).
+     *
+     * The most consequential thing the app can do, and the only one behind a
+     * confirmation. **It is never exercised against the owner's live channel** —
+     * this suite is where it is proven, on throwaway channels in a throwaway
+     * database, and the live proof deliberately skips it.
+     *
+     * Everything here asks the same question from a different side: did the bot
+     * actually leave, and did anything the streamer wrote leave with it?
+     */
+    describe('disconnecting the channel', () => {
+        /** Binds all three managed rewards, as an onboarded channel has them. */
+        const bindRewards = async (channelId: string): Promise<void> => {
+            const rewards = new ChannelRewardRepository(handle.db, channelId);
+            await rewards.upsert({ kind: 'song_request', rewardId: `${channelId}-sr`, title: 'Song Request' });
+            await rewards.upsert({ kind: 'skip_queue', rewardId: `${channelId}-sk`, title: 'Skip song queue' });
+            await rewards.upsert({ kind: 'add_quote', rewardId: `${channelId}-aq`, title: 'Add a quote' });
+        };
+
+        it('marks the channel disconnected and stops the bot', async () => {
+            expect(manager.get(alpha.id)).toBeDefined();
+
+            const res = await request(app)
+                .delete('/api/v1/me/channel')
+                .set('authorization', asAlpha())
+                .expect(200);
+
+            expect(res.body.data.status).toBe('disconnected');
+            // Genuinely gone, not merely recorded — the same standard the switch
+            // is held to one describe block up.
+            expect(manager.get(alpha.id)).toBeUndefined();
+            expect(transport.subscribed.has(alpha.broadcasterId)).toBe(false);
+        });
+
+        it('switches all three managed rewards off and forgets their bindings', async () => {
+            await bindRewards(alpha.id);
+
+            await request(app).delete('/api/v1/me/channel').set('authorization', asAlpha()).expect(200);
+
+            /*
+             * A reward left ENABLED on a disconnected channel stays redeemable
+             * against a bot that has left: the viewer spends points and nothing
+             * happens. That is the failure this asserts against.
+             *
+             * Disabled and not deleted, deliberately — two of the owner own
+             * rewards predate this application entirely, and their title, cost,
+             * prompt and redemption history are theirs to keep for a channel they
+             * may reconnect.
+             */
+            expect(disabledRewards.map((r) => r.rewardId).sort()).toEqual([
+                `${alpha.id}-aq`, `${alpha.id}-sk`, `${alpha.id}-sr`
+            ]);
+            expect(await new ChannelRewardRepository(handle.db, alpha.id).listAll()).toEqual([]);
+        });
+
+        it('completes even when Twitch refuses the reward disables', async () => {
+            await bindRewards(alpha.id);
+            rewardDisableFails = true;
+
+            const res = await request(app)
+                .delete('/api/v1/me/channel')
+                .set('authorization', asAlpha())
+                .expect(200);
+
+            /*
+             * A streamer who has asked the bot to leave must not be told "no"
+             * because Twitch returned an error. The two wrong states are not
+             * symmetric: a channel recorded as disconnected whose rewards survive
+             * is untidy, and a channel recorded as connected whose bot has gone is
+             * a lie the owner will act on.
+             */
+            expect(res.body.data.status).toBe('disconnected');
+            expect(manager.get(alpha.id)).toBeUndefined();
+            // And the bindings go regardless, so a disconnected channel is not
+            // left believing it still manages three rewards.
+            expect(await new ChannelRewardRepository(handle.db, alpha.id).listAll()).toEqual([]);
+        });
+
+        it('keeps every command, emote and quote the streamer wrote', async () => {
+            // The promise the danger card makes in words, asserted in rows. It is
+            // also the reason coming back is worth doing.
+            await request(app).post('/api/v1/commands').set('authorization', asAlpha())
+                .send({ name: '!keepme', responseText: 'still here', userLevel: 'everyone' }).expect(201);
+            await request(app).post('/api/v1/emotes').set('authorization', asAlpha())
+                .send({ triggerText: 'keepme', responseText: 'still here' }).expect(201);
+            await request(app).post('/api/v1/quotes').set('authorization', asAlpha())
+                .send({ quoteText: 'still here' }).expect(201);
+
+            await request(app).delete('/api/v1/me/channel').set('authorization', asAlpha()).expect(200);
+
+            const repositories = createChannelRepositories(handle.db, alpha.id);
+            expect((await repositories.commands.listAll()).some((c) => c.name === '!keepme')).toBe(true);
+            expect((await repositories.emotes.listAll()).some((e) => e.triggerText === 'keepme')).toBe(true);
+            expect(await repositories.quotes.count()).toBeGreaterThan(0);
+        });
+
+        it('leaves the owner pause preference alone rather than folding it in', async () => {
+            // `enabled` is what the owner chose about pausing and means nothing
+            // right now; `status` is what disconnecting did. Writing `enabled`
+            // here would offer a one-click undo for something one click cannot
+            // undo — see the contract's note on the two fields.
+            const res = await request(app).delete('/api/v1/me/channel')
+                .set('authorization', asAlpha()).expect(200);
+
+            expect(res.body.data).toEqual({ enabled: true, status: 'disconnected' });
+            const [row] = await handle.sql`select status, enabled from channels where id = ${alpha.id}`;
+            expect(row).toMatchObject({ status: 'disconnected', enabled: true });
+        });
+
+        it('does not restart the bot when the header switch is flipped afterwards', async () => {
+            await request(app).delete('/api/v1/me/channel').set('authorization', asAlpha()).expect(200);
+
+            // Wanting the bot on does not undo a teardown, exactly as it does not
+            // grant consent Twitch withdrew. `listActive` requires both.
+            await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
+                .send({ enabled: true }).expect(200);
+
+            expect(manager.get(alpha.id)).toBeUndefined();
+        });
+
+        it('leaves the other channel connected and running', async () => {
+            await bindRewards(alpha.id);
+            await bindRewards(beta.id);
+
+            await request(app).delete('/api/v1/me/channel').set('authorization', asAlpha()).expect(200);
+
+            expect(manager.get(beta.id)).toBeDefined();
+            expect(transport.subscribed.has(beta.broadcasterId)).toBe(true);
+            // Beta was never named in the request and cannot be — including in
+            // the reward cleanup, which is the part that reaches out to Twitch.
+            expect(disabledRewards.every((r) => r.channelId === alpha.id)).toBe(true);
+            expect(await new ChannelRewardRepository(handle.db, beta.id).listAll()).toHaveLength(3);
+
+            const [betaRow] = await handle.sql`select status from channels where id = ${beta.id}`;
+            expect(betaRow).toMatchObject({ status: 'active' });
+        });
+
+        it('refuses an API key', async () => {
+            const key = await apiKeys.create(alpha.id, 'stream deck');
+
+            const res = await request(app).delete('/api/v1/me/channel')
+                .set('x-api-key', key.key).expect(403);
+
+            expect(res.body.error.code).toBe('forbidden');
+            // A key taped inside a Stream Deck profile must not be able to end
+            // the channel, and a refused request must have no side effects.
+            expect(res.body.error.code).toBe('forbidden');
+            expect(manager.get(alpha.id)).toBeDefined();
+            const [row] = await handle.sql`select status from channels where id = ${alpha.id}`;
+            expect(row).toMatchObject({ status: 'active' });
+        });
+
+        it('refuses an unauthenticated caller', async () => {
+            await request(app).delete('/api/v1/me/channel').expect(401);
             expect(manager.get(alpha.id)).toBeDefined();
         });
     });

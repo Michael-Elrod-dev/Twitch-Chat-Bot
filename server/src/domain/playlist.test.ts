@@ -93,7 +93,7 @@ describeDb('the requests playlist', () => {
 
     const handlerWith = (spotify: FakeSpotify, settings: SettingsService) => createSongRequestHandler({
         spotify: spotify as unknown as SpotifyClient,
-        queue: new SongQueueRepository(handle.db, channelId),
+        queue: new SongQueueRepository(handle.db, channelId, () => undefined),
         settings,
         logger,
         playlist: new PlaylistRepository(handle.db, channelId)

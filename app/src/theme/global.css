@@ -357,23 +357,48 @@ button {
     color: var(--color-text-tertiary);
 }
 
+/*
+ * The toggle, at the handoff's standalone size.
+ *
+ * **34×19 with a 15px knob, and the header's 30×17 is the override.** It was the
+ * other way round while the master switch was the only toggle in the app, which
+ * was harmless and wrong: the handoff says "34×19 (30×17 in the header)", so
+ * writing the header's size as the base made every toggle the settings screens
+ * added four pixels too small. Caught in a browser, because a size is not
+ * something jsdom has an opinion about.
+ */
 .toggle {
     position: relative;
-    width: 30px;
-    height: 17px;
+    width: 34px;
+    height: 19px;
     padding: 0;
     border: 0;
     border-radius: var(--radius-pill);
     background: var(--color-toggle-off-track);
-    transition: background 120ms var(--motion-easing);
+    /*
+     * `background-color`, not the `background` shorthand — tidiness, and matching
+     * the `transform` transition below rather than fixing a bug. Transitioning a
+     * shorthand that carries non-animatable longhands is simply not what was
+     * meant.
+     *
+     * Recorded because the shorthand was briefly believed to be a real defect: an
+     * inspection found this toggle stuck on the inert grey after Spotify answered,
+     * and the cause turned out to be the inspecting browser pane not compositing,
+     * which freezes every CSS transition at `currentTime: 0`. Both properties were
+     * stuck at their "from" values, which is the tell — a broken shorthand would
+     * not also freeze a transform. The lesson is the run's own, one layer out:
+     * **the harness can lie about the thing it is measuring**, and a frozen
+     * animation clock looks exactly like a stylesheet that never applied.
+     */
+    transition: background-color 120ms var(--motion-easing);
 }
 
 .toggle--on {
-    background: var(--color-success);
+    background-color: var(--color-success);
 }
 
 .toggle--inert {
-    background: var(--color-tooltip-surface);
+    background-color: var(--color-tooltip-surface);
     cursor: not-allowed;
 }
 
@@ -381,8 +406,8 @@ button {
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 13px;
-    height: 13px;
+    width: 15px;
+    height: 15px;
     border-radius: var(--radius-pill);
     background: var(--color-toggle-off-knob);
     transition: transform 120ms var(--motion-easing);
@@ -390,11 +415,26 @@ button {
 
 .toggle--on .toggle__knob {
     background: var(--color-app-background);
-    transform: translateX(13px);
+    transform: translateX(15px);
 }
 
 .toggle--inert .toggle__knob {
     background: #3d3934;
+}
+
+/* The header's smaller variant, which is what the handoff calls the exception. */
+.master-switch .toggle {
+    width: 30px;
+    height: 17px;
+}
+
+.master-switch .toggle__knob {
+    width: 13px;
+    height: 13px;
+}
+
+.master-switch .toggle--on .toggle__knob {
+    transform: translateX(13px);
 }
 
 /* ---- buttons ----------------------------------------------------------- */
@@ -1725,4 +1765,763 @@ button {
     margin: 0;
     font-size: 12.5px;
     color: var(--color-text-tertiary);
+}
+
+/* ---- songs (3c) -------------------------------------------------------- */
+
+/*
+ * `1fr 348px`, per the handoff. The side column is fixed and the main column
+ * absorbs the width, which is the same rule the dashboard's bottom grid follows.
+ */
+.songs {
+    display: grid;
+    grid-template-columns: 1fr 348px;
+    gap: var(--space-region-gap);
+    flex: 1;
+    min-height: 0;
+}
+
+.songs__main,
+.songs__side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-grid-gap);
+    min-height: 0;
+}
+
+.songs__queue {
+    flex: 1;
+}
+
+/* The requests pill in the songs header: sage when open, bordered when not. */
+.requests-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px 7px 14px;
+    border-radius: var(--radius-control);
+    background: var(--color-success-tint);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--color-success-text);
+}
+
+.requests-pill--off {
+    background: none;
+    border: 1px solid var(--color-border-subtle);
+    color: var(--color-text-faint);
+}
+
+/* ---- now playing ------------------------------------------------------- */
+
+.now-playing {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: var(--space-card-padding);
+}
+
+.now-playing--idle {
+    grid-template-columns: 62px 1fr;
+}
+
+.now-playing__art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 62px;
+    height: 62px;
+    border-radius: var(--radius-chip);
+    background: var(--color-placeholder-stripe);
+    color: var(--color-disabled-icon);
+    object-fit: cover;
+}
+
+.now-playing__stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.now-playing__label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.now-playing__track {
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.now-playing__artist {
+    font-size: 12.5px;
+    color: var(--color-text-secondary);
+}
+
+.now-playing__idle-copy {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--color-text-tertiary);
+    max-width: 420px;
+    text-wrap: pretty;
+}
+
+.now-playing__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.now-playing__time {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-text-tertiary);
+}
+
+.now-playing__paused {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-accent-hover);
+}
+
+/* 3px, flush to the bottom edge of the card - the card's own progress line. */
+.now-playing__progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--color-border-subtle);
+}
+
+.now-playing__progress-fill {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+}
+
+/* ---- the queue grid ---------------------------------------------------- */
+
+.list-grid--queue {
+    grid-template-columns: 28px 1fr 200px 110px 48px;
+}
+
+.list-row__stack {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.list-row__track {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.list-row__artist {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+.list-row__requester {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-text-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.list-row__when {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+/* ---- the side cards ---------------------------------------------------- */
+
+.spotify-card,
+.playlist-card,
+.policy-card {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: var(--space-card-padding);
+}
+
+.spotify-card__label,
+.policy-card__label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.spotify-card__reading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.spotify-card__state {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-success-text);
+}
+
+.spotify-card__state--off {
+    color: var(--color-text-secondary);
+}
+
+.spotify-card__account {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-text-primary);
+}
+
+.spotify-card__since {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faint);
+}
+
+.spotify-card__explainer,
+.playlist-card__copy,
+.policy-card__copy {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-text-tertiary);
+    max-width: 420px;
+    text-wrap: pretty;
+}
+
+.playlist-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.playlist-card__title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+/* The name sits in an inset block: it is a value, not a heading. */
+.playlist-card__name {
+    padding: 9px 12px;
+    border-radius: var(--radius-chip);
+    background: var(--color-inset-surface);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-text-primary);
+}
+
+.playlist-card__count {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--color-success-text);
+}
+
+.playlist-card__count--pending {
+    color: var(--color-text-faint);
+}
+
+/* ---- 4c: Spotify missing ----------------------------------------------- */
+
+.spotify-missing {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    max-width: 520px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.spotify-missing__glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px dashed rgba(240, 235, 225, .14);
+    border-radius: var(--radius-card);
+    color: var(--color-disabled-icon);
+}
+
+.spotify-missing__headline {
+    margin: 0;
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1.25;
+    letter-spacing: -.015em;
+    color: var(--color-text-primary);
+}
+
+.spotify-missing__copy {
+    margin: 0;
+    max-width: 420px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    text-wrap: pretty;
+}
+
+.spotify-missing__note {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--color-text-faint);
+}
+
+/* ---- analytics (3d) ---------------------------------------------------- */
+
+.analytics__split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-region-gap);
+    flex: 1;
+    min-height: 0;
+}
+
+.analytics__split > .card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/*
+ * Not an apology, and styled so it cannot read as one: the same tertiary voice
+ * as any other caption, no glyph, no dashed box. The young-data framing is the
+ * design, so a channel with a quiet window gets a plain sentence rather than the
+ * empty-panel treatment that means "something is missing".
+ */
+.analytics__quiet {
+    padding: var(--space-card-padding);
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+}
+
+.chatters {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: var(--space-card-padding);
+}
+
+.chatter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chatter__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.chatter__name,
+.chatter__count {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-text-body);
+}
+
+.chatter__bar {
+    display: block;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-hairline);
+}
+
+.chatter__bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--color-accent);
+    opacity: .8;
+}
+
+.list-grid--streams {
+    grid-template-columns: 1fr 100px 100px 90px;
+}
+
+.list-row__when-day,
+.list-row__cell {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-text-body);
+}
+
+.list-row__live {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    color: var(--color-accent-hover);
+}
+
+.card__footer {
+    margin-top: auto;
+    padding: 13px 18px;
+    border-top: 1px solid var(--color-hairline);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-text-faint);
+    text-wrap: pretty;
+}
+
+.card__footer--shield {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+}
+
+.card__footer--shield svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--color-text-tertiary);
+}
+
+/* ---- settings (3e, 5a, 5b, 3f, 5c) ------------------------------------- */
+
+.settings {
+    display: grid;
+    grid-template-columns: 186px 1fr;
+    gap: 26px;
+    flex: 1;
+    min-height: 0;
+}
+
+.settings__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.settings__nav-item {
+    padding: 9px 12px;
+    border: 0;
+    border-radius: var(--radius-chip);
+    background: none;
+    text-align: left;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.settings__nav-item--on {
+    background: rgba(240, 235, 225, .07);
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.settings__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-region-gap);
+    min-height: 0;
+    overflow-y: auto;
+    /*
+     * Long-form copy keeps its readable line length; the column does not grow
+     * past it just because the window did.
+     */
+    max-width: 720px;
+}
+
+/*
+ * The standard setting row. The last one in a card has no hairline - a rule,
+ * not a prop, so a row that becomes conditional cannot be told wrong.
+ */
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--color-hairline);
+}
+
+.setting-row:last-child {
+    border-bottom: 0;
+}
+
+.setting-row__text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.setting-row__title {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--color-text-primary);
+}
+
+.setting-row__description {
+    margin: 0;
+    max-width: 430px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-text-tertiary);
+    text-wrap: pretty;
+}
+
+.setting-row__control,
+.setting-row__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Sage: a reassurance, not a setting. */
+.setting-row__unlimited {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-success-text);
+}
+
+.setting-row__confirm {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--color-success-text);
+}
+
+/* Clay doubles as the warning colour - there is no separate error red. */
+.setting-row__warn {
+    margin: 0;
+    max-width: 430px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-accent-hover);
+}
+
+.setting-row--field {
+    align-items: flex-end;
+}
+
+.setting-row--field .field {
+    flex: 1;
+}
+
+/* ---- stepper ----------------------------------------------------------- */
+
+.stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-chip);
+    overflow: hidden;
+}
+
+.stepper__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    background: none;
+    color: var(--color-text-secondary);
+}
+
+.stepper__button:hover:not(:disabled) {
+    background: rgba(240, 235, 225, .05);
+    color: var(--color-text-primary);
+}
+
+.stepper__button:disabled {
+    color: var(--color-disabled);
+    cursor: not-allowed;
+}
+
+.stepper__value {
+    min-width: 34px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+/* ---- notifications (5b) ------------------------------------------------ */
+
+.reward-state {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--color-success-text);
+}
+
+.reward-state--off {
+    color: var(--color-text-faint);
+}
+
+.button--danger {
+    border: 1px solid var(--color-accent-border-soft);
+    background: none;
+    color: var(--color-accent-hover);
+}
+
+/* ---- stream deck (3f) -------------------------------------------------- */
+
+.list-grid--keys {
+    grid-template-columns: 1fr 150px 120px 120px 48px;
+}
+
+/*
+ * The one place a key is ever drawn. Clay-bordered because it is the moment,
+ * and `break-all` because a key is one unbroken token that must be readable in
+ * full - a truncated secret is a secret nobody can use.
+ */
+.key-reveal {
+    display: block;
+    padding: 13px 14px;
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-chip);
+    background: var(--color-inset-surface);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-text-primary);
+    word-break: break-all;
+    /*
+     * Selectable, unlike the rest of the app: a failed clipboard write must
+     * leave the streamer able to take it by hand.
+     */
+    user-select: text;
+}
+
+.modal__copy {
+    margin: 0;
+    max-width: 430px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+    text-wrap: pretty;
+}
+
+/* ---- account (5c) ------------------------------------------------------ */
+
+.identity-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: var(--space-card-padding);
+}
+
+.identity-card__avatar {
+    flex: none;
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-avatar-large);
+    background: var(--color-placeholder-stripe);
+}
+
+.identity-card__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.identity-card__login {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-primary);
+}
+
+.identity-card__meta {
+    font-size: 12.5px;
+    color: var(--color-text-tertiary);
+}
+
+/* Clay border, no fill: the danger card is set apart without shouting. */
+.card--danger {
+    border-color: var(--color-accent-border);
+}
+
+/* ---- narrow windows ---------------------------------------------------- */
+
+/*
+ * The handoff's rule, applied to the two screens that needed it.
+ *
+ * The design width is 1280 and the window's own minimum is 900. Below roughly
+ * 1100 the dashboard's bottom grid stacks; the same thing has to happen here, and
+ * for a sharper reason than tidiness. At 900px the songs body gave its main
+ * column 480px, the queue grid spent 386 of that on fixed columns plus 64 on
+ * gaps, and the TRACK column collapsed to 35px — a queue whose one essential
+ * piece of information was unreadable, at the smallest size the window can
+ * actually be dragged to. The analytics streams table did the same to its WHEN
+ * column (23px holding "Fri 14 Aug").
+ *
+ * Found by measuring at 900, not by looking at 1280, which is why it is worth
+ * saying that the design size is the one size a layout is guaranteed to be right
+ * at.
+ *
+ * The settings pane is deliberately absent: it is `186px 1fr` with a 720px cap on
+ * its content, so it already fits and already scrolls. A media rule it does not
+ * need would be one more thing that has to stay true.
+ */
+@media (max-width: 1100px) {
+    /* Side cards below the queue, the way chat goes above the queue on `2b`. */
+    .songs {
+        grid-template-columns: 1fr;
+        /* Stacked, the body is taller than the viewport. `.content` scrolls, but
+           this keeps the queue's own scroll from fighting the page's. */
+        overflow-y: auto;
+    }
+
+    .songs__queue {
+        /* No longer filling a fixed-height column, so it takes what it needs. */
+        flex: none;
+    }
+
+    .analytics__split {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+
+    /*
+     * The fixed columns give up width before the flexible one does.
+     *
+     * A requester login and a relative time can lose a few characters and stay
+     * legible; a truncated track name is the row failing to say what it is for.
+     */
+    .list-grid--queue {
+        grid-template-columns: 28px 1fr 140px 90px 40px;
+        gap: 12px;
+    }
+
+    .list-grid--streams {
+        grid-template-columns: 1fr 78px 88px 78px;
+        gap: 12px;
+    }
 }

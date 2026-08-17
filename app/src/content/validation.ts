@@ -2,7 +2,10 @@ import {
     chatTextSchema,
     commandNameSchema,
     emoteTriggerSchema,
-    createQuoteSchema
+    createQuoteSchema,
+    aiLimitsSchema,
+    createApiKeySchema,
+    updateSettingsSchema
 } from '@almosthadai/shared';
 
 /**
@@ -67,6 +70,28 @@ export function validateQuoteText(raw: string): ValidationResult {
 }
 
 /**
+ * The playlist the streamer names on `5a`.
+ *
+ * `.nullable().optional()` on the contract's field means `undefined` is a valid
+ * value — "not mentioned in this PATCH". A form must not treat that as a pass,
+ * because an empty box is a name the streamer has not given, so the raw string
+ * goes in and the schema's `min(1)` refuses it.
+ */
+export function validatePlaylistName(raw: string): ValidationResult {
+    return check(updateSettingsSchema.shape.requestsPlaylistName, raw);
+}
+
+/** The Discord webhook on `5b`. The URL rule is the contract's, not a regex here. */
+export function validateWebhookUrl(raw: string): ValidationResult {
+    return check(updateSettingsSchema.shape.discordWebhookUrl, raw);
+}
+
+/** The name on a Stream Deck key. */
+export function validateApiKeyName(raw: string): ValidationResult {
+    return check(createApiKeySchema.shape.name, raw);
+}
+
+/**
  * The reply counter's denominator, read off the schema rather than typed here.
  *
  * The handoff draws `62 / 500`. Writing `500` in a component would be a second
@@ -77,3 +102,15 @@ export const REPLY_MAX_LENGTH: number = chatTextSchema.maxLength ?? 500;
 
 /** Same reasoning, for the quote form. */
 export const QUOTE_MAX_LENGTH: number = createQuoteSchema.shape.quoteText.maxLength ?? 1000;
+
+/**
+ * The stepper's ends, from the schema that decides whether a save is accepted.
+ *
+ * Zero is a real setting — the AI off for that tier and on for the ones above it
+ * — so the floor is `min`, not one. The ceiling is a fat-finger guard rather than
+ * a policy, which is exactly why it must not be re-typed at the control: a
+ * stepper that stopped at a number the server no longer enforces would be
+ * inventing a rule.
+ */
+export const AI_LIMIT_MIN: number = aiLimitsSchema.shape.everyone.minValue ?? 0;
+export const AI_LIMIT_MAX: number = aiLimitsSchema.shape.everyone.maxValue ?? 10_000;

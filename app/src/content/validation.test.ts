@@ -3,15 +3,23 @@ import {
     chatTextSchema,
     commandNameSchema,
     emoteTriggerSchema,
-    createQuoteSchema
+    createQuoteSchema,
+    createApiKeySchema,
+    aiLimitsSchema,
+    updateSettingsSchema
 } from '@almosthadai/shared';
 import {
+    AI_LIMIT_MAX,
+    AI_LIMIT_MIN,
     QUOTE_MAX_LENGTH,
     REPLY_MAX_LENGTH,
+    validateApiKeyName,
     validateCommandName,
     validateEmoteTrigger,
+    validatePlaylistName,
     validateQuoteText,
-    validateReply
+    validateReply,
+    validateWebhookUrl
 } from './validation.js';
 
 /**
@@ -128,6 +136,88 @@ describe('the validation mirror', () => {
                 expect(ui.ok).toBe(schema.success);
             });
         }
+    });
+
+    describe('the requests playlist name', () => {
+        for (const raw of ['Stream Requests', '  padded  ', '', '   ', 'a'.repeat(100), 'a'.repeat(101)]) {
+            it(`agrees with the contract field on ${JSON.stringify(raw.slice(0, 20))}`, () => {
+                const schema = updateSettingsSchema.shape.requestsPlaylistName.safeParse(raw);
+                const ui = validatePlaylistName(raw);
+
+                expect(ui.ok).toBe(schema.success);
+                if (schema.success) expect(ui.value).toBe(schema.data);
+            });
+        }
+
+        it('refuses an empty box even though the contract field is optional', () => {
+            /*
+             * The trap this exists for. `requestsPlaylistName` is
+             * `.nullable().optional()`, so `safeParse(undefined)` SUCCEEDS — it
+             * means "this PATCH does not mention the playlist". A form that
+             * passed its empty box through as undefined would therefore "pass"
+             * validation and then save nothing, with a sage confirmation under
+             * it. The raw string goes in instead, and `min(1)` refuses it.
+             */
+            expect(updateSettingsSchema.shape.requestsPlaylistName.safeParse(undefined).success).toBe(true);
+            expect(validatePlaylistName('').ok).toBe(false);
+            expect(validatePlaylistName('   ').ok).toBe(false);
+        });
+
+        it('trims before saving, so the confirmation names what was stored', () => {
+            expect(validatePlaylistName('  Stream Requests  ').value).toBe('Stream Requests');
+        });
+    });
+
+    describe('the Discord webhook', () => {
+        for (const raw of [
+            'https://discord.com/api/webhooks/1/abc',
+            'not-a-url',
+            '',
+            `https://discord.com/api/webhooks/${'a'.repeat(500)}`
+        ]) {
+            it(`agrees with the contract field on ${JSON.stringify(raw.slice(0, 24))}`, () => {
+                const schema = updateSettingsSchema.shape.discordWebhookUrl.safeParse(raw);
+                const ui = validateWebhookUrl(raw);
+
+                expect(ui.ok).toBe(schema.success);
+            });
+        }
+    });
+
+    describe('the Stream Deck key name', () => {
+        for (const raw of ['Stream Deck', '', '   ', 'a'.repeat(64), 'a'.repeat(65)]) {
+            it(`agrees with createApiKeySchema on a ${raw.length}-character name`, () => {
+                const schema = createApiKeySchema.shape.name.safeParse(raw);
+                const ui = validateApiKeyName(raw);
+
+                expect(ui.ok).toBe(schema.success);
+                if (schema.success) expect(ui.value).toBe(schema.data);
+            });
+        }
+    });
+
+    describe('the AI stepper bounds', () => {
+        it('takes both ends from the schema that decides whether a save is accepted', () => {
+            expect(AI_LIMIT_MIN).toBe(aiLimitsSchema.shape.everyone.minValue);
+            expect(AI_LIMIT_MAX).toBe(aiLimitsSchema.shape.everyone.maxValue);
+        });
+
+        it('resolved real bounds rather than falling back', () => {
+            // Same reasoning as the reply counter below: `?? 0` and `?? 10_000`
+            // would look identical to a working derivation while the stepper
+            // enforced numbers the server no longer does.
+            expect(aiLimitsSchema.shape.everyone.minValue).not.toBeNull();
+            expect(aiLimitsSchema.shape.everyone.maxValue).not.toBeNull();
+        });
+
+        it('keeps zero inside the range, because zero is a real setting', () => {
+            // Zero turns the AI off for one tier and leaves it on for the ones
+            // above. A floor of 1 would quietly delete that capability.
+            expect(AI_LIMIT_MIN).toBe(0);
+            expect(aiLimitsSchema.safeParse({
+                everyone: 0, vip: 5, subscriber: 5, moderator: 10
+            }).success).toBe(true);
+        });
     });
 
     describe('the counters', () => {

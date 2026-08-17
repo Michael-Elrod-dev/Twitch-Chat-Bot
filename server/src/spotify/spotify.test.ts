@@ -180,7 +180,7 @@ describeDb('Spotify integration', () => {
     });
 
     const queueFor = (channelId: string): SongQueueRepository =>
-        new SongQueueRepository(handle.db, channelId);
+        new SongQueueRepository(handle.db, channelId, () => undefined);
 
     describe('THE PAUSE GATE', () => {
         it('does not advance the queue while playback is paused', async () => {
@@ -225,6 +225,44 @@ describeDb('Spotify integration', () => {
 
             expect(spotify.queued).toEqual(['spotify:track:queued']);
             expect(await queueFor(alphaId).count()).toBe(0);
+        });
+
+        it('announces the queue it leaves behind when it hands a track off', async () => {
+            /*
+             * The second half of the invisible-row defect.
+             *
+             * The monitor removes the row a viewer is waiting on, and it told
+             * nobody — so even a client that had somehow learned about the song
+             * would have gone on rendering it after it was gone. The add half is
+             * covered in the API suite; this is the removal half, at the only
+             * place that performs it.
+             */
+            const announced: number[] = [];
+            const watched = new SongQueueRepository(handle.db, alphaId, (n) => { announced.push(n); });
+
+            const spotify = new FakeSpotify();
+            spotify.playback = {
+                isPlaying: true, trackUri: 'spotify:track:current', progressMs: 195_000, durationMs: 200_000,
+                trackName: 'Current', artistName: 'Someone', albumArtUrl: null
+            };
+
+            await watched.add({
+                trackUri: 'spotify:track:handoff', trackName: 'Handoff', artistName: 'A',
+                requestedByTwitchUserId: null
+            });
+            await watched.add({
+                trackUri: 'spotify:track:after', trackName: 'After', artistName: 'B',
+                requestedByTwitchUserId: null
+            });
+            announced.length = 0;
+
+            await new PlaybackMonitor({
+                channelId: alphaId, client: spotify, queue: watched, logger
+            }).tick();
+
+            // One announcement, carrying the ONE song still waiting — not the two
+            // there were before the handoff.
+            expect(announced).toEqual([1]);
         });
 
         it('waits while the current track is only halfway through', async () => {
@@ -865,6 +903,8 @@ describeDb('the monitor lifecycle belongs to the session', () => {
      */
     let handle: DbHandle;
     let channelId: string;
+    /** Queue lengths the repository announced, in order. */
+    const queueAnnouncements: number[] = [];
 
     beforeAll(async () => {
         handle = await connectTestDatabase(TEST_DATABASE_URL as string);
@@ -873,6 +913,8 @@ describeDb('the monitor lifecycle belongs to the session', () => {
         })).id;
     }, 60_000);
 
+    beforeEach(() => { queueAnnouncements.length = 0; });
+
     afterAll(async () => {
         await handle?.close();
     });
@@ -880,7 +922,12 @@ describeDb('the monitor lifecycle belongs to the session', () => {
     const buildMonitor = (client: SpotifyClient): PlaybackMonitor => new PlaybackMonitor({
         channelId,
         client,
-        queue: new SongQueueRepository(handle.db, channelId),
+        // Recording, because the monitor's handoff is the SECOND half of the
+        // invisible-row defect: it removes the row the viewer is waiting on, and
+        // it announced nothing either.
+        queue: new SongQueueRepository(handle.db, channelId, (queueLength) => {
+            queueAnnouncements.push(queueLength);
+        }),
         logger,
         setIntervalImpl: (() => ({ unref: () => undefined }) as unknown as NodeJS.Timeout) as typeof setInterval,
         clearIntervalImpl: (() => undefined) as typeof clearInterval

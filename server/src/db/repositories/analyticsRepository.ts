@@ -1,6 +1,7 @@
 import { and, desc, eq, sql as raw, type SQL } from 'drizzle-orm';
 import { chatMessages, chatTotals, streams, viewers, channelRoles } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
+import { resolveCurrentStream } from './currentStream.js';
 import type { AnalyticsRange } from '@almosthadai/shared';
 import type { InteractionType } from '../../services/analytics.js';
 
@@ -207,9 +208,10 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /**
      * A bounded window, from the messages themselves.
      *
-     * `this_stream` resolves to the most recent stream — the open one while
-     * live, the last one when offline, the same rule the dashboard follows so
-     * the two screens cannot disagree about which stream "this" is.
+     * `this_stream` resolves through `resolveCurrentStream` — the same function
+     * the dashboard calls, not merely the same intent written twice. The two
+     * cannot disagree about which stream "this" is because there is only one
+     * definition of it left to read.
      */
     private async windowedTotals(range: Exclude<AnalyticsRange, 'all_time'>): Promise<{
         messages: number;
@@ -263,14 +265,13 @@ export class AnalyticsRepository extends ChannelScopedRepository {
             return raw`${chatMessages.messageTime} >= now() - interval '7 days'`;
         }
 
-        const [latest] = await this.db
-            .select({ id: streams.id })
-            .from(streams)
-            .where(eq(streams.channelId, this.channelId))
-            .orderBy(desc(streams.startedAt))
-            .limit(1);
-
-        return latest ? eq(chatMessages.streamId, latest.id) : null;
+        // The dashboard's own resolver, called rather than reimplemented. This
+        // used to be a local `order by started_at desc`, which disagreed with
+        // the dashboard whenever a crash had left an older stream row open — the
+        // two screens then reported different message counts for the same
+        // "this stream" in the same second.
+        const current = await resolveCurrentStream(this.db, this.channelId);
+        return current ? eq(chatMessages.streamId, current.id) : null;
     }
 
     /**

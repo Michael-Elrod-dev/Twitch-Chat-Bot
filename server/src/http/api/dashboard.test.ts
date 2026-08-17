@@ -118,7 +118,9 @@ describeDb('dashboard', () => {
             apiKeys: {} as never,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            songs: (channelId) => new SongQueueRepository(handle.db, channelId, () => undefined),
+            // No disconnect in this suite; the release has nothing to let go of.
+            releaseManagedRewards: async () => undefined,
             // No session in this suite; the reload has nothing to tell.
             reloadChannelContent: async () => undefined,
             spotifyConnected: async () => spotifyLinked

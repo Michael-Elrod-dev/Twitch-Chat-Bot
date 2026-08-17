@@ -1,6 +1,7 @@
-import { and, desc, eq, sql as raw } from 'drizzle-orm';
-import { apiUsage, chatMessages, streams } from '../schema/index.js';
+import { and, eq, sql as raw } from 'drizzle-orm';
+import { apiUsage, chatMessages } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
+import { resolveCurrentStream } from './currentStream.js';
 
 export interface DashboardNumbersRecord {
     messages: number;
@@ -36,23 +37,14 @@ export class DashboardRepository extends ChannelScopedRepository {
      * both: "which stream are these numbers about". Live shows the open one;
      * offline falls back to the last, which is exactly what `2b`'s
      * `Last stream / Thursday · 4h 02m` caption is captioning.
+     *
+     * The ordering is NOT written here. It lives in `resolveCurrentStream`
+     * because the analytics screen's `this_stream` chip asks the identical
+     * question, and the two used to answer it with two orderings that differ on
+     * a crash-orphaned stream row — see that module.
      */
     async currentOrLastStream(): Promise<DashboardStreamRecord | null> {
-        const [row] = await this.db
-            .select({
-                id: streams.id,
-                startedAt: streams.startedAt,
-                endedAt: streams.endedAt
-            })
-            .from(streams)
-            .where(eq(streams.channelId, this.channelId))
-            // Open streams first, then most recent. A crash can leave an older
-            // row open, so `ended_at is null` alone is not enough to identify
-            // the current stream — newest-first inside that is.
-            .orderBy(raw`${streams.endedAt} is not null`, desc(streams.startedAt))
-            .limit(1);
-
-        return row ?? null;
+        return resolveCurrentStream(this.db, this.channelId);
     }
 
     /**

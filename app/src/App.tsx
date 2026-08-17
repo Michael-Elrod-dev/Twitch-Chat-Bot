@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+    ChannelDisconnectedResponse,
     ChannelEnabledResponse,
+    ChannelSettings,
     DashboardSummary,
     LiveChatMessage,
     LiveEvent,
@@ -26,6 +28,11 @@ import { Dashboard } from './dashboard/Dashboard.js';
 import { Commands } from './content/Commands.js';
 import { Emotes } from './content/Emotes.js';
 import { Quotes } from './content/Quotes.js';
+import { Songs } from './songs/Songs.js';
+import { Analytics } from './analytics/Analytics.js';
+import { Settings } from './settings/Settings.js';
+import type { SettingsPatch } from './settings/settingsPatch.js';
+import { presentError } from './content/errorPresentation.js';
 import { appendChatMessage } from './dashboard/ChatCard.js';
 import { SignIn } from './screens/SignIn.js';
 import { Waiting } from './screens/Waiting.js';
@@ -57,10 +64,36 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
     const [summary, setSummary] = useState<DashboardSummary | null>(null);
     const [messages, setMessages] = useState<LiveChatMessage[]>([]);
     const [queue, setQueue] = useState<QueuedSong[]>([]);
+    /**
+     * Incremented every time the queue is re-read.
+     *
+     * The songs screen needs to know the queue MOVED, not merely what it now
+     * contains: a handoff that replaces one waiting song with another leaves an
+     * identical-looking array, and the now-playing card still has to re-read
+     * because the bot just put a new track into Spotify.
+     */
+    const [queueRevision, setQueueRevision] = useState(0);
 
     const token = auth.accessToken;
 
     // ---- what is true right now --------------------------------------------
+
+    /**
+     * Re-reads the song queue.
+     *
+     * Declared above the realtime effect because both it and the songs screen use
+     * it, and there is only one right way to do it: the `song_queue.updated` event
+     * announces that the queue moved and does not carry it, so every path that
+     * learns the queue changed — the event, and the screen's own drop — has to
+     * fetch. Two copies of that fetch is how one of them ends up reading a
+     * different limit than the other.
+     */
+    const reloadQueue = useCallback((): void => {
+        void withFreshSession(sessionStorage, (accessToken) =>
+            apiRequest<{ items: QueuedSong[]; total: number }>('/api/v1/songs', { accessToken }))
+            .then((songs) => { setQueue(songs.items); setQueueRevision((n) => n + 1); })
+            .catch(() => { /* the next status refresh picks it up */ });
+    }, [sessionStorage]);
 
     /**
      * The dashboard's opening state, and the seed for the uptime clock.
@@ -81,6 +114,10 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
 
             setSummary(next);
             setQueue(songs.items);
+            // Bumped here too: this path runs on reconnect, and a socket that has
+            // been away is exactly when the songs screen most needs to re-read
+            // what is playing rather than trust what it drew before the drop.
+            setQueueRevision((n) => n + 1);
             setLive(next.live);
             setStreamStartedAt(next.startedAt ? new Date(next.startedAt) : null);
         } catch {
@@ -135,18 +172,18 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
 
                 if (event.type === 'song_queue.updated') {
                     // Refetched rather than applied: the event announces that
-                    // the queue moved, and the payload does not carry it.
-                    void withFreshSession(sessionStorage, (accessToken) =>
-                        apiRequest<{ items: QueuedSong[]; total: number }>('/api/v1/songs', { accessToken }))
-                        .then((songs) => { setQueue(songs.items); })
-                        .catch(() => { /* the next status refresh picks it up */ });
+                    // the queue moved, and the payload does not carry it. The
+                    // event now carries `queueLength`, which is deliberately not
+                    // used to shortcut this — a length is not a list, and
+                    // rendering rows from one would mean inventing them.
+                    reloadQueue();
                 }
             }
         });
 
         connectionRef.start();
         return () => { connectionRef.stop(); };
-    }, [auth.phase, token, loadDashboard, sessionStorage]);
+    }, [auth.phase, token, loadDashboard, reloadQueue, sessionStorage]);
 
     // The uptime clock ticks locally once a second.
     const startedAtRef = useRef<Date | null>(null);
@@ -203,6 +240,74 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
         })();
     }, [auth, sessionStorage]);
 
+    // ---- settings, owned here because `/me` is ------------------------------
+
+    /**
+     * Saves a settings patch and puts the server's answer back into `/me`.
+     *
+     * **The shell owns `ChannelSettings` and the panes do not.** Three screens
+     * edit the same object — the songs page's requests toggle, the AI pane, the
+     * songs pane — and the header pill reads one of its fields. A pane holding its
+     * own copy would let two of them disagree about the same setting, with the
+     * header agreeing with whichever rendered last.
+     *
+     * **Not optimistic, unlike the master switch, and the difference is
+     * deliberate.** `PATCH /me/settings` does real work on the way through:
+     * naming a playlist resolves it at Spotify and may create one, and switching
+     * requests off hides a Twitch reward. The response is the only account of what
+     * actually happened, so showing a guess first and correcting it after would
+     * flicker a name the server may have resolved to something else.
+     *
+     * An empty patch is a re-read and sends no body — see `SettingsPatch`. The
+     * schema refuses an empty object, so this is not merely an optimisation.
+     */
+    const saveSettings = useCallback(async (patch: SettingsPatch): Promise<string | null> => {
+        const current = auth.me;
+        if (!current) return 'You are not signed in';
+
+        try {
+            if (Object.keys(patch).length === 0) {
+                await auth.refreshMe();
+                return null;
+            }
+
+            const updated = await withFreshSession(sessionStorage, (accessToken) =>
+                apiRequest<ChannelSettings>('/api/v1/me/settings', {
+                    method: 'PATCH',
+                    body: patch,
+                    accessToken
+                }));
+
+            auth.setMe({ ...current, settings: updated } satisfies MeResponse);
+            return null;
+        } catch (error) {
+            return presentError(error).message;
+        }
+    }, [auth, sessionStorage]);
+
+    /**
+     * The danger zone.
+     *
+     * `/me` is re-read rather than patched locally: disconnecting moves `status`,
+     * stops the session and removes three rewards, and the header, the songs page
+     * and the account card all read some part of that. Reconstructing it here would
+     * be this component deciding what a teardown did.
+     */
+    const disconnectChannel = useCallback(async (): Promise<string | null> => {
+        try {
+            await withFreshSession(sessionStorage, (accessToken) =>
+                apiRequest<ChannelDisconnectedResponse>('/api/v1/me/channel', {
+                    method: 'DELETE',
+                    accessToken
+                }));
+
+            await auth.refreshMe();
+            return null;
+        } catch (error) {
+            return presentError(error).message;
+        }
+    }, [auth, sessionStorage]);
+
     const [connectError, setConnectError] = useState<string | null>(null);
 
     const connectChannel = useCallback((): void => {
@@ -214,6 +319,25 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
             setConnectError(
                 `Could not open your browser (${err instanceof Error ? err.message : String(err)}).`
             );
+        });
+    }, [platform]);
+
+    /**
+     * Spotify's consent chain, in the system browser for the same reason Twitch's
+     * is: the app must never see the account password, and an embedded webview
+     * asking for one is indistinguishable from a phishing page.
+     */
+    const connectSpotify = useCallback((): void => {
+        void platform.openExternal(`${API_BASE_URL}/auth/spotify/connect`).catch(() => {
+            /*
+             * Swallowed here, unlike the Twitch grant above, and the asymmetry is
+             * deliberate rather than an oversight. The channel connect button is a
+             * dead end if the browser will not open — there is no app without it —
+             * so it earns a visible error. Spotify is an optional feature reached
+             * from a card that keeps explaining itself, so the honest thing is to
+             * leave the streamer looking at that card rather than at a message
+             * about their browser.
+             */
         });
     }, [platform]);
 
@@ -289,8 +413,31 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                             : section === 'commands' ? <Commands storage={sessionStorage} />
                                 : section === 'emotes' ? <Emotes storage={sessionStorage} />
                                     : section === 'quotes' ? <Quotes storage={sessionStorage} />
-                                        /* 9c fills the rest in. */
-                                        : <p style={{ color: 'var(--color-text-tertiary)' }}>{section}</p>}
+                                        : section === 'songs'
+                                            ? (
+                                                <Songs
+                                                    storage={sessionStorage}
+                                                    settings={auth.me.settings}
+                                                    queue={queue}
+                                                    queueRevision={queueRevision}
+                                                    onQueueChanged={reloadQueue}
+                                                    onSettingsChange={saveSettings}
+                                                    onConnectSpotify={connectSpotify}
+                                                />
+                                            )
+                                            : section === 'analytics'
+                                                ? <Analytics storage={sessionStorage} />
+                                                : (
+                                                    <Settings
+                                                        storage={sessionStorage}
+                                                        channel={auth.me.channel}
+                                                        settings={auth.me.settings}
+                                                        onSettingsChange={saveSettings}
+                                                        onSignOut={() => { void auth.signOut(); }}
+                                                        onDisconnectChannel={disconnectChannel}
+                                                        onConnectSpotify={connectSpotify}
+                                                    />
+                                                )}
                     </main>
                 </div>
             </div>

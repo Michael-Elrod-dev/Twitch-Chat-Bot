@@ -13,6 +13,7 @@ import { AppSessionRepository } from './db/repositories/appSessionRepository.js'
 import { ChannelTokenRepository } from './db/repositories/channelTokenRepository.js';
 import { ChannelRewardRepository } from './db/repositories/channelRewardRepository.js';
 import { RewardAdoptionService } from './services/rewardAdoption.js';
+import { releaseManagedRewards } from './services/rewardRelease.js';
 import { UserTokenProvider } from './twitch/userTokenProvider.js';
 import { SessionManager } from './session/sessionManager.js';
 import {
@@ -322,6 +323,62 @@ async function main(): Promise<void> {
         );
     }
 
+    /**
+     * The other direction: giving the three rewards back as a channel disconnects.
+     *
+     * The seam is **required** on the router, so this function existing is a
+     * compile-time obligation rather than something a future edit could quietly
+     * drop — see `ResourceOptions.releaseManagedRewards` for why a reward left
+     * standing on a disconnected channel is worse than an untidy one.
+     *
+     * Which is exactly why the credential-less case is a LOUD log rather than a
+     * silent return. A dev box with no Twitch credentials cannot delete anything
+     * at Twitch, and pretending otherwise is how a deployment discovers months
+     * later that its disconnects never cleaned up. The channel row is still
+     * marked and the session still stops; only the Twitch half is missing, and
+     * the log says so with the channel id.
+     */
+    async function releaseRewardsFor(channelId: string): Promise<void> {
+        const channel = await channelRepository.findById(channelId);
+
+        if (!helix || !twitchConfigured || !channel) {
+            logger.warn(
+                { channelId, twitchConfigured, hasChannel: channel !== null },
+                'Cannot remove managed rewards at Twitch - the bindings are being forgotten regardless'
+            );
+            // The rows still go: a disconnected channel must not keep routing
+            // redemptions for rewards it no longer manages.
+            const rewards = new ChannelRewardRepository(database.db, channelId);
+            for (const reward of await rewards.listAll()) await rewards.remove(reward.kind);
+            return;
+        }
+
+        const userTokens = new UserTokenProvider({
+            clientId: env.TWITCH_CLIENT_ID as string,
+            clientSecret: env.TWITCH_CLIENT_SECRET as string,
+            channelId,
+            repository: new ChannelTokenRepository(database.db, channelId, cipher),
+            logger
+        });
+
+        await releaseManagedRewards({
+            channelId,
+            logger,
+            rewards: new ChannelRewardRepository(database.db, channelId),
+            // The token is fetched per reward rather than once up front: the
+            // calls are sequential and a long-running release could otherwise
+            // reach the third one with a token that expired during the first two.
+            disableReward: async (rewardId) => {
+                await helix.setCustomRewardEnabled(
+                    channel.twitchBroadcasterId,
+                    await userTokens.get(),
+                    rewardId,
+                    false
+                );
+            }
+        });
+    }
+
     for (const channel of active) {
         try {
             await adoptRewardsFor(channel.id, channel.twitchBroadcasterId);
@@ -546,6 +603,30 @@ async function main(): Promise<void> {
             },
             requesterOf: (trackUri) =>
                 sessionManager.get(channelId)?.nowPlayingRequester(trackUri) ?? null,
+            /**
+             * `skipTrack()`'s first caller.
+             *
+             * The method has existed on the client since the Spotify work landed
+             * and nothing had ever invoked it — the missing half that made the
+             * design's Skip button unbuildable. Nothing is playing is reported as
+             * false rather than thrown: Spotify answers 404 for a skip against an
+             * idle player, and that is an ordinary state, not a fault.
+             */
+            skipPlayingTrack: async () => {
+                try {
+                    const state = await client.getPlaybackState();
+                    if (!state?.trackUri) return false;
+
+                    await client.skipTrack();
+                    return true;
+                } catch (err) {
+                    logger.warn(
+                        { channelId, err: (err as Error).message },
+                        'Could not skip the playing track at Spotify'
+                    );
+                    return false;
+                }
+            },
             disconnect: async () => {
                 const removed = await tokenRepository.delete('spotify');
                 if (!removed) return false;
@@ -651,6 +732,7 @@ async function main(): Promise<void> {
         }),
         channels: channelRepository,
         applyChannelEnabled,
+        releaseManagedRewards: releaseRewardsFor,
         // The write lands in the database; this is what makes the running bot
         // read it. Absent session (channel disabled) is a no-op: there is
         // nothing to tell, and the next start loads from the database anyway.
@@ -660,7 +742,17 @@ async function main(): Promise<void> {
         apiKeys: apiKeyRepository,
         analytics: (channelId) => new AnalyticsRepository(database.db, channelId),
         dashboard: (channelId) => new DashboardRepository(database.db, channelId),
-        songs: (channelId) => new SongQueueRepository(database.db, channelId),
+        // Same listener as the session's copy in `buildChannelSession`: whichever
+        // repository instance performs the mutation, the same news reaches the
+        // same sockets.
+        songs: (channelId) => new SongQueueRepository(database.db, channelId, (queueLength) => {
+            bus.publish(channelId, {
+                type: 'song_queue.updated',
+                channelId,
+                at: new Date().toISOString(),
+                queueLength
+            });
+        }),
         // Presence only, and the cipher stays here: the route asks "is Spotify
         // linked", and answering it must not hand a router the key to every
         // stored credential.

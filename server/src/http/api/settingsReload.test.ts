@@ -146,7 +146,9 @@ describeDb('settings reach the running bot', () => {
             apiKeys: {} as never,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            songs: (channelId) => new SongQueueRepository(handle.db, channelId, () => undefined),
+            // No disconnect in this suite; the release has nothing to let go of.
+            releaseManagedRewards: async () => undefined,
             reloadChannelContent: async (channelId, kind) => {
                 if (channelId === channel.id) await session.reloadContent(kind);
             }

@@ -26,6 +26,39 @@ JWT-guarded REST + WebSocket API for the desktop client.
   invariant: anything the bot cannot do gives the viewer their points back.
 - **API v1** — REST and realtime for the desktop client; API keys for Stream Deck.
 
+### What happens to a channel's data
+
+A streamer's history is the product. Two operations look like they might destroy
+it, and neither does:
+
+- **Disconnecting a channel** (the app's danger zone) stops the bot, switches its
+  three managed channel-point rewards **off at Twitch**, and leaves everything
+  else alone. The rewards keep their title, cost, prompt and redemption history —
+  they are disabled, never deleted, because two of a long-running channel's three
+  were adopted from an earlier bot and were never this application's to destroy.
+  Commands, emotes, quotes, chat totals, streams and viewers all stay exactly
+  where they are.
+- **Reinstalling the app** changes nothing at all. The app is a remote control;
+  every row lives on the server, keyed to the Twitch channel. A streamer who
+  uninstalls, reinstalls, and signs back in is looking at the same data.
+
+**Reconnecting a channel restores what was there**, because it was never removed:
+the channel row is matched on its Twitch broadcaster id, so re-onboarding rebinds
+to the existing history rather than starting a new one. A streamer who leaves for
+three years and comes back finds their quotes, commands and lifetime chat totals
+intact.
+
+The one thing reconnecting does **not** do by itself is re-enable the three
+rewards a disconnect switched off. Song requests come back when the streamer turns
+them on (which flips the reward at Twitch); the skip and quote rewards currently
+need turning back on in Twitch's own dashboard. That is a known, deliberate gap
+rather than an oversight — re-enabling rewards in someone's channel unprompted is
+the kind of surprise the reward handling is otherwise careful to avoid — and it is
+recorded as tracked future work.
+
+Deliberate deletion is a different matter: rows removed from the database are gone
+from the database, and what protects them then is the backup tiering below.
+
 ## Repository layout
 
 An npm workspaces monorepo. There is exactly one bot in this repo.
@@ -300,7 +333,9 @@ creation and only its hash is stored — there is no recovery endpoint.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/v1/me` | caller, channel, settings — the only route valid with no channel |
-| PATCH | `/api/v1/me/settings` | `aiEnabled`, `songRequestsEnabled`, `discordWebhookUrl` |
+| PATCH | `/api/v1/me/settings` | `aiEnabled`, `aiLimits`, `songRequestsEnabled`, playlist fields, `discordWebhookUrl` |
+| PATCH | `/api/v1/me/channel` | the header master switch (`enabled`) |
+| DELETE | `/api/v1/me/channel` | disconnect the channel — see below |
 | GET | `/api/v1/commands` | list (`?limit=&offset=`) |
 | POST | `/api/v1/commands` | create |
 | PATCH | `/api/v1/commands/:name` | update response and/or level |
@@ -314,9 +349,15 @@ creation and only its hash is stored — there is no recovery endpoint.
 | POST | `/api/v1/quotes` | add |
 | DELETE | `/api/v1/quotes/:number` | delete |
 | GET | `/api/v1/songs` | queue **(key ok)** |
-| DELETE | `/api/v1/songs/head` | skip the current track **(key ok)** |
+| DELETE | `/api/v1/songs/head` | drop the next **waiting** request **(key ok)** |
+| POST | `/api/v1/songs/skip` | skip what is **playing** in Spotify **(key ok)** |
+| GET | `/api/v1/songs/playing` | the current track **(key ok)** |
 | POST | `/api/v1/songs/toggle` | enable/disable requests **(key ok)** |
-| GET | `/api/v1/analytics/summary` | totals and top chatters |
+| GET | `/api/v1/analytics/summary` | totals and top chatters (`?range=`) |
+| GET | `/api/v1/spotify` | link status, account, requests playlist |
+| DELETE | `/api/v1/spotify` | unlink Spotify |
+| GET | `/api/v1/rewards` | the three bot-managed rewards |
+| GET | `/api/v1/dashboard` | the dashboard summary |
 | GET | `/api/v1/api-keys` | list keys (never the key itself) |
 | POST | `/api/v1/api-keys` | create — returns the key **once** |
 | DELETE | `/api/v1/api-keys/:id` | revoke |
@@ -360,6 +401,36 @@ requests per `API_RATE_WINDOW_MS` — 300/minute by default. Responses carry
 Keyed on the credential rather than the IP address, because behind Caddy every
 request shares one source address: an IP-keyed limiter would either throttle the
 whole tenancy at once or trust a header the client controls.
+
+## Backups
+
+`scripts/pg-backup.sh`, on an hourly systemd timer, dumps → **verifies** →
+uploads to S3. Nothing is uploaded and nothing is rotated unless the dump
+verifies: it must clear a size floor, parse as a `pg_restore` archive, and contain
+tables. An unverified dump is worse than no dump, because it looks like safety.
+
+Retention is **tiered**:
+
+| Tier | Kept | Answers |
+|---|---|---|
+| hourly | newest 24 (`MAX_BACKUPS`) | "undo the last hour" |
+| daily | newest 90 (`DAILY_KEEP`) | "the numbers looked wrong on Tuesday" |
+| monthly | **never rotated** | "what did this channel look like last year" |
+
+The tiers exist because a flat 24-hour window once meant that data deleted more
+than a day earlier had no recoverable state anywhere — every dump in the bucket
+was already post-deletion. Hourly backups cannot answer a question nobody asks
+within an hour, and for a product whose value is multi-year history that is the
+question that actually gets asked.
+
+The daily and monthly copies are **promoted**, not re-dumped: the same verified
+artifact is copied server-side into `daily/` and `monthly/`, so no tier can hold a
+dump that was not verified, and the extra tiers cost one S3 copy rather than
+another `pg_dump` against a live database. Promotion is idempotent — the first run
+of a day claims it and later runs find it already there, which matters because the
+timer is `Persistent=true` and a box that was off catches up.
+
+Restores are drilled in CI: see `.github/workflows/restore-drill.yml`.
 
 ## Documentation
 

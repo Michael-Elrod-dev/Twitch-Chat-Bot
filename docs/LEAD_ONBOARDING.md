@@ -44,7 +44,8 @@ A **hosted, multi-tenant Twitch bot**, live in production, that a streamer will 
 - `docs/PHASE1_EVENTSUB_FACTS.md` — verified Twitch platform facts.
 - `docs/DEPENDENCIES.md` — the Renovate → CI-green → manual-merge flow.
 - `docs/archive/` — Phase 0 record; historical, don't edit.
-- `design_handoff_bot_desktop_app/` — **Claude Design's approved handoff** (the app's visual/interaction spec). It is **working reference: gitignored, never committed, and its deletion is an exit criterion of the final screens tranche.** Read its `README.md`; it is the acceptance spec for the app's look and behavior.
+- `docs/APP_COVERAGE_LEDGER.md` — the desktop app's whole surface against `UI_FUNCTIONALITY.md`: what is built, what is deliberately absent, what is deferred, and every place the contract won over the design mock.
+- ~~`design_handoff_bot_desktop_app/`~~ — **deleted 2026-08-17, on the close of the final screens tranche, which is what it was for.** Claude Design's approved handoff was working reference: gitignored, never committed, and its removal was an exit criterion. Its content is not lost — the acceptance spec is now `docs/APP_COVERAGE_LEDGER.md` (every design id and every deviation, with reasons) plus the design decisions carried in the components' own comments. The `.gitignore` rule for it is kept deliberately: the owner still holds the source zip, and a re-extraction for reference must not become a commit.
 
 ## Owner-facing carry-overs (things the owner still owes or must decide)
 
@@ -54,10 +55,34 @@ A **hosted, multi-tenant Twitch bot**, live in production, that a streamer will 
 
 ## Resume point (do this)
 
-The remaining work is **the desktop app**, all specced and open:
-- **The app-shell + auth package (issued, not started):** the `app/` Tauri 2 + React + TS workspace, the design tokens as a theme module, the persistent shell (title bar / icon rail / channel header), the auth screens, the WS connection state machine, the channel enable/disable endpoint for the header master switch (contract-first, reintroduction-tested), and a CI Windows-installer artifact. Its full spec is the "Desktop app shell & auth (remainder)" entry in `WORK_PACKAGES.md`. **Design note preserved from the prior lead:** the master switch needs a NEW `enabled` column, never a reuse of `status` — `status` is what the world did to the channel, `enabled` is what the owner chose; conflating them lies to the broadcaster.
-- **Then the three screen tranches** (dashboard/live → content domains → songs/analytics/settings), each verified separately, with the small server additions each needs riding along contract-first. On the final tranche's close, delete `design_handoff_bot_desktop_app/` and prove no remnants.
+**The app-build phase is complete.** The desktop app is feature-complete and the
+design handoff has been deleted, which was its exit criterion. The shell, auth,
+dashboard, the three content domains, songs, analytics and all five settings
+panes are built, tested and deployed; `docs/APP_COVERAGE_LEDGER.md` is the
+item-by-item account of that claim.
 
-The auth foundation the whole app sits on is already hardened and deployed (an open-redirect token-exfiltration hole was found and closed before any UI was built on it). Nothing needs unpicking; the repo is green and production is healthy.
+**Design note preserved across the whole run, because it keeps being the right
+call:** `status` is what the world did to a channel, `enabled` is what the owner
+chose. Conflating them lies to the broadcaster in both directions. The final
+tranche extended it — `disconnected` is a *teardown* the broadcaster can reach,
+and still not the same thing as the pause `enabled: false` records.
 
-**Your first actions:** read `docs/WORK_PACKAGES.md` (Phase-1 section, and its tail), `docs/PHASE1_DESIGN.md` §8, and `design_handoff_bot_desktop_app/README.md`; verify the current state yourself (`bash scripts/test-db.sh` then the server suite, and a production health probe); then issue the app-shell package to the engineer via a PASTE TO OPUS block, following the pattern in `WORK_PACKAGES.md`.
+What comes next, in the owner's stated order:
+
+- **The deferred-observations ledger** at the tail of `WORK_PACKAGES.md` — a
+  short list of live behaviours witnessed by reasoning and test but not yet by
+  the owner's own eyes, plus specced-not-built items. The owner intends a single
+  wrap-up pass through it.
+- **The rebrand.** `{{APP_NAME}}` is one constant in the app; the infrastructure
+  carriers are inventoried in the log.
+- **The security audit** — a separate Fable session, fresh eyes, before public
+  launch. Recorded under FUTURE in `WORK_PACKAGES.md`.
+- **Release-process proof**, then owner-specified features. Per the owner's
+  recorded definition, all of that precedes "v1".
+
+**Your first actions:** read `docs/WORK_PACKAGES.md` (the Phase-1 section and its
+tail, including the deferred ledger), `docs/APP_COVERAGE_LEDGER.md`, and
+`docs/PHASE1_DESIGN.md` §8; verify the current state yourself (`bash
+scripts/test-db.sh` then the server suite with `REQUIRE_DB_TESTS=1`, `npm run
+typecheck` at the root, and a production health probe); then take direction from
+the owner on which of the above they want first.

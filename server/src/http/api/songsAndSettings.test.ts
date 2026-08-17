@@ -67,6 +67,17 @@ class FakeSurface implements SpotifySurface {
         return this.requesters.get(trackUri) ?? null;
     }
 
+    /** How many times the player was told to advance. */
+    skips = 0;
+    /** Set false to model an idle player, which Spotify refuses a skip against. */
+    skippable = true;
+
+    async skipPlayingTrack(): Promise<boolean> {
+        if (!this.skippable) return false;
+        this.skips += 1;
+        return true;
+    }
+
     async disconnect(): Promise<boolean> {
         if (this.disconnected) return false;
         this.disconnected = true;
@@ -88,6 +99,19 @@ describeDb('songs, analytics and settings', () => {
     let resolvedNames: { channelId: string; name: string }[];
     /** What `resolvePlaylist` will answer next. Null models Spotify being unreachable. */
     let resolveTo: string | null;
+
+    /**
+     * A queue repository wired to the same recorder the live bus would be.
+     *
+     * Every construction of it in this file goes through here, deliberately: the
+     * defect being guarded is "a queue mutation nobody announced", and a test
+     * helper that quietly built a silent repository for *seeding* would recreate
+     * exactly that blind spot inside the test that is supposed to catch it.
+     */
+    const recordingQueue = (channelId: string): SongQueueRepository =>
+        new SongQueueRepository(handle.db, channelId, (queueLength) => {
+            published.push({ channelId, event: { type: 'song_queue.updated', queueLength } });
+        });
 
     beforeAll(async () => {
         handle = await connectTestDatabase(TEST_DATABASE_URL as string);
@@ -134,7 +158,7 @@ describeDb('songs, analytics and settings', () => {
             apiKeys: new ApiKeyRepository(handle.db),
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            songs: (channelId) => recordingQueue(channelId),
             rewards: (channelId) => new ChannelRewardRepository(handle.db, channelId),
             spotify: (channelId) => surfaces.get(channelId) ?? null,
             resolvePlaylist: async (channelId, name) => {
@@ -142,6 +166,8 @@ describeDb('songs, analytics and settings', () => {
                 return resolveTo;
             },
             publish: (channelId, event) => { published.push({ channelId, event }); },
+            // No disconnect in this suite; the release has nothing to let go of.
+            releaseManagedRewards: async () => undefined,
             reloadChannelContent: async () => undefined
         }));
 
@@ -443,12 +469,71 @@ describeDb('songs, analytics and settings', () => {
         });
     });
 
+    // ---- skipping the PLAYING track -----------------------------------------
+
+    describe('skipping what is playing', () => {
+        const seedQueue = async (channelId: string): Promise<void> => {
+            await handle.sql`
+                insert into viewers (twitch_user_id, login)
+                values ('skip-viewer', 'skipviewer')
+                on conflict (twitch_user_id) do nothing
+            `;
+            await recordingQueue(channelId).add({
+                trackUri: 'spotify:track:waiting',
+                trackName: 'Still Waiting',
+                artistName: 'Artist',
+                requestedByTwitchUserId: 'skip-viewer'
+            });
+        };
+
+        /**
+         * THE REINTRODUCTION TARGET.
+         *
+         * Skip must advance the *player* and never touch the waiting queue. Those
+         * were conflated once already — the design drew Skip beside the playing
+         * track while the only route available dropped the next request — so this
+         * asserts both halves at once: the player was told, and the queue that a
+         * viewer paid into is exactly as it was.
+         */
+        it('advances the player and leaves every queued row alone', async () => {
+            await seedQueue(alpha.id);
+            const before = await recordingQueue(alpha.id).list();
+
+            await as(alpha, request(app).post('/api/v1/songs/skip')).expect(204);
+
+            expect(surfaces.get(alpha.id)?.skips).toBe(1);
+            const after = await recordingQueue(alpha.id).list();
+            expect(after.map((s) => s.trackUri)).toEqual(before.map((s) => s.trackUri));
+            expect(after).toHaveLength(1);
+        });
+
+        it('answers not_found when nothing is playing, rather than reporting a fault', async () => {
+            const surface = surfaces.get(alpha.id);
+            if (surface) surface.skippable = false;
+
+            const response = await as(alpha, request(app).post('/api/v1/songs/skip')).expect(404);
+
+            // A Stream Deck press against a silent player should say so, not
+            // claim the bot is broken.
+            expect(response.body.error.code).toBe('not_found');
+        });
+
+        it('answers not_found when Spotify is not connected at all', async () => {
+            surfaces.delete(alpha.id);
+
+            await as(alpha, request(app).post('/api/v1/songs/skip')).expect(404);
+        });
+
+        it('never reaches another channel player', async () => {
+            await as(alpha, request(app).post('/api/v1/songs/skip')).expect(204);
+
+            expect(surfaces.get(beta.id)?.skips).toBe(0);
+        });
+    });
+
     // ---- the queue event ----------------------------------------------------
 
     describe('song queue events', () => {
-        const queue = (channelId: string): SongQueueRepository =>
-            new SongQueueRepository(handle.db, channelId);
-
         const seed = async (channelId: string, count: number): Promise<void> => {
             await handle.sql`
                 insert into viewers (twitch_user_id, login)
@@ -456,7 +541,7 @@ describeDb('songs, analytics and settings', () => {
                 on conflict (twitch_user_id) do nothing
             `;
             for (let i = 0; i < count; i++) {
-                await queue(channelId).add({
+                await recordingQueue(channelId).add({
                     trackUri: `spotify:track:q${i}`,
                     trackName: `Track ${i}`,
                     artistName: 'Artist',
@@ -465,13 +550,43 @@ describeDb('songs, analytics and settings', () => {
             }
         };
 
+        /**
+         * THE DEFECT THE OWNER FOUND.
+         *
+         * A song added by redemption changed the queue and announced nothing, so
+         * the app — subscribed and waiting — never learned the row existed. In
+         * production it sat in the table for 121 seconds and the owner reported,
+         * correctly, that the queue never appeared.
+         *
+         * This is the assertion that was missing. Every other test in this block
+         * exercised a *skip*, which was the one path that did publish, so the
+         * whole suite was green over a queue that was invisible in normal use.
+         */
+        it('publishes when a song is ADDED, not only when one is skipped', async () => {
+            await seed(alpha.id, 1);
+
+            expect(published).toEqual([
+                { channelId: alpha.id, event: { type: 'song_queue.updated', queueLength: 1 } }
+            ]);
+        });
+
+        it('publishes a growing length as requests arrive', async () => {
+            await seed(alpha.id, 3);
+
+            // Three adds, three announcements, each carrying the queue a client
+            // would render at that moment.
+            expect(published.map((p) => p.event.queueLength)).toEqual([1, 2, 3]);
+        });
+
         it('publishes the length left after a skip', async () => {
             await seed(alpha.id, 3);
+            // The seeding announcements are the previous test's subject; this one
+            // is about the skip, so the record starts here.
+            published.length = 0;
 
             await as(alpha, request(app).delete('/api/v1/songs/head')).expect(200);
 
-            // The field the contract declared and nothing ever sent. Two is the
-            // queue the client is about to render, not the one it had.
+            // Two is the queue the client is about to render, not the one it had.
             expect(published).toEqual([
                 { channelId: alpha.id, event: { type: 'song_queue.updated', queueLength: 2 } }
             ]);
@@ -479,6 +594,7 @@ describeDb('songs, analytics and settings', () => {
 
         it('publishes zero when the last song is skipped', async () => {
             await seed(alpha.id, 1);
+            published.length = 0;
 
             await as(alpha, request(app).delete('/api/v1/songs/head')).expect(200);
 
@@ -495,6 +611,7 @@ describeDb('songs, analytics and settings', () => {
         it('counts only the caller channel queue', async () => {
             await seed(alpha.id, 2);
             await seed(beta.id, 5);
+            published.length = 0;
 
             await as(alpha, request(app).delete('/api/v1/songs/head')).expect(200);
 
@@ -658,6 +775,90 @@ describeDb('songs, analytics and settings', () => {
             // is in. Zeroes, not a 500 and not an apology.
             expect(response.body.data.messages).toBe(0);
             expect(response.body.data.recentStreams).toEqual([]);
+        });
+    });
+
+    // ---- "this stream" means one thing ---------------------------------------
+
+    describe('what "this stream" means', () => {
+        /**
+         * The dashboard and the analytics chip, asked the same question.
+         *
+         * Both screens scope to "this stream", the owner clicks between them in
+         * the same second, and a message count that changes because the pane
+         * changed is a bug reported as "the numbers are wrong" with no way to say
+         * which number. Until the two shared a resolver this agreement was
+         * asserted by a comment in each file and enforced by nothing.
+         *
+         * The case that separates them is the one the dashboard's own comment
+         * names: **a crash leaves an older stream row open.** `ended_at is null`
+         * then picks the older stream and `max(started_at)` picks the newer, so
+         * two orderings that agree on every tidy channel disagree on the first
+         * untidy one. Seeded here rather than hoped against, because it is the
+         * only shape in which the defect is visible.
+         */
+        const seedCrashOrphanedStream = async (): Promise<void> => {
+            await handle.sql`
+                insert into viewers (twitch_user_id, login) values
+                    ('orphan-a', 'orphana'), ('orphan-b', 'orphanb'),
+                    ('newer-a', 'newera'), ('newer-b', 'newerb'), ('newer-c', 'newerc')
+                on conflict (twitch_user_id) do nothing
+            `;
+
+            const [orphan] = await handle.sql`
+                insert into streams (channel_id, started_at, ended_at)
+                values (${alpha.id}, now() - interval '2 days', null)
+                returning id
+            `;
+            const [newer] = await handle.sql`
+                insert into streams (channel_id, started_at, ended_at)
+                values (${alpha.id}, now() - interval '1 hour', now() - interval '30 minutes')
+                returning id
+            `;
+
+            // Two in the stream that is still open, five in the newer closed
+            // one. Deliberately different counts, and deliberately all of type
+            // `message`: the dashboard counts everything that is not a
+            // redemption and the analytics window counts `message`, so any other
+            // type would let the two disagree for a reason that is not the bug.
+            await handle.sql`
+                insert into chat_messages (channel_id, stream_id, twitch_user_id, message_type, message_time)
+                values
+                    (${alpha.id}, ${orphan!['id']}, 'orphan-a', 'message', now() - interval '2 days'),
+                    (${alpha.id}, ${orphan!['id']}, 'orphan-b', 'message', now() - interval '2 days'),
+                    (${alpha.id}, ${newer!['id']}, 'newer-a', 'message', now() - interval '55 minutes'),
+                    (${alpha.id}, ${newer!['id']}, 'newer-a', 'message', now() - interval '54 minutes'),
+                    (${alpha.id}, ${newer!['id']}, 'newer-b', 'message', now() - interval '53 minutes'),
+                    (${alpha.id}, ${newer!['id']}, 'newer-b', 'message', now() - interval '52 minutes'),
+                    (${alpha.id}, ${newer!['id']}, 'newer-c', 'message', now() - interval '51 minutes')
+            `;
+        };
+
+        it('gives the dashboard and the analytics chip the same stream', async () => {
+            await seedCrashOrphanedStream();
+
+            const dashboard = await as(alpha, request(app).get('/api/v1/dashboard')).expect(200);
+            const analytics = await as(alpha, request(app)
+                .get('/api/v1/analytics/summary?range=this_stream')).expect(200);
+
+            // The agreement itself is the assertion — one screen's figure equal
+            // to the other's, not each equal to a number typed here.
+            expect(analytics.body.data.messages).toBe(dashboard.body.data.numbers.messages);
+        });
+
+        it('names the open stream, not the one that started most recently', async () => {
+            await seedCrashOrphanedStream();
+
+            const analytics = await as(alpha, request(app)
+                .get('/api/v1/analytics/summary?range=this_stream')).expect(200);
+
+            /*
+             * The other half of the pin, and the reason the test above is not
+             * enough on its own: two screens that both read the WRONG stream
+             * agree perfectly. Two is the open stream's count and five is the
+             * newer closed one's, so this says which of the two they agreed on.
+             */
+            expect(analytics.body.data.messages).toBe(2);
         });
     });
 });

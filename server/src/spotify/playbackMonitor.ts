@@ -21,7 +21,18 @@ import { ManualReauthRequiredError } from '../twitch/errors.js';
  * can never hold the process open.
  */
 
-/** How close to the end counts as "about to finish". */
+/**
+ * How close to the end counts as "about to finish".
+ *
+ * **Consequence worth knowing before someone rediscovers it from chat:** a skip
+ * outside this window plays one of the streamer's own tracks before the next
+ * request. Handoff only happens in the last ten seconds, so skipping with two
+ * minutes left leaves nothing of ours in Spotify's queue and the player falls
+ * through to whatever it was going to play anyway; the queued request is handed
+ * over at the end of *that* interlude track instead. Nothing is lost and nothing
+ * is out of order — the request keeps its place — but "skip, and the next request
+ * plays immediately" is not what happens, and the ten-second window is the reason.
+ */
 const ADVANCE_WINDOW_MS = 10_000;
 
 /** Polling cadence. Phase 0 used 3s; the same trade of freshness against calls. */

@@ -93,7 +93,9 @@ describeDb('API tenant isolation', () => {
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            songs: (channelId) => new SongQueueRepository(handle.db, channelId, () => undefined),
+            // No disconnect in this suite; the release has nothing to let go of.
+            releaseManagedRewards: async () => undefined,
             // No session in this suite; the reload has nothing to tell.
             reloadChannelContent: async () => undefined
         }));
@@ -206,6 +208,29 @@ describeDb('API tenant isolation', () => {
             expect(b.body.data.items).toHaveLength(0);
 
             await request(app).delete('/api/v1/emotes/kappa').set('authorization', asBeta()).expect(404);
+        });
+
+        it('answers a trigger the schema refuses with bad_request, not internal', async () => {
+            /*
+             * A trigger long enough that the schema rejects it. The route used
+             * to `parse` this rather than `safeParse`, and the throw landed in
+             * the handler's catch — so an input the client got wrong came back
+             * as a 500 saying the request failed, which describes the server
+             * breaking rather than the client sending something invalid.
+             *
+             * It matters beyond tidiness because the envelope's code is the
+             * whole instruction for where the app puts the message:
+             * `bad_request` goes beside the field, `internal` becomes a banner.
+             * The wrong code puts the right words in the wrong place.
+             */
+            const tooLong = 'k'.repeat(200);
+
+            const response = await request(app)
+                .delete(`/api/v1/emotes/${tooLong}`)
+                .set('authorization', asAlpha())
+                .expect(400);
+
+            expect(response.body).toMatchObject({ ok: false, error: { code: 'bad_request' } });
         });
     });
 

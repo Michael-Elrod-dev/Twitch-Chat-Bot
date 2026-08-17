@@ -151,7 +151,30 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
      * has connected: a channel with no Spotify gets null, and every song path
      * reports "not connected" rather than failing obscurely.
      */
-    const songQueue = deps.db ? new SongQueueRepository(deps.db, channelId) : null;
+    /*
+     * The queue, wired to the live bus at construction.
+     *
+     * This is the fix for the invisible-row defect: the redemption path and the
+     * playback monitor both mutate this queue, and neither published anything —
+     * so a requested song sat in the table for two minutes with the app watching
+     * and never being told. The repository now announces every mutation itself,
+     * and the listener is a required constructor argument, so a future third way
+     * to change the queue cannot repeat it.
+     *
+     * `deps.bus` absent means nothing is watching, which is that field's existing
+     * documented meaning — the no-op listener is the honest wiring for it, not a
+     * hole.
+     */
+    const songQueue = deps.db
+        ? new SongQueueRepository(deps.db, channelId, (queueLength) => {
+            deps.bus?.publish(channelId, {
+                type: 'song_queue.updated',
+                channelId,
+                at: new Date().toISOString(),
+                queueLength
+            });
+        })
+        : null;
 
     /*
      * Stream lifecycle. Needs only a database: metadata comes from Helix where

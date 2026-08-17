@@ -19,6 +19,7 @@ import {
     type MeResponse,
     type ChannelSettings,
     type ChannelEnabledResponse,
+    type ChannelDisconnectedResponse,
     type DashboardSummary,
     type ApiKeySummary,
     type CreatedApiKey,
@@ -162,14 +163,43 @@ export interface ResourceOptions {
     resolvePlaylist?: (channelId: string, name: string) => Promise<string | null>;
     /** The three bot-managed rewards, for the notifications screen's trust card. */
     rewards?: (channelId: string) => ChannelRewardRepository;
+    /**
+     * Removes the three managed rewards from Twitch as a channel disconnects.
+     *
+     * **Required, and for the same reason `reloadChannelContent` is.** A reward
+     * left standing on a disconnected channel stays redeemable against a bot that
+     * has left — a viewer spends points and nothing happens, which is the exact
+     * failure the Spotify disconnect was made to prevent one route down. If this
+     * were optional, a build that forgot it would compile, disconnect cleanly, and
+     * keep charging viewers for a service that no longer exists.
+     *
+     * A seam rather than a Helix dependency because deleting a reward needs the
+     * broadcaster's own token, and a route handler must not be within reach of the
+     * key that decrypts every stored credential. The composition root decides what
+     * to do when Twitch is unreachable — and, importantly, *says so in a log* —
+     * rather than the route silently having no seam to call.
+     *
+     * Failures are the seam's own to report. Disconnecting must complete even when
+     * Twitch refuses: a channel recorded as connected while its bot has gone is
+     * the worse of the two wrong states.
+     */
+    releaseManagedRewards: (channelId: string) => Promise<void>;
 }
 
 /**
- * The Spotify reads the API makes on the app's behalf.
+ * What the API does with Spotify on the app's behalf.
  *
- * Deliberately narrower than `SpotifyClient`: the API has no business queueing
- * or skipping tracks through this seam — skip already has its own route against
- * the bot's own queue — so those methods are simply not offered here.
+ * Still deliberately narrower than `SpotifyClient` — nothing here can *queue* a
+ * track, because a track reaching Spotify without a redemption behind it is the
+ * one thing the whole songs design refuses.
+ *
+ * `skipPlayingTrack` was previously excluded on the reasoning that "skip already
+ * has its own route against the bot's own queue". That reasoning was wrong, and
+ * finding out why is what produced this method: `DELETE /songs/head` drops the
+ * next **waiting** request, and the playback monitor has already handed the
+ * playing track to Spotify and deleted it from our queue. So the two are
+ * different actions on different songs, and the app had no way to perform the one
+ * the design draws beside the now-playing card.
  */
 export interface SpotifySurface {
     account: () => Promise<{ id: string; displayName: string } | null>;
@@ -183,6 +213,14 @@ export interface SpotifySurface {
      * the time it is playing there is nothing left to query.
      */
     requesterOf: (trackUri: string) => string | null;
+    /**
+     * Advances Spotify's player to the next track.
+     *
+     * Acts on what is PLAYING, never on the bot's waiting queue — see the note
+     * above. Answers false when Spotify refused or had nothing to advance, so
+     * the route can say "nothing is playing" rather than reporting a fault.
+     */
+    skipPlayingTrack: () => Promise<boolean>;
     /** Forgets the stored credential. @returns whether there was one. */
     disconnect: () => Promise<boolean>;
     connectedAt: () => Promise<Date | null>;
@@ -376,6 +414,72 @@ export function createResourceRouter(options: ResourceOptions): Router {
         })
     );
 
+    /**
+     * The danger zone: disconnecting the channel.
+     *
+     * One of the two destructive actions in the product, and the one the handoff
+     * requires a confirmation for — the confirmation is the client's, but the
+     * ordering here is what makes it safe to have only one.
+     *
+     * **Status first, then the teardown.** The write lands before anything is torn
+     * down, for the same reason the master switch persists before acting: a channel
+     * recorded as disconnected whose rewards we failed to remove is momentarily
+     * untidy and self-corrects on the next attempt, whereas a channel whose rewards
+     * are gone but which still reads `active` is a bot the owner believes is
+     * running and which cannot be. The first is a mess; the second is a lie.
+     *
+     * **Rewards next, session last.** The reward removal needs the channel's
+     * session-scoped credentials to still be reachable, and stopping the session
+     * first would take them away — the ordering is load-bearing, not stylistic.
+     *
+     * **Nothing the streamer wrote is deleted.** Commands, emotes and quotes are
+     * theirs and outlive the connection; the danger card promises exactly that, and
+     * the promise is why coming back is worth doing. This route touches the channel
+     * row, Twitch, and the running session. No content repository is reachable from
+     * it at all.
+     */
+    router.delete('/api/v1/me/channel', rejectApiKey, ok(async (req, res) => {
+        const channel = req.channel;
+        if (!channel) {
+            res.status(404).json(apiFailure('not_found', 'No channel is connected for this account'));
+            return;
+        }
+
+        const marked = await options.channels.setStatus(channel.id, 'disconnected');
+        if (!marked) {
+            res.status(404).json(apiFailure('not_found', 'No channel is connected for this account'));
+            return;
+        }
+
+        await options.releaseManagedRewards(channel.id);
+
+        /*
+         * `false`, not the channel's own `enabled` flag.
+         *
+         * The owner's pause preference is deliberately left untouched in the row —
+         * it is theirs and it means nothing right now — but the running session
+         * must go regardless of what it says. Passing `enabled` here would keep a
+         * session alive for a channel that has just been torn down, and
+         * `applyChannelEnabled` would happily rebuild it.
+         *
+         * Removing the session also drops this broadcaster from the transport's
+         * desired subscription set, so the periodic reconcile pass unsubscribes at
+         * Twitch on its own. That is why there is no unsubscribe call here: the
+         * subscription model converges rather than being commanded, and a direct
+         * call would be a second source of truth for the same thing.
+         */
+        await options.applyChannelEnabled?.(channel.id, false);
+
+        const after = await options.channels.findById(channel.id);
+
+        res.status(200).json(apiSuccess({
+            // Read back from the row rather than assumed, exactly as the switch
+            // does: the response is where the outcome is reported, not hoped for.
+            enabled: after?.enabled ?? channel.enabled,
+            status: after?.status ?? 'disconnected'
+        } satisfies ChannelDisconnectedResponse));
+    }));
+
     // ---- commands ----------------------------------------------------------
 
     router.get('/api/v1/commands', rejectApiKey, validateQuery(paginationSchema), ok(async (req, res) => {
@@ -493,8 +597,24 @@ export function createResourceRouter(options: ResourceOptions): Router {
     }));
 
     router.delete('/api/v1/emotes/:trigger', rejectApiKey, ok(async (req, res) => {
-        const trigger = emoteTriggerSchema.parse(req.params['trigger']);
-        const deleted = await repositories(req.channel!.id).emotes.delete(trigger);
+        /*
+         * `safeParse`, matching the command delete above it.
+         *
+         * `parse` throws, and a throw from inside a route handler lands in the
+         * `internal` catch — so a trigger the schema simply does not like came
+         * back as a 500 saying "Request failed", which tells the client the
+         * server broke when the client sent something invalid. The envelope is
+         * the whole contract for how the app places a message: `bad_request` goes
+         * beside the field, `internal` becomes a banner. Getting the code wrong
+         * puts the right words in the wrong place.
+         */
+        const parsed = emoteTriggerSchema.safeParse(req.params['trigger']);
+        if (!parsed.success) {
+            res.status(400).json(apiFailure('bad_request', 'invalid emote trigger'));
+            return;
+        }
+
+        const deleted = await repositories(req.channel!.id).emotes.delete(parsed.data);
 
         if (!deleted) {
             res.status(404).json(apiFailure('not_found', 'No such emote'));
@@ -586,14 +706,52 @@ export function createResourceRouter(options: ResourceOptions): Router {
             return;
         }
 
-        // Counted after the removal, so the number on the wire is the queue the
-        // client is about to render. The field was declared with this event and
-        // never sent until now - see the contract's note.
-        options.publish?.(req.channel!.id, {
-            type: 'song_queue.updated',
-            queueLength: (await queue.list()).length
-        });
+        /*
+         * No publish here any more, and its absence is the point.
+         *
+         * This route used to be the ONLY publisher of `song_queue.updated`, which
+         * is exactly why a song added by redemption was never announced: the news
+         * was attached to one caller instead of to the change. `removeHead` now
+         * announces for itself, as `add` does, so this route publishes by
+         * mutating rather than by remembering to.
+         */
         res.status(200).json(apiSuccess(skipped as QueuedSong));
+    }));
+
+    /**
+     * Skips the track playing in Spotify.
+     *
+     * **This is not `DELETE /songs/head`, and the difference is the whole reason
+     * it exists.** That route drops the next *waiting* request; this one advances
+     * the player. The playback monitor hands a track to Spotify and deletes it
+     * from our queue at that instant, so by the time a song is audible it is not
+     * in the queue at all — which is why the app could draw a Skip button beside
+     * the now-playing card and have nothing correct to call.
+     *
+     * Reachable by API key, like the rest of the songs group: "skip this song" is
+     * exactly what a Stream Deck button is for, and it is narrower than the toggle
+     * a key can already reach.
+     *
+     * Answers 204 rather than the new track. Spotify's player does not advance
+     * synchronously, so reading it back here would usually return the track we
+     * just skipped and tell the client something actively false. The client
+     * re-reads instead.
+     */
+    router.post('/api/v1/songs/skip', ok(async (req, res) => {
+        const surface = options.spotify?.(req.channel!.id) ?? null;
+        if (!surface) {
+            res.status(404).json(apiFailure('not_found', 'No Spotify account is connected'));
+            return;
+        }
+
+        if (!await surface.skipPlayingTrack()) {
+            // Nothing playing is not a fault. A Stream Deck press against a
+            // silent player should say so, not report a broken bot.
+            res.status(404).json(apiFailure('not_found', 'Nothing is playing to skip'));
+            return;
+        }
+
+        res.status(204).end();
     }));
 
     /**

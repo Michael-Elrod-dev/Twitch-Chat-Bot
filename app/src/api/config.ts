@@ -24,5 +24,31 @@ export const API_BASE_URL: string =
  */
 export const APP_RETURN_TO = 'almosthadai://auth';
 
-/** The app's own version, shown bottom-centre on the auth screens. */
-export const APP_VERSION = 'v0.1.0';
+/**
+ * The app's own version — the auth screens' bottom line and the account
+ * screen's `Version …` row.
+ *
+ * `__APP_VERSION__` is defined by the Vite config from `package.json`, so this
+ * cannot disagree with the build it ships in. It used to be a hand-typed
+ * `'v0.1.0'`, which is the sort of string that survives every release after the
+ * one it was written for — and a version the app reports wrongly is worse than
+ * none, because a bug report would name a build that never existed.
+ *
+ * The fallback covers a consumer that has not run through Vite's `define`, which
+ * is nothing we ship but is exactly what a bare `tsc` or a stray test runner is.
+ */
+declare const __APP_VERSION__: string | undefined;
+
+/** `0.1.0` — the bare number, for anywhere the word "Version" precedes it. */
+export const APP_VERSION_NUMBER: string =
+    typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0-dev';
+
+/**
+ * `v0.1.0` — the prefixed form the auth screens print on their own.
+ *
+ * Two exports rather than a `replace(/^v/, '')` at the one call site that does
+ * not want the letter: the account row reads "Version 0.1.0", and "Version
+ * v0.1.0" is the kind of thing that ships because nobody read the rendered
+ * string. Derived from the same constant, so they cannot disagree.
+ */
+export const APP_VERSION = `v${APP_VERSION_NUMBER}`;

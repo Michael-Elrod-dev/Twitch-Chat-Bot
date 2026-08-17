@@ -12,9 +12,24 @@ export interface ChannelSummary {
     login: string;
     displayName: string | null;
     /**
-     * What the world did to this channel. `needs_reauth` is Twitch withdrawing
-     * consent; `suspended`/`disconnected` are administrative. None of these are
-     * things the broadcaster chose from the app — see `enabled`.
+     * Whether this channel is connected at all, and why not when it is not.
+     *
+     * `needs_reauth` is Twitch withdrawing consent; `suspended` is
+     * administrative. `disconnected` is the one the broadcaster can reach
+     * themselves — the danger zone's "Disconnect this channel" — and it is
+     * deliberately NOT the same thing as `enabled: false`:
+     *
+     * - `enabled: false` is a pause. The header switch put it there, the header
+     *   switch takes it back, nothing was torn down.
+     * - `disconnected` is a teardown. The bot leaves, its three managed rewards
+     *   are removed at Twitch, and coming back means the whole channel-consent
+     *   flow again. Recording that as a paused switch would offer a one-click
+     *   undo for something one click cannot undo.
+     *
+     * So the two fields still answer different questions, and this one still is
+     * not derived from the other. What changed is only that the broadcaster has a
+     * door into one of these values; being able to choose a state does not make
+     * it the same state as the pause.
      */
     status: 'active' | 'suspended' | 'disconnected' | 'needs_reauth';
     /**
@@ -42,6 +57,24 @@ export type SetChannelEnabledRequest = z.infer<typeof setChannelEnabledSchema>;
  * asserted rather than assumed.
  */
 export interface ChannelEnabledResponse {
+    enabled: boolean;
+    status: ChannelSummary['status'];
+}
+
+/**
+ * What the danger zone's Disconnect leaves behind.
+ *
+ * The same two fields, from the same row, for the same reason — the app's header
+ * reads both and must not infer either. It is a separate type only so the name
+ * says which action produced it; a shared alias would read as if disconnecting
+ * and pausing were the same operation with a different verb.
+ *
+ * `contentKept` is not a field here on purpose. Commands, emotes and quotes
+ * surviving a disconnect is a promise the danger card makes in words, and a
+ * boolean echoing it back would be the server agreeing with itself — the thing
+ * that proves it is the test that reads the rows afterwards.
+ */
+export interface ChannelDisconnectedResponse {
     enabled: boolean;
     status: ChannelSummary['status'];
 }
@@ -140,10 +173,26 @@ export const updateSettingsSchema = z
          * Naming the playlist. Explicit null clears the name, which also clears
          * the id the server resolved for it — a name and the playlist it points
          * at cannot be allowed to drift apart.
+         *
+         * The messages are here rather than in the app for the same reason the
+         * rules are: the settings form runs this schema to validate the field, so
+         * a message written here is the one the streamer reads whether the check
+         * happened in the client or came back in the server's 400.
          */
-        requestsPlaylistName: z.string().trim().min(1).max(100).nullable().optional(),
+        requestsPlaylistName: z
+            .string()
+            .trim()
+            .min(1, 'Give the playlist a name')
+            .max(100, 'That name is too long for a playlist')
+            .nullable()
+            .optional(),
         /** Explicit null clears it; omitted leaves it alone. */
-        discordWebhookUrl: z.string().url().max(500).nullable().optional()
+        discordWebhookUrl: z
+            .string()
+            .url('That is not a webhook URL')
+            .max(500, 'That URL is too long')
+            .nullable()
+            .optional()
     })
     // An empty PATCH is almost always a client bug, and silently succeeding
     // would hide it.
@@ -438,6 +487,15 @@ export interface CreatedApiKey extends ApiKeySummary {
 }
 
 export const createApiKeySchema = z.object({
-    name: z.string().trim().min(1).max(64)
+    /**
+     * What the streamer calls this key — "Stream Deck", "laptop". The only thing
+     * that will identify it in the table afterwards, since the key itself is
+     * never shown again, so an unnamed one would be unrevokable in practice.
+     */
+    name: z
+        .string()
+        .trim()
+        .min(1, 'Give the key a name so you can tell it apart later')
+        .max(64, 'That name is too long')
 });
 export type CreateApiKeyRequest = z.infer<typeof createApiKeySchema>;

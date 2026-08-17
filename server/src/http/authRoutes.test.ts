@@ -184,6 +184,8 @@ function buildHarness(overrides: {
         analytics: () => ({}) as never,
         dashboard: () => ({}) as never,
         songs: () => ({}) as never,
+        // No disconnect in this suite; the release has nothing to let go of.
+        releaseManagedRewards: async () => undefined,
         // No session in this suite; the reload has nothing to tell.
         reloadChannelContent: async () => undefined
     }));

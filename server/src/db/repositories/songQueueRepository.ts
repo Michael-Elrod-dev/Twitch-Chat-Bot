@@ -1,6 +1,7 @@
 import { and, asc, eq, sql as raw } from 'drizzle-orm';
 import { songQueue, viewers, channels } from '../schema/index.js';
 import { ChannelScopedRepository } from './types.js';
+import type { Database } from '../client.js';
 
 export interface QueuedSongRecord {
     id: string;
@@ -12,14 +13,64 @@ export interface QueuedSongRecord {
 }
 
 /**
+ * Told that this channel's queue changed, with the length it changed to.
+ *
+ * Synchronous and returning nothing on purpose: publishing to the live bus must
+ * not be able to fail a redemption or a skip. A viewer who spent points has
+ * bought a queued song, not a delivered WebSocket frame.
+ */
+export type QueueChangedListener = (queueLength: number) => void;
+
+/**
  * The song queue, as the API sees it.
  *
- * Read and skip only. Adding a song is the redemption path's job and arrives
- * with P1-WP4.2 — the API deliberately does not offer a way to enqueue, because
- * a track that entered without a redemption would have no channel points behind
- * it and nothing to refund if it were skipped.
+ * Read and skip only. Adding a song is the redemption path's job — the API
+ * deliberately does not offer a way to enqueue, because a track that entered
+ * without a redemption would have no channel points behind it and nothing to
+ * refund if it were skipped.
+ *
+ * **Every mutation notifies, as part of the write.** This is the same
+ * construction the settings cache uses, applied to the same class of bug and for
+ * the same reason: the queue changed and nobody was told.
+ *
+ * The defect that forced it is worth keeping written down. `song_queue.updated`
+ * had exactly ONE publisher — the HTTP skip route — so a song added by
+ * redemption and a song handed to Spotify by the playback monitor both changed
+ * the queue in silence. Production timeline from the owner's own test: the row
+ * was written at `…456228` and handed off at `…577560`, so it sat in the table
+ * for **121 seconds** while the app, which had subscribed correctly and was
+ * waiting, was never told it existed. The owner reported the queue as never
+ * appearing, and they were right.
+ *
+ * Making the listener a REQUIRED constructor argument is what stops that
+ * recurring. An optional one, or a publish call beside each mutation, leaves
+ * "someone adds a third way to change the queue and forgets" permanently
+ * available — which is precisely what happened. Now the queue cannot be mutated
+ * by anything that has not said where the news goes.
  */
 export class SongQueueRepository extends ChannelScopedRepository {
+    private readonly onChanged: QueueChangedListener;
+
+    constructor(db: Database, channelId: string, onChanged: QueueChangedListener) {
+        super(db, channelId);
+        this.onChanged = onChanged;
+    }
+
+    /**
+     * Announces the queue's new length.
+     *
+     * Never throws into its caller: a listener that fails is a delivery problem,
+     * and a redemption that already wrote its row must still report success to
+     * the viewer who paid for it.
+     */
+    private async announce(): Promise<void> {
+        try {
+            this.onChanged(await this.count());
+        } catch {
+            /* A broken listener cannot un-queue a song. */
+        }
+    }
+
     async list(): Promise<QueuedSongRecord[]> {
         const rows = await this.db
             .select({
@@ -101,6 +152,10 @@ export class SongQueueRepository extends ChannelScopedRepository {
                 requestedByTwitchUserId: requestedBy
             });
         });
+
+        // After the transaction commits, so the length announced is one a reader
+        // would actually see.
+        await this.announce();
     }
 
     /** @returns whether this track is already queued for this channel. */
@@ -135,6 +190,9 @@ export class SongQueueRepository extends ChannelScopedRepository {
             .where(eq(songQueue.id, head.id))
             .returning({ id: songQueue.id });
 
-        return removed.length > 0 ? head : null;
+        if (removed.length === 0) return null;
+
+        await this.announce();
+        return head;
     }
 }
