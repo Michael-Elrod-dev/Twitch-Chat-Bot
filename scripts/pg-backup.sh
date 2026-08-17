@@ -12,9 +12,9 @@
 # cannot answer "the numbers looked wrong on Tuesday", which for a product whose
 # value is multi-year history is the question that actually gets asked.
 #
-#   hourly    newest MAX_BACKUPS (24)   the recent-mistake window
-#   daily     newest DAILY_KEEP (90)    the noticed-it-later window
-#   monthly   never rotated             the year-scale record
+#   hourly    newest MAX_BACKUPS (default 10)   the recent-mistake window
+#   daily     newest DAILY_KEEP (default 90)    the noticed-it-later window
+#   monthly   never rotated                     the year-scale record
 #
 # Promotion, not a second dump: the same verified artifact is copied server-side
 # into the daily and monthly prefixes, so a tier can never hold a dump that was
