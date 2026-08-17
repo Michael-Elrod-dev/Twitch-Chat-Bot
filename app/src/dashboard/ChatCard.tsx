@@ -63,8 +63,6 @@ export interface ChatCardProps {
     messages: LiveChatMessage[];
     /** The card header's dot and meta follow the connection, not the channel. */
     connection: 'open' | 'reconnecting' | 'down';
-    /** So the broadcaster's own lines can be told apart. Lowercase login. */
-    broadcasterLogin: string | null;
     /** The copy shown when there is nothing to show. */
     emptyCopy: string;
 }
@@ -72,7 +70,6 @@ export interface ChatCardProps {
 export function ChatCard({
     messages,
     connection,
-    broadcasterLogin,
     emptyCopy
 }: ChatCardProps): React.JSX.Element {
     /*
@@ -123,8 +120,6 @@ export function ChatCard({
                         <ol className="chat-feed__list">
                             {ordered.map((message, index) => {
                             const chip = chipFor(message.outcome);
-                            const isBroadcaster = broadcasterLogin !== null
-                                && message.chatter.login.toLowerCase() === broadcasterLogin;
 
                             return (
                                 <li
@@ -137,9 +132,7 @@ export function ChatCard({
                                     className={`chat-row${message.fromBot ? ' chat-row--bot' : ''}`}
                                 >
                                     <span className="chat-row__time">{formatTime(message.at)}</span>
-                                    <span
-                                        className={`chat-row__name${isBroadcaster ? ' chat-row__name--broadcaster' : ''}`}
-                                    >
+                                    <span className={`chat-row__name chat-row__name--${message.chatter.role}`}>
                                         {message.chatter.displayName || message.chatter.login}
                                     </span>
                                     <span className="chat-row__text">{message.text}</span>

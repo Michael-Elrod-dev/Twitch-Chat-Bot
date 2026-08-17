@@ -6,7 +6,7 @@ import type { SettingsService } from '../domain/settings.js';
 import type { ChannelRoleRepository } from '../db/repositories/channelRoleRepository.js';
 import type { AiService } from '../services/aiService.js';
 import type { AnalyticsSink, InteractionType } from '../services/analytics.js';
-import type { ChatterRoles } from '../domain/permissions.js';
+import { chatRoleOf, type ChatterRoles } from '../domain/permissions.js';
 import type { EventBus } from '../live/eventBus.js';
 import type { ChatHistoryRepository } from '../db/repositories/chatHistoryRepository.js';
 import { NULL_EVENT_BUS } from '../live/eventBus.js';
@@ -256,7 +256,19 @@ export class ChatPipeline {
             type: 'chat.message',
             channelId: o.channelId,
             at: new Date().toISOString(),
-            chatter: { login: event.chatter.login, displayName: event.chatter.displayName },
+            chatter: {
+                login: event.chatter.login,
+                displayName: event.chatter.displayName,
+                // Read off the same event flags the permission check uses, via
+                // the same precedence function — so the feed cannot disagree
+                // with what the pipeline actually let this person do.
+                role: chatRoleOf({
+                    isModerator: event.chatter.isModerator,
+                    isVip: event.chatter.isVip,
+                    isSubscriber: event.chatter.isSubscriber,
+                    isBroadcaster: event.chatter.isBroadcaster
+                })
+            },
             text: event.text,
             outcome: outcome.action,
             // Taken from the reason the pipeline actually recorded, not

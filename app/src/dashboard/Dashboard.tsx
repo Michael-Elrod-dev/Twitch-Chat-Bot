@@ -120,7 +120,6 @@ export function Dashboard({
                 <ChatCard
                     messages={reachable ? messages : []}
                     connection={connection === 'open' ? 'open' : connection === 'reconnecting' ? 'reconnecting' : 'down'}
-                    broadcasterLogin={channel?.login.toLowerCase() ?? null}
                     emptyCopy={chatEmpty}
                 />
                 <SongQueueCard

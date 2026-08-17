@@ -48,7 +48,7 @@ const chat = (over: Partial<LiveChatMessage> = {}): LiveChatMessage => ({
     type: 'chat.message',
     channelId: 'c1',
     at: '2026-08-16T20:14:00.000Z',
-    chatter: { login: 'viewer', displayName: 'Viewer' },
+    chatter: { login: 'viewer', displayName: 'Viewer', role: 'viewer' },
     text: 'hello',
     outcome: 'none',
     fromBot: false,
@@ -396,16 +396,16 @@ describe('the chat feed', () => {
         expect(rows[0]?.className).not.toContain('chat-row--bot');
     });
 
-    it('colours the broadcaster own name apart from everyone else', () => {
+    it('colours each role from the event, including the moderator green 9a could not do', () => {
         renderDashboard({
             messages: [
-                chat({ chatter: { login: 'streamer', displayName: 'Streamer' } }),
-                chat({ chatter: { login: 'someone', displayName: 'Someone' } })
+                chat({ chatter: { login: 'streamer', displayName: 'Streamer', role: 'broadcaster' } }),
+                chat({ chatter: { login: 'someone', displayName: 'Someone', role: 'viewer' } })
             ]
         });
 
         expect(screen.getByText('Streamer').className).toContain('chat-row__name--broadcaster');
-        expect(screen.getByText('Someone').className).not.toContain('chat-row__name--broadcaster');
+        expect(screen.getByText('Someone').className).toContain('chat-row__name--viewer');
     });
 
     it('reads oldest at the top and newest at the bottom', () => {
@@ -435,7 +435,6 @@ describe('the chat feed', () => {
             <ChatCard
                 messages={[chat({ text: 'first' })]}
                 connection="open"
-                broadcasterLogin="streamer"
                 emptyCopy="empty"
             />
         );
@@ -449,12 +448,32 @@ describe('the chat feed', () => {
             <ChatCard
                 messages={[chat({ text: 'second' }), chat({ text: 'first' })]}
                 connection="open"
-                broadcasterLogin="streamer"
                 emptyCopy="empty"
             />
         );
 
         expect(feed.scrollTop).toBe(900);
+    });
+
+    it('renders a moderator green - the colouring 9a shipped unable to do', () => {
+        /*
+         * The rider's whole purpose. Until `role` rode on the event the feed
+         * could only compare a login against the channel's, which identifies the
+         * broadcaster and nobody else; every moderator rendered as an ordinary
+         * viewer, and no test could have caught it because the information was
+         * not on the wire to get wrong.
+         */
+        renderDashboard({
+            messages: [
+                chat({ chatter: { login: 'modperson', displayName: 'ModPerson', role: 'moderator' } }),
+                chat({ chatter: { login: 'vipperson', displayName: 'VipPerson', role: 'vip' } })
+            ]
+        });
+
+        expect(screen.getByText('ModPerson').className).toContain('chat-row__name--moderator');
+        // VIPs share the body colour with ordinary viewers, per the handoff.
+        expect(screen.getByText('VipPerson').className).toContain('chat-row__name--vip');
+        expect(screen.getByText('VipPerson').className).not.toContain('--moderator');
     });
 
     it('keeps the newest line and evicts the oldest at the cap', () => {

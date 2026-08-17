@@ -1016,8 +1016,25 @@ button {
     color: var(--color-text-body);
 }
 
+/*
+ * Name colour by role, straight from the event.
+ *
+ * Derived server-side from the same flags the permission check reads, rather
+ * than by matching the login against the channel's — which was all 9a could do
+ * without a role on the wire, and which could never have coloured a moderator.
+ */
 .chat-row__name--broadcaster {
     color: var(--color-accent-hover);
+}
+
+.chat-row__name--moderator {
+    color: var(--color-success-text);
+}
+
+/* VIPs and ordinary viewers share the body colour, per the handoff. */
+.chat-row__name--vip,
+.chat-row__name--viewer {
+    color: var(--color-text-body);
 }
 
 .chat-row__text {
@@ -1161,4 +1178,551 @@ button {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+/* ---- content pages (commands, emotes, quotes) -------------------------- */
+
+.content-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-section-gap);
+    height: 100%;
+    min-height: 0;
+}
+
+.content-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.content-header__spacer {
+    flex: 1;
+}
+
+.content-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: -.01em;
+    color: var(--color-text-primary);
+}
+
+.content-meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+
+.search {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 230px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-control);
+    background: var(--color-card-surface);
+    color: var(--color-text-faint);
+}
+
+.search__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text-primary);
+    font: inherit;
+    outline: none;
+}
+
+.search__input::placeholder {
+    color: var(--color-text-faint);
+}
+
+/* ---- chips ------------------------------------------------------------- */
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-chip-gap);
+}
+
+.chip-row--centred {
+    justify-content: center;
+}
+
+.filter-chip {
+    padding: 6px 13px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: none;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: 12.5px;
+}
+
+.filter-chip--on {
+    background: var(--color-border-muted);
+    color: var(--color-text-primary);
+    font-weight: 600;
+}
+
+/* Selected = clay tint, clay border, clay text. */
+.select-chip {
+    padding: 6px 13px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-pill);
+    background: none;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: 12.5px;
+}
+
+.select-chip--on {
+    border-color: var(--color-accent-border);
+    background: var(--color-accent-tint);
+    color: var(--color-accent-hover);
+    font-weight: 600;
+}
+
+.suggestion-chip {
+    padding: 6px 13px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+/* ---- list card --------------------------------------------------------- */
+
+.list-card {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.list-grid {
+    display: grid;
+    align-items: center;
+    gap: 16px;
+    padding: 13px 18px;
+}
+
+.list-grid--commands {
+    grid-template-columns: 190px 1fr 130px 96px;
+}
+
+.list-grid--emotes {
+    grid-template-columns: 280px 1fr 60px;
+}
+
+.list-grid__head {
+    border-bottom: 1px solid var(--color-hairline);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.list-row {
+    border-bottom: 1px solid var(--color-row-divider);
+}
+
+.list-row:last-of-type {
+    border-bottom: 0;
+}
+
+.list-row:hover {
+    background: rgba(240, 235, 225, .025);
+}
+
+/* The composer sits IN the grid rather than over it, on its own clay wash. */
+.list-row--composer {
+    background: rgba(200, 102, 63, .045);
+}
+
+.list-row__name {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+/* A built-in's name is quieter — it is not something you wrote. */
+.list-row__name--builtin {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-text-body);
+}
+
+.list-row__reply,
+.list-row__behaviour {
+    min-width: 0;
+    font-size: 13px;
+    /* Truncated rather than wrapped: the row is a scannable index, and the full
+       text is one click away in the editor. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.list-row__reply {
+    color: var(--color-text-body);
+}
+
+/* Describes behaviour rather than quoting text, so it reads as meta. */
+.list-row__behaviour {
+    color: var(--color-text-tertiary);
+}
+
+.list-row__who {
+    font-size: 13px;
+    color: var(--color-text-body);
+}
+
+.list-row__who--mod {
+    color: var(--color-success-text);
+}
+
+.list-row__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    color: var(--color-text-secondary);
+}
+
+.list-row__actions button {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+}
+
+/* Revealed on hover, per the handoff — the row stays quiet until wanted. */
+.list-row__actions--hover {
+    opacity: 0;
+}
+
+.list-row:hover .list-row__actions--hover,
+.list-row__actions--hover:focus-within {
+    opacity: 1;
+}
+
+/* A lock, not a disabled control: nothing is forbidden, it is simply not
+   that kind of command. */
+.list-row--builtin .list-row__actions {
+    color: var(--color-disabled);
+}
+
+.list-row__error {
+    margin: 0;
+    padding: 0 18px 12px;
+    font-size: 12.5px;
+    color: var(--color-accent-hover);
+}
+
+/*
+ * `rgba(240,235,225,.07)` per the handoff — one step quieter than the active
+ * filter chip's `.09`, which is the difference between "this is selected" and
+ * "this is a label". The token is named for structural hairlines because that
+ * is where the value first appeared; reaching for it here beats minting a
+ * second token with the same number.
+ */
+.chip--builtin {
+    background: var(--color-hairline-structural);
+    color: var(--color-text-secondary);
+}
+
+.list-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 18px;
+    border-top: 1px solid var(--color-hairline);
+}
+
+.list-footer__count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faint);
+}
+
+.list-footer__pager {
+    display: flex;
+    gap: 12px;
+    color: var(--color-text-secondary);
+}
+
+.list-footer__pager button {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+}
+
+.list-footer__pager button:disabled {
+    color: var(--color-disabled);
+    cursor: default;
+}
+
+/* ---- empty state (4d) --------------------------------------------------- */
+
+.empty-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 52px 40px;
+    text-align: center;
+}
+
+.empty-card__headline {
+    margin: 0;
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1.3;
+    letter-spacing: -.015em;
+    color: var(--color-text-primary);
+}
+
+.empty-card__copy {
+    max-width: 420px;
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    text-wrap: pretty;
+    color: var(--color-text-secondary);
+}
+
+.builtin-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 18px;
+}
+
+.builtin-chip {
+    padding: 6px 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-chip);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+/* ---- fields ------------------------------------------------------------ */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.field__label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.field__label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.field__counter {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faint);
+}
+
+.field__input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-chip);
+    background: var(--color-inset-surface);
+    color: var(--color-text-primary);
+    font: inherit;
+    outline: none;
+}
+
+.field__input:focus {
+    border-color: var(--color-border-strong);
+}
+
+.field__input--mono {
+    font-family: var(--font-mono);
+}
+
+/* The composer's trigger and the editor's name: clay-bordered insets. */
+.field__input--clay {
+    border-color: var(--color-accent-border);
+}
+
+.field__input--invalid {
+    border-color: var(--color-accent-border);
+}
+
+.field__input:disabled {
+    color: var(--color-text-tertiary);
+}
+
+.field__textarea {
+    min-height: 64px;
+    resize: vertical;
+}
+
+.field__hint {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+
+/* Clay doubles as the warning colour — there is no separate error red. */
+.field__error {
+    font-size: 12px;
+    color: var(--color-accent-hover);
+}
+
+/*
+ * Rate limiting is not an error state.
+ *
+ * Being asked to wait a few seconds is the system working; dressing it in the
+ * warning colour would teach the owner their bot is broken when it is busy.
+ */
+.inline-notice {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--color-text-secondary);
+}
+
+/* ---- modal ------------------------------------------------------------- */
+
+.modal-scrim {
+    position: absolute;
+    inset: var(--space-title-bar-height) 0 0 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-modal-scrim);
+}
+
+.modal {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 560px;
+    max-width: calc(100% - 48px);
+    padding: 26px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-modal);
+    background: var(--color-card-surface);
+}
+
+.modal__title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--color-text-primary);
+}
+
+.modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.banner__dismiss {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text-secondary);
+}
+
+.button--small {
+    padding: 7px 12px;
+}
+
+/* ---- quotes ------------------------------------------------------------ */
+
+.quote-composer {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+}
+
+.quote-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    align-content: start;
+    gap: var(--space-grid-gap);
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.quote-card {
+    flex-direction: row;
+    gap: 14px;
+    padding: 16px 18px;
+}
+
+/* The Random pick, shown by lifting its border rather than moving the page. */
+.quote-card--highlighted {
+    border-color: var(--color-accent-border);
+}
+
+.quote-card__number {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-faint);
+}
+
+.quote-card__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.quote-card__text {
+    font-size: 14px;
+    line-height: 1.5;
+    text-wrap: pretty;
+    color: var(--color-text-primary);
+}
+
+.quote-card__author {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+
+.quote-card__delete {
+    flex: none;
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-disabled);
+}
+
+/* ---- footnote ---------------------------------------------------------- */
+
+.footnote {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--color-text-tertiary);
 }

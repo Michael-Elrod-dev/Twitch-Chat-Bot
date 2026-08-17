@@ -23,6 +23,9 @@ import { IconRail, type RailSection } from './shell/IconRail.js';
 import { ChannelHeader } from './shell/ChannelHeader.js';
 import { formatUptime } from './shell/channelStatus.js';
 import { Dashboard } from './dashboard/Dashboard.js';
+import { Commands } from './content/Commands.js';
+import { Emotes } from './content/Emotes.js';
+import { Quotes } from './content/Quotes.js';
 import { appendChatMessage } from './dashboard/ChatCard.js';
 import { SignIn } from './screens/SignIn.js';
 import { Waiting } from './screens/Waiting.js';
@@ -283,8 +286,11 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                                     onRetry={() => { void loadDashboard(); }}
                                 />
                             )
-                            /* 9b and 9c fill the rest in. */
-                            : <p style={{ color: 'var(--color-text-tertiary)' }}>{section}</p>}
+                            : section === 'commands' ? <Commands storage={sessionStorage} />
+                                : section === 'emotes' ? <Emotes storage={sessionStorage} />
+                                    : section === 'quotes' ? <Quotes storage={sessionStorage} />
+                                        /* 9c fills the rest in. */
+                                        : <p style={{ color: 'var(--color-text-tertiary)' }}>{section}</p>}
                     </main>
                 </div>
             </div>

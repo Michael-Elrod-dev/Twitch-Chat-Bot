@@ -1,3 +1,4 @@
+import type { ChatRole } from '@almosthadai/shared';
 import type { ChannelRoleRecord } from '../db/repositories/channelRoleRepository.js';
 
 export const USER_LEVELS = ['everyone', 'vip', 'mod', 'broadcaster'] as const;
@@ -40,6 +41,24 @@ export function rankOf(roles: ChatterRoles): number {
     if (roles.isModerator) return RANK.mod;
     if (roles.isVip) return RANK.vip;
     return RANK.everyone;
+}
+
+/**
+ * The same precedence as `rankOf`, named for the realtime feed.
+ *
+ * Directly beneath `rankOf` on purpose: these two must agree about who outranks
+ * whom, and the cheapest way to keep them agreeing is for a reader changing one
+ * to have the other on screen. A viewer the pipeline treats as a moderator must
+ * never render as an ordinary viewer, and vice versa.
+ *
+ * `viewer` rather than `everyone`: this says what someone IS, where `UserLevel`
+ * says what a command REQUIRES, and `everyone` is not a thing anybody is.
+ */
+export function chatRoleOf(roles: ChatterRoles): ChatRole {
+    if (roles.isBroadcaster) return 'broadcaster';
+    if (roles.isModerator) return 'moderator';
+    if (roles.isVip) return 'vip';
+    return 'viewer';
 }
 
 export function isUserLevel(value: string): value is UserLevel {

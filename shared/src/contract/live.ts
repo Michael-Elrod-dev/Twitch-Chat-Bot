@@ -11,11 +11,29 @@
  * assertable from the client side rather than invisible.
  */
 
+/**
+ * What a chatter *is* in this channel, for the feed's name colouring.
+ *
+ * Deliberately NOT `UserLevel`. That type answers "who is allowed to run this
+ * command" and includes `everyone`, which is a threshold rather than anything a
+ * person holds; this answers "what is this person", where the bottom of the
+ * scale is an ordinary viewer. They order the same way and mean different
+ * things, so they are kept apart rather than unified into a type that would be
+ * wrong half the time it was read.
+ */
+export type ChatRole = 'broadcaster' | 'moderator' | 'vip' | 'viewer';
+
 export interface LiveChatMessage {
     type: 'chat.message';
     channelId: string;
     at: string;
-    chatter: { login: string; displayName: string };
+    /**
+     * `role` is the highest tier this chatter holds, so the feed can colour the
+     * broadcaster clay and moderators sage. It is exposure of a decision the
+     * pipeline already makes per message, not a second derivation — the
+     * permission check and this read the same role flags off the same event.
+     */
+    chatter: { login: string; displayName: string; role: ChatRole };
     text: string;
     /**
      * What the pipeline decided, so the UI can show why the bot did or did not

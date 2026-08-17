@@ -193,6 +193,100 @@ describeDb('realtime feed', () => {
         await transport.drain();
     };
 
+    /**
+     * The chatter's role, all the way from Twitch's badges to the wire.
+     *
+     * End-to-end rather than a unit test on the mapping, because the value of
+     * this field is that it survives the whole chain: badges are parsed into
+     * role flags, the flags decide permissions, and the SAME flags produce the
+     * role the feed colours by. A test that called `chatRoleOf` directly would
+     * prove the function and not the thing that was missing.
+     */
+    describe('the chatter role', () => {
+        /** Twitch's real badge shape; `info` is empty for these sets. */
+        const badge = (setId: string): { set_id: string; id: string; info: string } =>
+            ({ set_id: setId, id: '1', info: '' });
+
+        const deliverAs = async (
+            broadcasterId: string,
+            text: string,
+            badges: { set_id: string; id: string; info: string }[],
+            chatterUserId = '55555'
+        ): Promise<void> => {
+            const delivery = chatMessageDelivery(SECRET, {
+                broadcasterUserId: broadcasterId, text, badges, chatterUserId
+            });
+            await request(httpServer).post(EVENTSUB_WEBHOOK_PATH)
+                .set(delivery.headers).send(delivery.body).expect(204);
+            await transport.drain();
+        };
+
+        it('reports a badged moderator as a moderator', async () => {
+            // The case 9a could not colour at all: without this the feed had
+            // only the login to compare, so every mod rendered as a viewer.
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliverAs(alpha.broadcasterId, 'hello all', [badge('moderator')]);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                chatter: { role: 'moderator' }
+            });
+        });
+
+        it('reports an unbadged chatter as a viewer', async () => {
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliverAs(alpha.broadcasterId, 'hello all', []);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                chatter: { role: 'viewer' }
+            });
+        });
+
+        it('reports a VIP as a vip, not as a moderator', async () => {
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliverAs(alpha.broadcasterId, 'hello all', [badge('vip')]);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                chatter: { role: 'vip' }
+            });
+        });
+
+        it('reports the broadcaster from their id, badge or no badge', async () => {
+            /*
+             * A broadcaster's own messages do not reliably carry the badge, so
+             * the normaliser derives it from the id. This asserts the role
+             * follows that derivation rather than the badge list — otherwise
+             * the owner's own lines would render as ordinary viewers in their
+             * own dashboard.
+             */
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliverAs(alpha.broadcasterId, 'hello all', [], alpha.broadcasterId);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                chatter: { role: 'broadcaster' }
+            });
+        });
+
+        it('outranks: a moderator who is also a VIP reads as a moderator', async () => {
+            const client = await connect(alpha.token);
+            await client.waitFor('hello');
+
+            await deliverAs(alpha.broadcasterId, 'hello all',
+                [badge('vip'), badge('moderator')]);
+
+            expect(await client.waitFor('chat.message')).toMatchObject({
+                chatter: { role: 'moderator' }
+            });
+        });
+    });
+
     describe('the end-to-end path', () => {
         it('delivers a real EventSub chat message to a subscribed client', async () => {
             const client = await connect(alpha.token);
