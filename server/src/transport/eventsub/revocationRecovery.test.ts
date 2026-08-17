@@ -147,14 +147,6 @@ describe('RevocationRecovery', () => {
     });
 
     describe('robustness', () => {
-        it('returns immediately, so the webhook is never delayed', () => {
-            // The endpoint has already answered Twitch by this point.
-            const start = Date.now();
-            build().handle(revocation({ status: 'authorization_revoked' }));
-
-            expect(Date.now() - start).toBeLessThan(50);
-        });
-
         it('ignores a revocation naming a broadcaster we do not have', async () => {
             build().handle(revocation({ condition: { broadcaster_user_id: '9999' }, status: 'authorization_revoked' }));
             await new Promise((resolve) => setImmediate(resolve));

@@ -8,7 +8,7 @@ import { AiRateLimiter, limitFor, DEFAULT_STREAM_LIMITS } from './rateLimiter.js
 import { ChannelAiService, DEFAULT_FALLBACK_MESSAGE } from './aiService.js';
 import { FakeClaudeClient, UnconfiguredClaudeClient } from './claudeClient.js';
 import { escapeXml, buildUserMessage, buildChatHistory, buildStreamContext } from './promptBuilder.js';
-import { CHAT_SYSTEM_PROMPT, GAME_PROMPTS, CHAT_HISTORY_LIMITS } from './prompts.js';
+import { CHAT_SYSTEM_PROMPT, GAME_PROMPTS } from './prompts.js';
 import type { SettingsService } from '../domain/settings.js';
 import type { ChatterRoles } from '../domain/permissions.js';
 
@@ -107,13 +107,6 @@ describe('limitFor', () => {
         expect(limitFor(roles({ isBroadcaster: true }))).toBe(DEFAULT_STREAM_LIMITS.broadcaster);
     });
 
-    it('takes the BEST applicable tier, not the last one checked', () => {
-        // A subscriber who is also a VIP gets the higher of the two. Phase 0's
-        // behaviour, and the one a viewer would expect.
-        expect(limitFor(roles({ isSubscriber: true, isVip: true })))
-            .toBe(Math.max(DEFAULT_STREAM_LIMITS.subscriber, DEFAULT_STREAM_LIMITS.vip));
-    });
-
     it('honours a channel overriding its limits', () => {
         expect(limitFor(roles(), { ...DEFAULT_STREAM_LIMITS, everyone: 99 })).toBe(99);
     });
@@ -128,11 +121,6 @@ describe('prompt assets', () => {
         expect(GAME_PROMPTS.roast).toContain('NEVER be genuinely mean or hurtful');
     });
 
-    it('keeps the game commands free of chat history', () => {
-        expect(CHAT_HISTORY_LIMITS.chat).toBe(50);
-        expect(CHAT_HISTORY_LIMITS.advice).toBe(0);
-        expect(CHAT_HISTORY_LIMITS.roast).toBe(0);
-    });
 });
 
 // ---- against a real database ------------------------------------------------

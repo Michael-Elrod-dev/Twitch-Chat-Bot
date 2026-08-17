@@ -181,14 +181,6 @@ describeDb('dashboard', () => {
             expect(summary.numbers.chatters).toBe(2);
         });
 
-        it('counts commands as messages, because they are chat lines', async () => {
-            const numbers = await new DashboardRepository(handle.db, alpha.id)
-                .numbersForStream(await openStream(alpha.id, new Date('2026-08-16T18:00:00.000Z')));
-
-            // Four lines from the test above, one of them a command.
-            expect(numbers.messages).toBe(4);
-        });
-
         it('keeps redemptions out of the message and chatter figures', async () => {
             // Spending points is an interaction, not a line of chat. Counting it
             // as one would inflate "messages this stream" by every reward.

@@ -46,24 +46,20 @@ describe('HelixChatSink', () => {
     });
 
     describe('failures never reach the pipeline', () => {
-        it('swallows a rate limit', async () => {
+        it('swallows every send failure shape', async () => {
             // One channel being unable to speak is not a reason to stop
             // processing its messages, let alone anyone else's.
-            const send = vi.fn<SendFn>(async () => { throw new RateLimitedError('/chat/messages', 5000); });
+            const rows: { shape: string; error: Error }[] = [
+                { shape: 'rate limit', error: new RateLimitedError('/chat/messages', 5000) },
+                { shape: 'unauthorized', error: new HelixError('/chat/messages', 401, 'Invalid OAuth token') },
+                { shape: 'unexpected failure', error: new Error('socket hang up') }
+            ];
 
-            await expect(buildSink(send).send(message)).resolves.toBeUndefined();
-        });
+            for (const row of rows) {
+                const send = vi.fn<SendFn>(async () => { throw row.error; });
 
-        it('swallows an unauthorized send', async () => {
-            const send = vi.fn<SendFn>(async () => { throw new HelixError('/chat/messages', 401, 'Invalid OAuth token'); });
-
-            await expect(buildSink(send).send(message)).resolves.toBeUndefined();
-        });
-
-        it('swallows an unexpected failure', async () => {
-            const send = vi.fn<SendFn>(async () => { throw new Error('socket hang up'); });
-
-            await expect(buildSink(send).send(message)).resolves.toBeUndefined();
+                await expect(buildSink(send).send(message), row.shape).resolves.toBeUndefined();
+            }
         });
     });
 

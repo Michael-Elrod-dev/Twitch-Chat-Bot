@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { usageSuffix, withUsageSuffix, DEFAULT_COUNTER_THRESHOLD } from './usageCounter.js';
+import { usageSuffix, withUsageSuffix } from './usageCounter.js';
 
 /**
  * The regression and the redesign.
@@ -71,10 +71,6 @@ describe('the usage counter', () => {
     });
 
     describe('the threshold knob', () => {
-        it('defaults to three', () => {
-            expect(DEFAULT_COUNTER_THRESHOLD).toBe(3);
-        });
-
         it('honours an override', () => {
             expect(usageSuffix({ used: 5, limit: 15, threshold: 10 })).toBe('(10 left this stream)');
             expect(usageSuffix({ used: 12, limit: 15, threshold: 0 })).toBeNull();

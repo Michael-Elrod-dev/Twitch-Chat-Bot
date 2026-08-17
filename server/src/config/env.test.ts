@@ -68,12 +68,22 @@ describe('loadEnv - accepted configuration', () => {
 });
 
 describe('loadEnv - rejected configuration', () => {
-    it('rejects a missing DATABASE_URL', () => {
-        expect(() => loadEnv({ REDIS_URL: valid.REDIS_URL })).toThrow(ConfigError);
-    });
+    it('rejects each invalid single-variable value', () => {
+        const rows: { name: string; env: Record<string, string> }[] = [
+            { name: 'missing DATABASE_URL', env: { REDIS_URL: valid.REDIS_URL } },
+            { name: 'missing REDIS_URL', env: { DATABASE_URL: valid.DATABASE_URL } },
+            { name: 'PORT 0', env: { ...valid, PORT: '0' } },
+            { name: 'PORT 70000', env: { ...valid, PORT: '70000' } },
+            { name: 'non-integer PORT', env: { ...valid, PORT: '3000.5' } },
+            { name: 'unknown NODE_ENV', env: { ...valid, NODE_ENV: 'staging' } },
+            { name: 'malformed PUBLIC_URL', env: { ...valid, PUBLIC_URL: 'not a url' } },
+            { name: 'short JWT_SECRET', env: { ...valid, JWT_SECRET: 'short' } },
+            { name: 'non-ASCII signing secret', env: { ...valid, TWITCH_EVENTSUB_SECRET: 'sécret-with-accents' } }
+        ];
 
-    it('rejects a missing REDIS_URL', () => {
-        expect(() => loadEnv({ DATABASE_URL: valid.DATABASE_URL })).toThrow(ConfigError);
+        for (const row of rows) {
+            expect(() => loadEnv(row.env), row.name).toThrow(ConfigError);
+        }
     });
 
     it('reports EVERY missing variable at once, not just the first', () => {
@@ -103,23 +113,6 @@ describe('loadEnv - rejected configuration', () => {
             expect(message).toContain('Invalid environment configuration');
             expect(message).toContain('  - DATABASE_URL');
         }
-    });
-
-    it('rejects an out-of-range PORT', () => {
-        expect(() => loadEnv({ ...valid, PORT: '0' })).toThrow(ConfigError);
-        expect(() => loadEnv({ ...valid, PORT: '70000' })).toThrow(ConfigError);
-    });
-
-    it('rejects a non-integer PORT', () => {
-        expect(() => loadEnv({ ...valid, PORT: '3000.5' })).toThrow(ConfigError);
-    });
-
-    it('rejects an unknown NODE_ENV', () => {
-        expect(() => loadEnv({ ...valid, NODE_ENV: 'staging' })).toThrow(ConfigError);
-    });
-
-    it('rejects a malformed PUBLIC_URL', () => {
-        expect(() => loadEnv({ ...valid, PUBLIC_URL: 'not a url' })).toThrow(ConfigError);
     });
 
     it('rejects an empty DATABASE_URL with a useful message', () => {
@@ -255,9 +248,6 @@ describe('loadEnv - live EventSub mode', () => {
         expect(env.EVENTSUB_DRY_RUN).toBe(false);
     });
 
-    it('rejects a JWT secret that is too short to be meaningful', () => {
-        expect(() => loadEnv({ ...valid, JWT_SECRET: 'short' })).toThrow(ConfigError);
-    });
 });
 
 describe('loadEnv - EventSub settings', () => {
@@ -271,10 +261,6 @@ describe('loadEnv - EventSub settings', () => {
         expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'short' })).toThrow(ConfigError);
         expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'x'.repeat(101) })).toThrow(ConfigError);
         expect(loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'x'.repeat(100) }).TWITCH_EVENTSUB_SECRET).toHaveLength(100);
-    });
-
-    it('rejects a non-ASCII secret', () => {
-        expect(() => loadEnv({ ...valid, TWITCH_EVENTSUB_SECRET: 'sécret-with-accents' })).toThrow(ConfigError);
     });
 
     it('defaults the replay window to the ten minutes Twitch documents', () => {
@@ -316,11 +302,6 @@ describe('loadEnv - empty-string variables', () => {
         expect(env.PORT).toBe(3000);
         expect(env.LOG_LEVEL).toBe('info');
         expect(env.NODE_ENV).toBe('development');
-    });
-
-    it('still rejects an empty REQUIRED variable', () => {
-        // Absent and empty are the same thing, and both are still fatal here.
-        expect(() => loadEnv({ ...valid, DATABASE_URL: '' })).toThrow(ConfigError);
     });
 
     it('does not let an empty PUBLIC_URL trip the production https rule', () => {

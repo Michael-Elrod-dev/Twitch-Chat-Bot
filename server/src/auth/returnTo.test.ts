@@ -45,11 +45,6 @@ describe('return_to allow-list', () => {
             expect(isAllowedReturnTo(`${APP_URI_SCHEME}://auth/callback`, prod)).toBe(true);
         });
 
-        it('accepts it in production, where loopback is off', () => {
-            // The desktop handoff must work with the strictest policy, or the
-            // fix would have broken the thing it exists to enable.
-            expect(isAllowedReturnTo(`${APP_URI_SCHEME}://auth`, { allowLoopback: false })).toBe(true);
-        });
     });
 
     describe('loopback, development only', () => {

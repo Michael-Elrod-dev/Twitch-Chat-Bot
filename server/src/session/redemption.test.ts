@@ -45,37 +45,23 @@ const redemption = (overrides: Partial<RedemptionEvent> = {}): RedemptionEvent =
 // ---- the format parser, which decides whether points are kept -------------
 
 describe('parseQuote', () => {
-    it('accepts the documented format', () => {
-        expect(parseQuote('"Something wise" - Someone')).toEqual({
-            text: 'Something wise', author: 'Someone'
-        });
-    });
+    it('accepts the documented and phone-keyboard formats and rejects the rest', () => {
+        // The curly-quote and long-dash rows are deliberate fixtures. A viewer
+        // typing on their phone should not lose points to autocorrect.
+        const rows: { input: string; expected: { text: string; author: string } | null }[] = [
+            { input: '"Something wise" - Someone', expected: { text: 'Something wise', author: 'Someone' } },
+            { input: '“Something wise” — Someone', expected: { text: 'Something wise', author: 'Someone' } },
+            { input: '\'Quoted\' – Person', expected: { text: 'Quoted', author: 'Person' } },
+            { input: '"Just a quote"', expected: null },
+            { input: 'Something wise - Someone', expected: null },
+            { input: '"   " - Someone', expected: null },
+            { input: '"Something" -    ', expected: null },
+            { input: '"Wait - what?" - Someone Else', expected: { text: 'Wait - what?', author: 'Someone Else' } }
+        ];
 
-    it('accepts curly quotes and long dashes from a phone keyboard', () => {
-        // A viewer typing on their phone should not lose points to autocorrect.
-        expect(parseQuote('“Something wise” — Someone')).toEqual({
-            text: 'Something wise', author: 'Someone'
-        });
-        expect(parseQuote('\'Quoted\' – Person')).toEqual({ text: 'Quoted', author: 'Person' });
-    });
-
-    it('rejects input with no author', () => {
-        expect(parseQuote('"Just a quote"')).toBeNull();
-    });
-
-    it('rejects unquoted input', () => {
-        expect(parseQuote('Something wise - Someone')).toBeNull();
-    });
-
-    it('rejects an empty quote or author', () => {
-        expect(parseQuote('"   " - Someone')).toBeNull();
-        expect(parseQuote('"Something" -    ')).toBeNull();
-    });
-
-    it('keeps internal punctuation intact', () => {
-        expect(parseQuote('"Wait - what?" - Someone Else')).toEqual({
-            text: 'Wait - what?', author: 'Someone Else'
-        });
+        for (const row of rows) {
+            expect(parseQuote(row.input), row.input).toEqual(row.expected);
+        }
     });
 });
 

@@ -165,51 +165,40 @@ describe('ChatPipeline', () => {
             { name: '!modonly', responseText: 'secret', handlerName: null, description: null, userLevel: 'mod' }
         ];
 
-        it('blocks a viewer', async () => {
-            const pipeline = build(commands);
-            const outcome = await pipeline.handle(event('!modonly'));
+        it('gates a mod-level command by the chatter role', async () => {
+            const rows: { who: string; roles: Parameters<typeof chatter>[0]; replies: string[] }[] = [
+                { who: 'viewer', roles: {}, replies: [] },
+                { who: 'mod', roles: { isModerator: true }, replies: ['secret'] },
+                { who: 'broadcaster', roles: { isBroadcaster: true }, replies: ['secret'] }
+            ];
 
-            expect(outcome).toMatchObject({ ran: false });
-            expect(sent).toEqual([]);
-        });
+            for (const row of rows) {
+                sent.length = 0;
+                const pipeline = build(commands);
+                const outcome = await pipeline.handle(event('!modonly', { chatter: chatter(row.roles) }));
 
-        it('allows a mod', async () => {
-            const pipeline = build(commands);
-            await pipeline.handle(event('!modonly', { chatter: chatter({ isModerator: true }) }));
-
-            expect(sent).toEqual(['secret']);
-        });
-
-        it('allows the broadcaster', async () => {
-            const pipeline = build(commands);
-            await pipeline.handle(event('!modonly', { chatter: chatter({ isBroadcaster: true }) }));
-
-            expect(sent).toEqual(['secret']);
+                expect(sent, row.who).toEqual(row.replies);
+                if (row.replies.length === 0) expect(outcome, row.who).toMatchObject({ ran: false });
+            }
         });
     });
 
     describe('emotes', () => {
-        it('responds to an exact trigger', async () => {
-            const pipeline = build();
-            const outcome = await pipeline.handle(event('pog'));
+        it('fires on an exact trigger regardless of case and never on a partial match', async () => {
+            const rows: { text: string; action: 'emote' | 'none'; replies: string[] }[] = [
+                { text: 'pog', action: 'emote', replies: ['PogChamp!'] },
+                { text: 'POG', action: 'emote', replies: ['PogChamp!'] },
+                { text: 'that was pog indeed', action: 'none', replies: [] }
+            ];
 
-            expect(outcome).toMatchObject({ action: 'emote' });
-            expect(sent).toEqual(['PogChamp!']);
-        });
+            for (const row of rows) {
+                sent.length = 0;
+                const pipeline = build();
+                const outcome = await pipeline.handle(event(row.text));
 
-        it('is case-insensitive', async () => {
-            const pipeline = build();
-            await pipeline.handle(event('POG'));
-
-            expect(sent).toEqual(['PogChamp!']);
-        });
-
-        it('does not fire on a partial match', async () => {
-            const pipeline = build();
-            const outcome = await pipeline.handle(event('that was pog indeed'));
-
-            expect(outcome).toEqual({ action: 'none' });
-            expect(sent).toEqual([]);
+                expect(outcome, row.text).toMatchObject({ action: row.action });
+                expect(sent, row.text).toEqual(row.replies);
+            }
         });
     });
 

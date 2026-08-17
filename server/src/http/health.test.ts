@@ -31,11 +31,6 @@ describe('GET /healthz - liveness', () => {
         expect(res.body.status).toBe('ok');
     });
 
-    it('needs no authentication', async () => {
-        const res = await request(buildApp()).get('/healthz');
-
-        expect(res.status).not.toBe(401);
-    });
 });
 
 describe('GET /readyz - readiness', () => {

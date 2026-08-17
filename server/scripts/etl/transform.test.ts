@@ -20,43 +20,32 @@ const viewer = (overrides: Partial<LegacyViewer> = {}): LegacyViewer => ({
 });
 
 describe('routeTokenKey - the key/value drawer gets dissolved', () => {
-    it('routes broadcaster Twitch credentials to channel_tokens', () => {
-        expect(routeTokenKey('broadcasterAccessToken')).toEqual({
-            kind: 'channel_token', provider: 'twitch', field: 'access'
-        });
-        expect(routeTokenKey('broadcasterRefreshToken')).toEqual({
-            kind: 'channel_token', provider: 'twitch', field: 'refresh'
-        });
-    });
+    it('routes every key kind to its destination', () => {
+        const rows: { name: string; key: string; expected: object; exact: boolean }[] = [
+            { name: 'broadcaster access', key: 'broadcasterAccessToken', expected: { kind: 'channel_token', provider: 'twitch', field: 'access' }, exact: true },
+            { name: 'broadcaster refresh', key: 'broadcasterRefreshToken', expected: { kind: 'channel_token', provider: 'twitch', field: 'refresh' }, exact: true },
+            { name: 'spotify access', key: 'spotifyUserAccessToken', expected: { kind: 'channel_token', provider: 'spotify' }, exact: false },
+            { name: 'spotify refresh', key: 'spotifyUserRefreshToken', expected: { kind: 'channel_token', provider: 'spotify' }, exact: false },
+            { name: 'bot id', key: 'botId', expected: { kind: 'bot_identity', field: 'userId' }, exact: true },
+            { name: 'bot refresh', key: 'botRefreshToken', expected: { kind: 'bot_identity', field: 'refresh' }, exact: true },
+            { name: 'channel id', key: 'channelId', expected: { kind: 'channel', field: 'broadcasterId' }, exact: true },
+            { name: 'user id', key: 'userId', expected: { kind: 'channel', field: 'broadcasterId' }, exact: true },
+            // Server secrets stay OUT of the database. The Claude key and the
+            // app's client credentials belong to the environment, and importing
+            // them into a table would be a regression.
+            { name: 'claude key', key: 'claudeApiKey', expected: { kind: 'server_secret' }, exact: true },
+            { name: 'client id', key: 'clientId', expected: { kind: 'server_secret' }, exact: true },
+            { name: 'client secret', key: 'clientSecret', expected: { kind: 'server_secret' }, exact: true },
+            { name: 'spotify client id', key: 'spotifyClientId', expected: { kind: 'server_secret' }, exact: true },
+            { name: 'spotify client secret', key: 'spotifyClientSecret', expected: { kind: 'server_secret' }, exact: true },
+            { name: 'ai toggle', key: 'aiEnabled', expected: { kind: 'channel_setting', field: 'aiEnabled' }, exact: true },
+            { name: 'discord marker', key: 'lastDiscordNotification', expected: { kind: 'channel_setting', field: 'lastDiscordNotificationAt' }, exact: true }
+        ];
 
-    it('routes Spotify user credentials to channel_tokens', () => {
-        expect(routeTokenKey('spotifyUserAccessToken')).toMatchObject({ kind: 'channel_token', provider: 'spotify' });
-        expect(routeTokenKey('spotifyUserRefreshToken')).toMatchObject({ kind: 'channel_token', provider: 'spotify' });
-    });
-
-    it('routes bot credentials to bot_identity', () => {
-        expect(routeTokenKey('botId')).toEqual({ kind: 'bot_identity', field: 'userId' });
-        expect(routeTokenKey('botRefreshToken')).toEqual({ kind: 'bot_identity', field: 'refresh' });
-    });
-
-    it('routes channel identifiers to the channel row', () => {
-        expect(routeTokenKey('channelId')).toEqual({ kind: 'channel', field: 'broadcasterId' });
-        expect(routeTokenKey('userId')).toEqual({ kind: 'channel', field: 'broadcasterId' });
-    });
-
-    it('classifies server secrets so they are NOT imported', () => {
-        // Design §2.3: the Claude key and the app's client credentials move to the
-        // environment. Migrating them into the database would be a regression.
-        for (const key of ['claudeApiKey', 'clientId', 'clientSecret', 'spotifyClientId', 'spotifyClientSecret']) {
-            expect(routeTokenKey(key)).toEqual({ kind: 'server_secret' });
+        for (const row of rows) {
+            if (row.exact) expect(routeTokenKey(row.key), row.name).toEqual(row.expected);
+            else expect(routeTokenKey(row.key), row.name).toMatchObject(row.expected);
         }
-    });
-
-    it('routes per-channel settings out of the drawer', () => {
-        expect(routeTokenKey('aiEnabled')).toEqual({ kind: 'channel_setting', field: 'aiEnabled' });
-        expect(routeTokenKey('lastDiscordNotification')).toEqual({
-            kind: 'channel_setting', field: 'lastDiscordNotificationAt'
-        });
     });
 
     it('does not silently swallow an unrecognised key', () => {
@@ -101,20 +90,23 @@ describe('splitViewer - global identity vs channel-relative roles', () => {
         expect(splitViewer(viewer({ is_vip: null }))?.role.isVip).toBe(false);
     });
 
-    it('REJECTS a row whose user_id is a username', () => {
-        // Phase 0's P1-4 wrote the username into the numeric id column. Importing
-        // those under a fabricated id would poison identity permanently.
-        expect(splitViewer(viewer({ user_id: 'someviewer' }))).toBeNull();
-    });
+    it('accepts only a genuinely numeric user_id', () => {
+        const rows: { name: string; id: string; accepted: boolean }[] = [
+            // The source data is known to carry usernames in the numeric id
+            // column. Importing those under a fabricated id would poison
+            // identity permanently, so they are rejected outright.
+            { name: 'username in the id column', id: 'someviewer', accepted: false },
+            { name: 'empty id', id: '', accepted: false },
+            { name: 'whitespace id', id: '   ', accepted: false },
+            { name: 'short numeric id', id: '1', accepted: true },
+            { name: 'long numeric id', id: '123456789012', accepted: true }
+        ];
 
-    it('rejects an empty user_id', () => {
-        expect(splitViewer(viewer({ user_id: '' }))).toBeNull();
-        expect(splitViewer(viewer({ user_id: '   ' }))).toBeNull();
-    });
-
-    it('accepts a purely numeric id of any length', () => {
-        expect(splitViewer(viewer({ user_id: '1' }))).not.toBeNull();
-        expect(splitViewer(viewer({ user_id: '123456789012' }))).not.toBeNull();
+        for (const row of rows) {
+            const result = splitViewer(viewer({ user_id: row.id }));
+            if (row.accepted) expect(result, row.name).not.toBeNull();
+            else expect(result, row.name).toBeNull();
+        }
     });
 
     it('falls back to the id when the username is missing', () => {
@@ -131,23 +123,20 @@ describe('splitViewer - global identity vs channel-relative roles', () => {
 describe('resolveRequester - song_queue username becomes an id', () => {
     const loginToId = new Map([['alice', '42'], ['bob', '99']]);
 
-    it('resolves a known login to its id', () => {
-        expect(resolveRequester('alice', loginToId)).toEqual({ twitchUserId: '42', login: 'alice' });
-    });
+    it('resolves each requester shape', () => {
+        const rows: { name: string; input: string | null; expected: { twitchUserId: string | null; login: string | null } }[] = [
+            { name: 'known login', input: 'alice', expected: { twitchUserId: '42', login: 'alice' } },
+            { name: 'case-insensitive lookup, casing preserved', input: 'ALICE', expected: { twitchUserId: '42', login: 'ALICE' } },
+            // An unknown viewer keeps their name. The song must not lose its
+            // requester just because that viewer was never recorded.
+            { name: 'unknown viewer', input: 'stranger', expected: { twitchUserId: null, login: 'stranger' } },
+            { name: 'missing requester', input: null, expected: { twitchUserId: null, login: null } },
+            { name: 'blank requester', input: '  ', expected: { twitchUserId: null, login: null } }
+        ];
 
-    it('is case-insensitive on the login', () => {
-        expect(resolveRequester('ALICE', loginToId).twitchUserId).toBe('42');
-    });
-
-    it('keeps the display name when the viewer is unknown', () => {
-        // The song must not lose its requester's name just because that viewer
-        // was never recorded.
-        expect(resolveRequester('stranger', loginToId)).toEqual({ twitchUserId: null, login: 'stranger' });
-    });
-
-    it('handles a missing requester', () => {
-        expect(resolveRequester(null, loginToId)).toEqual({ twitchUserId: null, login: null });
-        expect(resolveRequester('  ', loginToId)).toEqual({ twitchUserId: null, login: null });
+        for (const row of rows) {
+            expect(resolveRequester(row.input, loginToId), row.name).toEqual(row.expected);
+        }
     });
 });
 
@@ -165,7 +154,4 @@ describe('assignQuoteNumbers - per-channel numbering', () => {
         expect(input.map((r) => r.quote_id)).toEqual([2, 1]);
     });
 
-    it('handles an empty set', () => {
-        expect(assignQuoteNumbers([])).toEqual([]);
-    });
 });

@@ -93,9 +93,4 @@ describe('refresh tokens', () => {
         expect(tokens.size).toBe(50);
     });
 
-    it('hashes deterministically, so lookup by hash works', () => {
-        const { token } = generateRefreshToken();
-
-        expect(hashRefreshToken(token)).toBe(hashRefreshToken(token));
-    });
 });

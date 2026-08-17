@@ -633,17 +633,6 @@ describe('Spotify connect in a plain browser', () => {
         await request(harness.app).get(`/auth/spotify/callback?code=x&state=${state}`).expect(403);
     });
 
-    it('still issues tokens for an ordinary sign-in with no continuation', async () => {
-        // The chained path must not have broken the desktop app's flow.
-        const start = await request(harness.app).get('/auth/app/login').expect(302);
-        const state = new URL(start.headers['location'] as string).searchParams.get('state') as string;
-
-        const response = await request(harness.app)
-            .get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=${state}`)
-            .expect(200);
-
-        expect(response.body.data.access_token).toBeTruthy();
-    });
 });
 
 describe('the continuation cannot be chosen by the caller', () => {

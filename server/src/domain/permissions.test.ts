@@ -30,29 +30,20 @@ describe('rank ordering: everyone < vip < mod < broadcaster', () => {
 });
 
 describe('hasPermission', () => {
-    it('lets anyone run an everyone command', () => {
-        for (const roles of [viewer, vip, mod, broadcaster]) {
-            expect(hasPermission('everyone', roles)).toBe(true);
+    it('gates every level against every role', () => {
+        const rows: { level: string; viewer: boolean; vip: boolean; mod: boolean; broadcaster: boolean }[] = [
+            { level: 'everyone', viewer: true, vip: true, mod: true, broadcaster: true },
+            { level: 'vip', viewer: false, vip: true, mod: true, broadcaster: true },
+            { level: 'mod', viewer: false, vip: false, mod: true, broadcaster: true },
+            { level: 'broadcaster', viewer: false, vip: false, mod: false, broadcaster: true }
+        ];
+
+        for (const row of rows) {
+            expect(hasPermission(row.level, viewer), `${row.level} for viewer`).toBe(row.viewer);
+            expect(hasPermission(row.level, vip), `${row.level} for vip`).toBe(row.vip);
+            expect(hasPermission(row.level, mod), `${row.level} for mod`).toBe(row.mod);
+            expect(hasPermission(row.level, broadcaster), `${row.level} for broadcaster`).toBe(row.broadcaster);
         }
-    });
-
-    it('gates vip commands at vip and above', () => {
-        expect(hasPermission('vip', viewer)).toBe(false);
-        expect(hasPermission('vip', vip)).toBe(true);
-        expect(hasPermission('vip', mod)).toBe(true);
-        expect(hasPermission('vip', broadcaster)).toBe(true);
-    });
-
-    it('gates mod commands', () => {
-        expect(hasPermission('mod', viewer)).toBe(false);
-        expect(hasPermission('mod', vip)).toBe(false);
-        expect(hasPermission('mod', mod)).toBe(true);
-        expect(hasPermission('mod', broadcaster)).toBe(true);
-    });
-
-    it('gates broadcaster commands against mods too', () => {
-        expect(hasPermission('broadcaster', mod)).toBe(false);
-        expect(hasPermission('broadcaster', broadcaster)).toBe(true);
     });
 
     it('treats an unknown level as everyone - fail OPEN, deliberately', () => {

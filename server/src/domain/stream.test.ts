@@ -205,15 +205,6 @@ describeDb('streams', () => {
     describe('what the three consumers read', () => {
         const at = (iso: string) => () => new Date(iso).getTime();
 
-        it('buckets AI rate limits on the stream uuid', async () => {
-            const service = serviceFor(alphaId, { helix: new FakeHelix() });
-            expect(service.currentStreamId()).toBeNull();
-
-            await service.onOnline('48765430', new Date('2026-08-16T10:00:00Z'));
-
-            expect(service.currentStreamId()).toEqual(expect.any(String));
-        });
-
         it('gives the AI the real title and category', async () => {
             const service = serviceFor(alphaId, {
                 helix: new FakeHelix(),

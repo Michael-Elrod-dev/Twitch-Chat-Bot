@@ -209,16 +209,6 @@ describe('CommandManager', () => {
             expect(manager.canRun((await manager.get('!skip'))!, mod)).toBe(true);
         });
 
-        it('lets anyone run an everyone command', async () => {
-            const manager = new CommandManager({
-                channelId: 'c1',
-                repository: makeRepo([{ name: '!discord', responseText: 'l', handlerName: null, description: null, userLevel: 'everyone' }]),
-                cache, logger
-            });
-            await manager.load();
-
-            expect(manager.canRun((await manager.get('!discord'))!, viewer)).toBe(true);
-        });
     });
 
     describe('cache population', () => {

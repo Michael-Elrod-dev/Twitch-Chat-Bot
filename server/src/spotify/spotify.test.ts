@@ -89,34 +89,23 @@ class FakeSpotify implements SpotifyClient {
 // ---- pure units -------------------------------------------------------------
 
 describe('parseTrackId', () => {
-    it('reads a spotify: URI', () => {
-        expect(parseTrackId('spotify:track:4cOdK2wGLETKBW3PvgPWqT')).toBe('4cOdK2wGLETKBW3PvgPWqT');
-    });
+    it('reads every link shape a viewer pastes and rejects non-track input', () => {
+        const rows: { name: string; input: string; expected: string | null }[] = [
+            { name: 'spotify: URI', input: 'spotify:track:4cOdK2wGLETKBW3PvgPWqT', expected: '4cOdK2wGLETKBW3PvgPWqT' },
+            { name: 'open.spotify.com link', input: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT', expected: '4cOdK2wGLETKBW3PvgPWqT' },
+            // The localized link is what the share button produces. A viewer
+            // outside the US pastes this and it must not be treated as a search.
+            { name: 'localized link', input: 'https://open.spotify.com/intl-de/track/4cOdK2wGLETKBW3PvgPWqT', expected: '4cOdK2wGLETKBW3PvgPWqT' },
+            { name: 'tracking query string', input: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=abc123', expected: '4cOdK2wGLETKBW3PvgPWqT' },
+            // Null is how the handler knows to search rather than look up.
+            { name: 'plain search string', input: 'bohemian rhapsody', expected: null },
+            { name: 'album link', input: 'https://open.spotify.com/album/abc', expected: null },
+            { name: 'playlist URI', input: 'spotify:playlist:abc', expected: null }
+        ];
 
-    it('reads an open.spotify.com link', () => {
-        expect(parseTrackId('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT')).toBe('4cOdK2wGLETKBW3PvgPWqT');
-    });
-
-    it('reads a localised link, which is what the share button produces', () => {
-        // open.spotify.com/intl-de/track/... - a viewer outside the US pastes
-        // this and it must not be treated as a search string.
-        expect(parseTrackId('https://open.spotify.com/intl-de/track/4cOdK2wGLETKBW3PvgPWqT'))
-            .toBe('4cOdK2wGLETKBW3PvgPWqT');
-    });
-
-    it('ignores the tracking query string share links carry', () => {
-        expect(parseTrackId('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=abc123'))
-            .toBe('4cOdK2wGLETKBW3PvgPWqT');
-    });
-
-    it('returns null for a plain search string', () => {
-        // Which is how the handler knows to search rather than look up.
-        expect(parseTrackId('bohemian rhapsody')).toBeNull();
-    });
-
-    it('returns null for a non-track Spotify link', () => {
-        expect(parseTrackId('https://open.spotify.com/album/abc')).toBeNull();
-        expect(parseTrackId('spotify:playlist:abc')).toBeNull();
+        for (const row of rows) {
+            expect(parseTrackId(row.input), row.name).toBe(row.expected);
+        }
     });
 });
 
@@ -409,48 +398,64 @@ describeDb('Spotify integration', () => {
         });
 
         describe('every failure refunds', () => {
-            it('refunds empty input', async () => {
-                expect(await buildHandler(alphaId, new FakeSpotify())(context(alphaId, '  ')))
-                    .toContain('refunded');
-            });
+            it('refunds every failure shape', async () => {
+                const rows: { name: string; run: () => Promise<string | null>; expected: string }[] = [
+                    {
+                        name: 'empty input',
+                        run: () => buildHandler(alphaId, new FakeSpotify())(context(alphaId, '  ')),
+                        expected: 'refunded'
+                    },
+                    {
+                        name: 'requests turned off',
+                        run: () => {
+                            const spotify = new FakeSpotify();
+                            spotify.tracks.set('abc123', track());
+                            return buildHandler(alphaId, spotify, false)(context(alphaId, 'spotify:track:abc123'));
+                        },
+                        expected: 'turned off'
+                    },
+                    {
+                        name: 'unfindable track',
+                        run: () => buildHandler(alphaId, new FakeSpotify())(context(alphaId, 'nonexistent song')),
+                        expected: 'could not find'
+                    },
+                    {
+                        name: 'track too long',
+                        run: () => {
+                            const spotify = new FakeSpotify();
+                            spotify.tracks.set('abc123', track({ durationMs: 30 * 60_000 }));
+                            return buildHandler(alphaId, spotify)(context(alphaId, 'spotify:track:abc123'));
+                        },
+                        expected: 'too long'
+                    },
+                    {
+                        // A duplicate refunds rather than silently collapsing.
+                        // The second viewer paid for nothing new.
+                        name: 'duplicate request',
+                        run: async () => {
+                            const spotify = new FakeSpotify();
+                            spotify.tracks.set('abc123', track());
+                            const handler = buildHandler(alphaId, spotify);
 
-            it('refunds when requests are turned off', async () => {
-                const spotify = new FakeSpotify();
-                spotify.tracks.set('abc123', track());
+                            await handler(context(alphaId, 'spotify:track:abc123'));
+                            return handler(context(alphaId, 'spotify:track:abc123'));
+                        },
+                        expected: 'already in the queue'
+                    },
+                    {
+                        name: 'Spotify unreachable',
+                        run: () => {
+                            const spotify = new FakeSpotify();
+                            spotify.failWith = new Error('network down');
+                            return buildHandler(alphaId, spotify)(context(alphaId, 'spotify:track:abc123'));
+                        },
+                        expected: 'refunded'
+                    }
+                ];
 
-                expect(await buildHandler(alphaId, spotify, false)(context(alphaId, 'spotify:track:abc123')))
-                    .toContain('turned off');
-            });
-
-            it('refunds an unfindable track', async () => {
-                expect(await buildHandler(alphaId, new FakeSpotify())(context(alphaId, 'nonexistent song')))
-                    .toContain('could not find');
-            });
-
-            it('refunds a track that is too long', async () => {
-                const spotify = new FakeSpotify();
-                spotify.tracks.set('abc123', track({ durationMs: 30 * 60_000 }));
-
-                expect(await buildHandler(alphaId, spotify)(context(alphaId, 'spotify:track:abc123')))
-                    .toContain('too long');
-            });
-
-            it('refunds a duplicate rather than silently collapsing it', async () => {
-                // The second viewer paid for nothing new.
-                const spotify = new FakeSpotify();
-                spotify.tracks.set('abc123', track());
-                const handler = buildHandler(alphaId, spotify);
-
-                await handler(context(alphaId, 'spotify:track:abc123'));
-                expect(await handler(context(alphaId, 'spotify:track:abc123'))).toContain('already in the queue');
-            });
-
-            it('refunds when Spotify is unreachable', async () => {
-                const spotify = new FakeSpotify();
-                spotify.failWith = new Error('network down');
-
-                expect(await buildHandler(alphaId, spotify)(context(alphaId, 'spotify:track:abc123')))
-                    .toContain('refunded');
+                for (const row of rows) {
+                    expect(await row.run(), row.name).toContain(row.expected);
+                }
             });
         });
     });

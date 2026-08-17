@@ -100,19 +100,6 @@ describeDb('!advice and !roast', () => {
         expect(ai.gameRequests[0]?.requester.twitchUserId).toBe('999');
     });
 
-    it('charges the caller when they target themselves', async () => {
-        // The degenerate case must still be one charge to the one person.
-        const ai = new StubAiService();
-        const replies: string[] = [];
-
-        await handlersFor(alphaId, ai)['advice']?.handler(
-            contextFor([], { twitchUserId: '100', login: 'alphaviewer' }, replies)
-        );
-
-        expect(ai.gameRequests[0]?.requester.twitchUserId).toBe('100');
-        expect(ai.gameRequests[0]?.target.twitchUserId).toBe('100');
-    });
-
     it('targets the caller when no name is given', async () => {
         const ai = new StubAiService();
         const replies: string[] = [];
@@ -123,6 +110,8 @@ describeDb('!advice and !roast', () => {
 
         expect(ai.gameRequests[0]?.type).toBe('advice');
         expect(ai.gameRequests[0]?.target.twitchUserId).toBe('100');
+        // The degenerate self-target is still one charge to the one person.
+        expect(ai.gameRequests[0]?.requester.twitchUserId).toBe('100');
     });
 
     it('says so rather than inventing a target it has never seen', async () => {

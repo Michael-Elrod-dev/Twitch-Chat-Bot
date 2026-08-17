@@ -136,30 +136,23 @@ describe('HelixApi', () => {
     describe('rateLimitDelayMs', () => {
         const now = 1_700_000_000_000;
 
-        it('reads Ratelimit-Reset as unix seconds', () => {
-            const headers = new Headers({ 'ratelimit-reset': String(now / 1000 + 20) });
-            expect(rateLimitDelayMs(headers, now)).toBe(20_000);
-        });
+        it('maps every header shape to a sane delay range', () => {
+            // Never zero. An instant retry is the behavior a rate limit exists
+            // to prevent, and an absurd reset must not sleep for hours.
+            const rows: { name: string; headers: Headers; min: number; max: number }[] = [
+                { name: 'Ratelimit-Reset as unix seconds', headers: new Headers({ 'ratelimit-reset': String(now / 1000 + 20) }), min: 20_000, max: 20_000 },
+                { name: 'Retry-After seconds fallback', headers: new Headers({ 'retry-after': '15' }), min: 15_000, max: 15_000 },
+                { name: 'no usable header', headers: new Headers(), min: 1, max: 60 * 60_000 - 1 },
+                { name: 'garbage reset', headers: new Headers({ 'ratelimit-reset': 'garbage' }), min: 1, max: 60 * 60_000 - 1 },
+                { name: 'already-past reset', headers: new Headers({ 'ratelimit-reset': String(now / 1000 - 100) }), min: 1, max: 60 * 60_000 - 1 },
+                { name: 'absurd reset', headers: new Headers({ 'ratelimit-reset': String(now / 1000 + 999_999) }), min: 1, max: 60 * 60_000 - 1 }
+            ];
 
-        it('falls back to Retry-After seconds', () => {
-            expect(rateLimitDelayMs(new Headers({ 'retry-after': '15' }), now)).toBe(15_000);
-        });
-
-        it('falls back to a fixed delay when neither is usable', () => {
-            // Never zero: an instant retry is the behaviour a rate limit exists
-            // to prevent.
-            expect(rateLimitDelayMs(new Headers(), now)).toBeGreaterThan(0);
-            expect(rateLimitDelayMs(new Headers({ 'ratelimit-reset': 'garbage' }), now)).toBeGreaterThan(0);
-        });
-
-        it('ignores an already-past reset', () => {
-            const headers = new Headers({ 'ratelimit-reset': String(now / 1000 - 100) });
-            expect(rateLimitDelayMs(headers, now)).toBeGreaterThan(0);
-        });
-
-        it('refuses an absurd reset rather than sleeping for hours', () => {
-            const headers = new Headers({ 'ratelimit-reset': String(now / 1000 + 999_999) });
-            expect(rateLimitDelayMs(headers, now)).toBeLessThan(60 * 60_000);
+            for (const row of rows) {
+                const delay = rateLimitDelayMs(row.headers, now);
+                expect(delay, row.name).toBeGreaterThanOrEqual(row.min);
+                expect(delay, row.name).toBeLessThanOrEqual(row.max);
+            }
         });
     });
 
