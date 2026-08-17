@@ -4,7 +4,7 @@ import { TwitchError } from './errors.js';
 /**
  * Twitch's authorization-code flow.
  *
- * PKCE is not available at Twitch (docs/PHASE1_EVENTSUB_FACTS.md §5.2), so the
+ * PKCE is not available at Twitch (docs/TWITCH_PLATFORM_FACTS.md section 5.2), so the
  * secret-holding server mediates every flow — including the desktop app's, which
  * is never an OAuth client itself.
  */

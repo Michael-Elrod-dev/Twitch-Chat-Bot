@@ -436,7 +436,7 @@ Restores are drilled in CI: see `.github/workflows/restore-drill.yml`.
 
 - [`docs/WORK_PACKAGES.md`](docs/WORK_PACKAGES.md) — the Phase 1 plan and its results
 - [`docs/PHASE1_DESIGN.md`](docs/PHASE1_DESIGN.md) — the client-server architecture
-- [`docs/PHASE1_EVENTSUB_FACTS.md`](docs/PHASE1_EVENTSUB_FACTS.md) — sourced EventSub
+- [`docs/TWITCH_PLATFORM_FACTS.md`](docs/TWITCH_PLATFORM_FACTS.md) — sourced EventSub
   and auth facts the transport is built on
 - [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — pinning policy and the update flow
 - [`docs/archive/`](docs/archive) — Phase 0's baseline review, package log, migration

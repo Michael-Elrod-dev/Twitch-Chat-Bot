@@ -2,8 +2,8 @@
  * The wire contract for EventSub webhook deliveries.
  *
  * Every field here is transcribed from Twitch's documentation rather than
- * remembered — see docs/PHASE1_EVENTSUB_FACTS.md §3 for the sourced facts these
- * shapes implement.
+ * remembered. See docs/TWITCH_PLATFORM_FACTS.md section 3 for the sourced facts
+ * these shapes implement.
  */
 
 /** Header names, lowercase because Node normalises incoming headers. */

@@ -10,7 +10,7 @@ import { RateLimitedError, HelixError } from '../twitch/errors.js';
  * account work across N channels without a per-channel bot token. The
  * authorization requirement mirrors the read path exactly: `user:write:chat` +
  * `user:bot` from the bot, and `channel:bot` from the broadcaster
- * (docs/PHASE1_EVENTSUB_FACTS.md §4).
+ * (docs/TWITCH_PLATFORM_FACTS.md section 4).
  */
 
 /** Twitch truncates beyond this; truncating here keeps the ellipsis meaningful. */

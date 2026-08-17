@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /**
  * Twitch signs each delivery with HMAC-SHA256 over
  * `message-id + message-timestamp + raw body`, keyed by the subscription secret
- * (docs/PHASE1_EVENTSUB_FACTS.md §3).
+ * (docs/TWITCH_PLATFORM_FACTS.md section 3).
  *
  * Two details are load-bearing and easy to get wrong:
  *  - the *raw* body must be hashed, not a re-serialised parse, because JSON key
