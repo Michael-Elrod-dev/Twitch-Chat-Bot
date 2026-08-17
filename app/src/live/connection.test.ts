@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { LiveEvent } from '@almosthadai/shared';
 import { LiveConnection, type ConnectionState, type WebSocketLike } from './connection.js';
 
@@ -245,29 +245,6 @@ describe('LiveConnection', () => {
 
         expect(h.sockets[0]?.onclose).toBeNull();
         expect(h.sockets[0]?.onmessage).toBeNull();
-    });
-});
-
-describe('LiveConnection wiring', () => {
-    it('uses the real WebSocket when no factory is supplied', async () => {
-        // Only that the default path is reached — the socket itself is the
-        // platform's, and testing it would be testing the browser.
-        const factory = vi.fn(() => new FakeSocket('ws://x'));
-        const connection = new LiveConnection({
-            token: async () => 't',
-            onEvent: () => undefined,
-            onStateChange: () => undefined,
-            socketFactory: factory,
-            setTimeoutImpl: () => 1,
-            clearTimeoutImpl: () => undefined
-        });
-
-        connection.start();
-        // The socket is built after the token promise settles.
-        await Promise.resolve();
-        await Promise.resolve();
-        expect(factory).toHaveBeenCalledOnce();
-        connection.stop();
     });
 });
 

@@ -20,19 +20,19 @@ describe('SignIn (3g)', () => {
         expect(screen.getByText(/never sees your\s+password/)).toBeInTheDocument();
     });
 
-    it('reports the server as reachable', () => {
-        render(<SignIn onSignIn={vi.fn()} serverReachable />);
-        expect(screen.getByText('SERVER REACHABLE')).toBeInTheDocument();
-    });
+    it('reports each reachability state without guessing', () => {
+        const rows: { name: string; reachable: boolean | null; text: string }[] = [
+            { name: 'reachable', reachable: true, text: 'SERVER REACHABLE' },
+            { name: 'unreachable', reachable: false, text: 'SERVER UNREACHABLE' },
+            { name: 'still checking', reachable: null, text: 'CHECKING' }
+        ];
 
-    it('reports the server as unreachable — this is where you first hit it', () => {
-        render(<SignIn onSignIn={vi.fn()} serverReachable={false} />);
-        expect(screen.getByText('SERVER UNREACHABLE')).toBeInTheDocument();
-    });
+        for (const row of rows) {
+            const { unmount } = render(<SignIn onSignIn={vi.fn()} serverReachable={row.reachable} />);
 
-    it('says it is still checking rather than guessing', () => {
-        render(<SignIn onSignIn={vi.fn()} serverReachable={null} />);
-        expect(screen.getByText('CHECKING')).toBeInTheDocument();
+            expect(screen.getByText(row.text), row.name).toBeInTheDocument();
+            unmount();
+        }
     });
 
     it('surfaces an error without hiding the button', () => {

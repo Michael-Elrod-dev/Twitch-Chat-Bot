@@ -42,13 +42,6 @@ describe('design tokens', () => {
         expect(document.title).toBe(APP_NAME);
     });
 
-    it('keeps the product name in exactly one constant', () => {
-        // index.html ships an empty <title> on purpose. If someone puts a
-        // literal name back into it, this is the test that says so.
-        expect(APP_NAME.length).toBeGreaterThan(0);
-        applyTheme(document);
-        expect(document.title).toBe(APP_NAME);
-    });
 });
 
 describe('prefers-reduced-motion', () => {

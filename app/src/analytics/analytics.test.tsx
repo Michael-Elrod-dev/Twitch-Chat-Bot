@@ -157,28 +157,23 @@ describe('Analytics (3d)', () => {
         expect(await screen.findByText('live')).toBeInTheDocument();
     });
 
-    it('counts the real streams in the young-data footer rather than hardcoding four', async () => {
-        stubApi({ all_time: summary({ streams: 4 }) });
-        render(<Analytics storage={session()} />);
+    it('renders the young-data footer from the real count and drops it at the threshold', async () => {
+        const rows: { name: string; streams: number; footer: string | null }[] = [
+            { name: 'plural count', streams: 4, footer: `4 streams in. Trends show up around ${TREND_THRESHOLD}.` },
+            { name: 'singular count', streams: 1, footer: `One stream in. Trends show up around ${TREND_THRESHOLD}.` },
+            // At the threshold the sentence would be false, so it goes away.
+            { name: 'at threshold', streams: TREND_THRESHOLD, footer: null }
+        ];
 
-        expect(await screen.findByText(`4 streams in. Trends show up around ${TREND_THRESHOLD}.`))
-            .toBeInTheDocument();
-    });
+        for (const row of rows) {
+            stubApi({ all_time: summary({ streams: row.streams }) });
+            const { unmount } = render(<Analytics storage={session()} />);
 
-    it('reads correctly at one stream, where a plural would be wrong', async () => {
-        stubApi({ all_time: summary({ streams: 1 }) });
-        render(<Analytics storage={session()} />);
-
-        expect(await screen.findByText(`One stream in. Trends show up around ${TREND_THRESHOLD}.`))
-            .toBeInTheDocument();
-    });
-
-    it('drops the footer once there is enough history for the sentence to be false', async () => {
-        stubApi({ all_time: summary({ streams: TREND_THRESHOLD }) });
-        render(<Analytics storage={session()} />);
-
-        await screen.findByText('24,806');
-        expect(screen.queryByText(/Trends show up around/)).not.toBeInTheDocument();
+            await screen.findByText('24,806');
+            if (row.footer) expect(screen.getByText(row.footer), row.name).toBeInTheDocument();
+            else expect(screen.queryByText(/Trends show up around/), row.name).not.toBeInTheDocument();
+            unmount();
+        }
     });
 
     it('renders a young channel plainly, with no apology and no empty-state glyph', async () => {

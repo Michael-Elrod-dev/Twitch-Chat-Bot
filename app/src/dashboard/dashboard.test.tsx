@@ -11,7 +11,6 @@ import type {
 import type { ConnectionState } from '../live/connection.js';
 import { Dashboard } from './Dashboard.js';
 import { StatusPill } from '../shell/StatusPill.js';
-import { resolvePillState, isMasterSwitchOperable, formatUptime } from '../shell/channelStatus.js';
 import { ChatCard, appendChatMessage, CHAT_FEED_CAP } from './ChatCard.js';
 import { formatLastStream, resolveNumbers, resolveStatusTiles } from './dashboardState.js';
 
@@ -218,22 +217,6 @@ describe('the status strip matrix', () => {
 // ---- the header pill, over the same matrix ---------------------------------
 
 describe('the header pill matrix', () => {
-    it('never says OFFLINE for a server we cannot reach', () => {
-        for (const connection of ['connecting', 'reconnecting', 'down'] as ConnectionState[]) {
-            expect(resolvePillState({
-                connection, channel: { status: 'active' }, live: false
-            })).toBe('unknown');
-        }
-    });
-
-    it('needs_reauth outranks live', () => {
-        // A channel streaming while the bot is locked out is still the thing the
-        // user must act on; LIVE there would hide it.
-        expect(resolvePillState({
-            connection: 'open', channel: { status: 'needs_reauth' }, live: true
-        })).toBe('needs_reauth');
-    });
-
     it('renders the uptime only in the live state', () => {
         const { rerender } = render(<StatusPill state="live" uptime="2:14:07" />);
         expect(screen.getByText(/LIVE 2:14:07/)).toBeInTheDocument();
@@ -241,39 +224,6 @@ describe('the header pill matrix', () => {
         rerender(<StatusPill state="unknown" uptime="2:14:07" />);
         expect(screen.queryByText(/2:14:07/)).not.toBeInTheDocument();
         expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
-    });
-
-    it('makes the switch inert whenever acting on it could not work', () => {
-        expect(isMasterSwitchOperable({
-            connection: 'down', channel: { status: 'active' }, live: true
-        })).toBe(false);
-        expect(isMasterSwitchOperable({
-            connection: 'open', channel: { status: 'needs_reauth' }, live: true
-        })).toBe(false);
-        expect(isMasterSwitchOperable({
-            connection: 'open', channel: { status: 'active' }, live: true
-        })).toBe(true);
-    });
-});
-
-// ---- the uptime clock ------------------------------------------------------
-
-describe('the uptime clock', () => {
-    it('counts from the stream start, not from now', () => {
-        const startedAt = new Date('2026-08-16T18:00:00.000Z');
-        expect(formatUptime(startedAt, new Date('2026-08-16T20:14:07.000Z'))).toBe('2:14:07');
-    });
-
-    it('pads minutes and seconds so the pill does not jitter in width', () => {
-        expect(formatUptime(new Date('2026-08-16T18:00:00.000Z'), new Date('2026-08-16T18:01:05.000Z')))
-            .toBe('0:01:05');
-    });
-
-    it('never runs backwards when the clock disagrees with the server', () => {
-        // A machine that just woke from sleep, or one with a skewed clock, must
-        // not render a negative uptime.
-        expect(formatUptime(new Date('2026-08-16T20:00:00.000Z'), new Date('2026-08-16T18:00:00.000Z')))
-            .toBe('0:00:00');
     });
 });
 

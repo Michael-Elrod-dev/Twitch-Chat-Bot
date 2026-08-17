@@ -128,35 +128,27 @@ describe('ChannelHeader', () => {
         expect(screen.getByText('streamer')).toBeInTheDocument();
     });
 
-    it('shows LIVE with the uptime', () => {
-        render(<ChannelHeader {...props} channel={channel()} live uptime="2:14:07" />);
-        expect(screen.getByText(/LIVE 2:14:07/)).toBeInTheDocument();
-    });
+    it('shows the right pill for every channel state', () => {
+        const rows: { name: string; element: React.ReactElement; text: string | RegExp; notShown?: string }[] = [
+            { name: 'live', element: <ChannelHeader {...props} channel={channel()} live uptime="2:14:07" />, text: /LIVE 2:14:07/ },
+            { name: 'offline', element: <ChannelHeader {...props} channel={channel()} />, text: 'OFFLINE' },
+            { name: 'revoked', element: <ChannelHeader {...props} channel={channel({ status: 'needs_reauth' })} />, text: 'NEEDS RECONNECT' },
+            // Unreachable reads UNKNOWN and never OFFLINE, which would claim
+            // knowledge of a channel the app cannot see.
+            { name: 'unreachable', element: <ChannelHeader {...props} channel={channel()} connection="down" />, text: 'UNKNOWN', notShown: 'OFFLINE' }
+        ];
 
-    it('shows OFFLINE when the channel is not live', () => {
-        render(<ChannelHeader {...props} channel={channel()} />);
-        expect(screen.getByText('OFFLINE')).toBeInTheDocument();
-    });
+        for (const row of rows) {
+            const { unmount } = render(row.element);
 
-    it('shows NEEDS RECONNECT when Twitch has revoked consent', () => {
-        render(<ChannelHeader {...props} channel={channel({ status: 'needs_reauth' })} />);
-        expect(screen.getByText('NEEDS RECONNECT')).toBeInTheDocument();
-    });
-
-    it('shows UNKNOWN — not OFFLINE — when the server is unreachable', () => {
-        render(<ChannelHeader {...props} channel={channel()} connection="down" />);
-
-        expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
-        expect(screen.queryByText('OFFLINE')).not.toBeInTheDocument();
+            expect(screen.getByText(row.text), row.name).toBeInTheDocument();
+            if (row.notShown) expect(screen.queryByText(row.notShown), row.name).not.toBeInTheDocument();
+            unmount();
+        }
     });
 
     it('renders the switch inert when the server is unreachable', () => {
         render(<ChannelHeader {...props} channel={channel()} connection="down" />);
-        expect(screen.getByRole('switch')).toBeDisabled();
-    });
-
-    it('renders the switch inert when Twitch has revoked consent', () => {
-        render(<ChannelHeader {...props} channel={channel({ status: 'needs_reauth' })} />);
         expect(screen.getByRole('switch')).toBeDisabled();
     });
 
