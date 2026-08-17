@@ -395,8 +395,39 @@ jobs:
       # SmartScreen shows a one-time warning. Tauri's own update signing is
       # independent of Windows code signing and is configured separately at the
       # first release.
+      #
+      # VITE_API_BASE_URL is REQUIRED here, not optional. It is a build-time
+      # constant baked into the bundle, and its fallback is the local dev server
+      # — so without this line the installer this job produces can only talk to
+      # a machine the person who installs it does not have. That is exactly what
+      # shipped from the first proven artifact, silently, because nothing looked.
+      #
+      # Tag builds and dispatch builds both target production deliberately:
+      # there is one host, and a developer wanting a local build uses
+      # `tauri dev`, never this job. If the domain changes at the rebrand, this
+      # line and app/.env.example are the two places that know it.
       - name: Build the installer
+        env:
+          VITE_API_BASE_URL: https://almosthadai.duckdns.org
         run: npm run tauri -w @almosthadai/app -- build --bundles nsis
+
+      # The loud failure the first artifact did not have.
+      #
+      # Asserted on the built bundle AFTER packaging rather than before, because
+      # `tauri build` runs the front-end build itself (beforeBuildCommand) — so
+      # app/dist at this point is precisely the tree NSIS packaged, not an
+      # earlier one that happened to be built the same way. A missing or wrong
+      # host fails the job here; it never reaches the upload below.
+      - name: Verify the installer points at production
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='https://almosthadai.duckdns.org'
+          if ! grep -rqF "$expected" app/dist/assets/*.js; then
+            echo "::error::Built bundle does not contain $expected - the installer would ship pointing at the dev-server fallback."
+            exit 1
+          fi
+          echo "Bundle targets $expected"
 
       - name: Upload the installer
         uses: actions/upload-artifact@v4

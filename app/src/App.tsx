@@ -1,15 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelEnabledResponse, LiveEvent, MeResponse } from '@almosthadai/shared';
+import type {
+    ChannelEnabledResponse,
+    DashboardSummary,
+    LiveChatMessage,
+    LiveEvent,
+    MeResponse,
+    QueuedSong
+} from '@almosthadai/shared';
 import { apiRequest } from './api/client.js';
 import { API_BASE_URL } from './api/config.js';
 import { useAuth } from './auth/useAuth.js';
-import { withFreshSession, browserSessionStorage, type SessionStorage } from './auth/sessionStore.js';
+import {
+    freshAccessToken,
+    withFreshSession,
+    browserSessionStorage,
+    type SessionStorage
+} from './auth/sessionStore.js';
 import { LiveConnection, type ConnectionState } from './live/connection.js';
 import type { Platform } from './platform/tauri.js';
 import { TitleBar } from './shell/TitleBar.js';
 import { IconRail, type RailSection } from './shell/IconRail.js';
 import { ChannelHeader } from './shell/ChannelHeader.js';
 import { formatUptime } from './shell/channelStatus.js';
+import { Dashboard } from './dashboard/Dashboard.js';
+import { appendChatMessage } from './dashboard/ChatCard.js';
 import { SignIn } from './screens/SignIn.js';
 import { Waiting } from './screens/Waiting.js';
 import { Onboarding } from './screens/Onboarding.js';
@@ -37,8 +51,49 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
     const [streamStartedAt, setStreamStartedAt] = useState<Date | null>(null);
     const [uptime, setUptime] = useState<string | undefined>(undefined);
     const [togglePending, setTogglePending] = useState(false);
+    const [summary, setSummary] = useState<DashboardSummary | null>(null);
+    const [messages, setMessages] = useState<LiveChatMessage[]>([]);
+    const [queue, setQueue] = useState<QueuedSong[]>([]);
 
     const token = auth.accessToken;
+
+    // ---- what is true right now --------------------------------------------
+
+    /**
+     * The dashboard's opening state, and the seed for the uptime clock.
+     *
+     * The realtime feed carries transitions; this carries the state they change.
+     * An app opened mid-stream has missed every transition that ever happened,
+     * so without this the uptime clock would not start until the broadcaster
+     * went offline — which is exactly when it stops being interesting.
+     */
+    const loadDashboard = useCallback(async (): Promise<void> => {
+        try {
+            const [next, songs] = await Promise.all([
+                withFreshSession(sessionStorage, (accessToken) =>
+                    apiRequest<DashboardSummary>('/api/v1/dashboard', { accessToken })),
+                withFreshSession(sessionStorage, (accessToken) =>
+                    apiRequest<{ items: QueuedSong[]; total: number }>('/api/v1/songs', { accessToken }))
+            ]);
+
+            setSummary(next);
+            setQueue(songs.items);
+            setLive(next.live);
+            setStreamStartedAt(next.startedAt ? new Date(next.startedAt) : null);
+        } catch {
+            /*
+             * Cleared, not kept.
+             *
+             * Stale figures under a live-looking screen are worse than none: the
+             * `4b` rule is that an unreachable server produces `?`, and holding
+             * the last good numbers would quietly turn that into a confident
+             * claim about a bot we can no longer see. The connection state is
+             * what drives the banner; this just makes sure there is nothing left
+             * to render behind it.
+             */
+            setSummary(null);
+        }
+    }, [sessionStorage]);
 
     // ---- realtime ----------------------------------------------------------
 
@@ -46,21 +101,49 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
         if (auth.phase !== 'signed_in' || !token) return undefined;
 
         const connectionRef = new LiveConnection({
-            accessToken: token,
-            onStateChange: setConnection,
+            // A fresh token per attempt, not the one captured at boot: tokens
+            // live fifteen minutes and a socket that reconnects with an expired
+            // one is refused silently, forever.
+            token: () => freshAccessToken(sessionStorage),
+            onStateChange: (state) => {
+                setConnection(state);
+                // Re-open means we have been away: whatever happened while the
+                // socket was down arrived nowhere, so the state is re-read
+                // rather than assumed to have survived.
+                if (state === 'open') void loadDashboard();
+            },
             onEvent: (event: LiveEvent) => {
                 if (event.type === 'channel.status') {
                     setLive(event.live);
                     // Re-synced from the server on every status event; the tick
-                    // below only fills in the seconds between them.
-                    setStreamStartedAt(event.live ? new Date(event.at) : null);
+                    // below only fills in the seconds between them. Taken from
+                    // `startedAt` and NOT from `at` — `at` is when the event was
+                    // sent, so seeding from it would restart the clock at every
+                    // status change and read minutes into an hours-long stream.
+                    setStreamStartedAt(event.startedAt ? new Date(event.startedAt) : null);
+                    // The numbers belong to a stream; when one starts or ends
+                    // they are about a different stream than they were.
+                    void loadDashboard();
+                }
+
+                if (event.type === 'chat.message') {
+                    setMessages((current) => appendChatMessage(current, event));
+                }
+
+                if (event.type === 'song_queue.updated') {
+                    // Refetched rather than applied: the event announces that
+                    // the queue moved, and the payload does not carry it.
+                    void withFreshSession(sessionStorage, (accessToken) =>
+                        apiRequest<{ items: QueuedSong[]; total: number }>('/api/v1/songs', { accessToken }))
+                        .then((songs) => { setQueue(songs.items); })
+                        .catch(() => { /* the next status refresh picks it up */ });
                 }
             }
         });
 
         connectionRef.start();
         return () => { connectionRef.stop(); };
-    }, [auth.phase, token]);
+    }, [auth.phase, token, loadDashboard, sessionStorage]);
 
     // The uptime clock ticks locally once a second.
     const startedAtRef = useRef<Date | null>(null);
@@ -181,8 +264,27 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                         togglePending={togglePending}
                     />
                     <main className="content">
-                        {/* WP9 fills these in; the shell around them is what this package owed. */}
-                        <p style={{ color: 'var(--color-text-tertiary)' }}>{section}</p>
+                        {section === 'dashboard'
+                            ? (
+                                <Dashboard
+                                    channel={auth.me.channel}
+                                    settings={auth.me.settings}
+                                    connection={connection}
+                                    summary={summary}
+                                    live={live}
+                                    uptime={uptime}
+                                    messages={messages}
+                                    queue={queue}
+                                    // The home this finally has. Until now a
+                                    // sign-in error inside the signed-in shell
+                                    // was a string with nowhere to go.
+                                    authError={auth.error}
+                                    onReconnect={connectChannel}
+                                    onRetry={() => { void loadDashboard(); }}
+                                />
+                            )
+                            /* 9b and 9c fill the rest in. */
+                            : <p style={{ color: 'var(--color-text-tertiary)' }}>{section}</p>}
                     </main>
                 </div>
             </div>

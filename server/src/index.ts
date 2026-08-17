@@ -47,6 +47,7 @@ import {
 import { createRateLimit } from './http/api/rateLimit.js';
 import { ApiKeyRepository } from './db/repositories/apiKeyRepository.js';
 import { AnalyticsRepository } from './db/repositories/analyticsRepository.js';
+import { DashboardRepository } from './db/repositories/dashboardRepository.js';
 import { SongQueueRepository } from './db/repositories/songQueueRepository.js';
 import { createEventBus } from './live/eventBus.js';
 import { LiveServer } from './live/liveServer.js';
@@ -490,7 +491,13 @@ async function main(): Promise<void> {
         applyChannelEnabled,
         apiKeys: apiKeyRepository,
         analytics: (channelId) => new AnalyticsRepository(database.db, channelId),
+        dashboard: (channelId) => new DashboardRepository(database.db, channelId),
         songs: (channelId) => new SongQueueRepository(database.db, channelId),
+        // Presence only, and the cipher stays here: the route asks "is Spotify
+        // linked", and answering it must not hand a router the key to every
+        // stored credential.
+        spotifyConnected: (channelId) =>
+            new ChannelTokenRepository(database.db, channelId, cipher).has('spotify'),
         publish: (channelId, event) => bus.publish(channelId, {
             ...event, channelId, at: new Date().toISOString()
         } as never)

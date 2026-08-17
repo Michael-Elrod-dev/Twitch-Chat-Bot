@@ -475,13 +475,25 @@ button {
     min-width: 0;
 }
 
+/*
+ * Both blocks, explicitly.
+ *
+ * These were styled for block-level children and then given inline ones, so the
+ * title and the description ran together into one sentence — "We cannot reach
+ * our serverYour bot is probably still running" — and `margin-top` on the
+ * description did nothing, because margins do not apply to inline boxes. Stated
+ * here rather than relying on the element chosen at each call site, so the two
+ * cannot be separated by a component that reaches for a span.
+ */
 .banner__title {
+    display: block;
     font-weight: 600;
     font-size: 13.5px;
     color: var(--color-text-primary);
 }
 
 .banner__description {
+    display: block;
     margin-top: 3px;
     font-size: 12.5px;
     color: var(--color-text-secondary);
@@ -678,4 +690,475 @@ button {
     min-height: 0;
     padding: var(--space-dashboard-padding);
     overflow: auto;
+}
+
+/* ---- dashboard --------------------------------------------------------- */
+
+/*
+ * `2a`, `2b`, `4a` and `4b` are one screen with different readings, so they
+ * share one layout. The content column is a vertical flex; the bottom region
+ * takes whatever height is left, which is what lets the chat feed grow with the
+ * window instead of pushing the page into a scroll.
+ */
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-section-gap);
+    height: 100%;
+    min-height: 0;
+}
+
+.dashboard__bottom {
+    display: grid;
+    grid-template-columns: 1fr 372px;
+    gap: var(--space-region-gap);
+    flex: 1;
+    min-height: 0;
+}
+
+/*
+ * The rail and the 372px side column are fixed; the main column absorbs width.
+ * Below this the bottom grid stacks, chat above queue.
+ */
+@media (max-width: 1100px) {
+    .dashboard__bottom {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---- status strip ------------------------------------------------------ */
+
+.status-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-grid-gap);
+}
+
+@media (max-width: 1100px) {
+    .status-strip {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.status-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px 16px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-card-surface);
+}
+
+.status-tile__label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.status-tile__reading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-tile__value {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-primary);
+}
+
+/*
+ * Not a dot.
+ *
+ * A grey dot would read as "off" - a claim about the bot. The question mark is
+ * the only mark that says we cannot see, rather than that there is nothing to
+ * see.
+ */
+.status-tile__unknown {
+    display: inline-flex;
+    justify-content: center;
+    width: 6px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--color-text-faint);
+}
+
+/* Six-pixel dots in the strip, where the header pill uses seven. */
+.status-tile .dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+}
+
+/* On, but not busy: the same dot, dimmed and still. */
+.dot--idle {
+    background: var(--color-success);
+    opacity: var(--motion-offline-dot-opacity);
+}
+
+/* Off, or never set up. Flat, and deliberately not sage. */
+.dot--dead {
+    background: var(--color-disabled);
+}
+
+/* Demands action. Clay, and the only pulsing thing in the strip. */
+.dot--alert {
+    background: var(--color-accent);
+    animation: liveGlow var(--motion-live-glow-duration) var(--motion-easing) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dot--alert { box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5); }
+}
+
+:root[data-reduced-motion='true'] .dot--alert {
+    animation: none;
+    box-shadow: 0 0 9px 2px rgba(224, 128, 90, .5);
+}
+
+/* ---- the numbers ------------------------------------------------------- */
+
+.numbers {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.numbers__caption {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faint);
+}
+
+.numbers__caption-label {
+    letter-spacing: .06em;
+}
+
+.numbers__caption-value {
+    color: var(--color-text-tertiary);
+}
+
+.numbers__row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-grid-gap);
+}
+
+.number-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-card-surface);
+}
+
+.number-card__figure {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -.02em;
+    color: var(--color-text-primary);
+}
+
+/*
+ * The `4b` stat block.
+ *
+ * A shape where a figure would be, rather than a question mark at 30px - the
+ * slot staying empty IS the message. A zero here would be a lie about the bot.
+ */
+.number-card__skeleton {
+    display: block;
+    width: 96px;
+    height: 26px;
+    border-radius: 6px;
+    background: var(--color-border-subtle);
+}
+
+.number-card__label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+/* ---- cards ------------------------------------------------------------- */
+
+.card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-card-surface);
+    overflow: hidden;
+}
+
+.card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: var(--space-card-header-padding);
+    border-bottom: 1px solid var(--color-hairline);
+}
+
+.card__title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--color-text-primary);
+}
+
+.card__meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+.card__header .dot {
+    width: 6px;
+    height: 6px;
+}
+
+/* ---- empty panel ------------------------------------------------------- */
+
+.empty-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+}
+
+.empty-panel__glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px dashed var(--color-tooltip-border);
+    border-radius: var(--radius-card);
+    color: var(--color-disabled-icon);
+}
+
+.empty-panel__copy {
+    max-width: 290px;
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    text-align: center;
+    text-wrap: pretty;
+    color: var(--color-text-tertiary);
+}
+
+/* ---- chat feed --------------------------------------------------------- */
+
+/*
+ * The scroll container. Oldest at the top, newest at the bottom — chat's
+ * direction everywhere, and the direction the design mock's own rows run in.
+ */
+.chat-feed {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/*
+ * `margin-top: auto` rather than `justify-content: flex-end` on the container.
+ * Both sit a short feed at the bottom, but flex-end makes the overflowing top
+ * of a full list unreachable in a scroll container — the rows scrolled past
+ * simply cannot be got back to. This does the same job and stays scrollable.
+ */
+.chat-feed__list {
+    margin: auto 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 16px;
+}
+
+/* The bot's own reply coming back to us. */
+.chat-row--bot {
+    background: rgba(200, 102, 63, .05);
+}
+
+.chat-row__time {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faintest);
+}
+
+.chat-row__name {
+    flex: none;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-body);
+}
+
+.chat-row__name--broadcaster {
+    color: var(--color-accent-hover);
+}
+
+.chat-row__text {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--color-text-body);
+    overflow-wrap: anywhere;
+}
+
+.chip {
+    flex: none;
+    padding: 3px 6px;
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 9.5px;
+    line-height: 1;
+    letter-spacing: .08em;
+}
+
+.chip--cmd {
+    background: var(--color-accent-tint-strong);
+    color: var(--color-accent-hover);
+}
+
+.chip--emote {
+    background: rgba(127, 156, 110, .14);
+    color: var(--color-success-text);
+}
+
+.chip--ai {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+}
+
+/* ---- song queue -------------------------------------------------------- */
+
+.pill--requests {
+    border: 1px solid transparent;
+    background: var(--color-success-tint);
+    color: var(--color-success-text);
+}
+
+.queue-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+    padding: 16px 18px;
+    overflow-y: auto;
+}
+
+.queue-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/*
+ * These two labels are the entire explanation of the two-stage queue. The
+ * handoff is explicit that no prose is added under them, and none is.
+ */
+.queue-stage__label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: .1em;
+    color: var(--color-text-tertiary);
+}
+
+.queue-now {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.queue-now__art {
+    width: 38px;
+    height: 38px;
+    flex: none;
+    border-radius: 6px;
+    background: var(--color-placeholder-stripe);
+}
+
+.queue-now__meta {
+    font-size: 12.5px;
+    color: var(--color-text-tertiary);
+}
+
+.queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.queue-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.queue-row__index {
+    flex: none;
+    width: 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-faint);
+}
+
+.queue-row__stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.queue-row__track {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--color-text-primary);
+}
+
+.queue-row__artist {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+/* ---- accessibility ----------------------------------------------------- */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }

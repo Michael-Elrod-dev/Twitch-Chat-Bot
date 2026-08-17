@@ -7,6 +7,8 @@ import type { RedemptionPipeline } from './redemptionPipeline.js';
 import type { PlaybackMonitor } from '../spotify/playbackMonitor.js';
 import type { StreamService } from '../domain/streamService.js';
 import type { PresenceTracker } from '../domain/presenceTracker.js';
+import type { EventBus } from '../live/eventBus.js';
+import { NULL_EVENT_BUS } from '../live/eventBus.js';
 
 /** Bounded dedup history. Twitch documents EventSub as at-least-once. */
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -39,6 +41,14 @@ export interface ChannelSessionOptions {
      * channel the bot no longer serves.
      */
     presence?: PresenceTracker;
+    /**
+     * Where realtime observers listen.
+     *
+     * Defaults to a bus that goes nowhere, exactly as the chat pipeline's does,
+     * so a session with no watchers costs nothing and every existing caller
+     * keeps working unchanged.
+     */
+    bus?: EventBus;
 }
 
 export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
@@ -64,6 +74,7 @@ export class ChannelSession {
     private readonly monitor: PlaybackMonitor | undefined;
     private readonly streams: StreamService | undefined;
     private readonly presence: PresenceTracker | undefined;
+    private readonly bus: EventBus;
 
     private state: SessionState = 'stopped';
     private live = false;
@@ -82,10 +93,39 @@ export class ChannelSession {
         this.monitor = options.monitor;
         this.streams = options.streams;
         this.presence = options.presence;
+        this.bus = options.bus ?? NULL_EVENT_BUS;
     }
 
     getState(): SessionState {
         return this.state;
+    }
+
+    /**
+     * Tells every watcher where this channel stands.
+     *
+     * Published on each transition the dashboard renders — the session coming
+     * up or going down, and the stream starting or ending — because those are
+     * precisely the moments the status strip, the header pill and the uptime
+     * clock are wrong until told otherwise.
+     *
+     * `startedAt` is read from the stream service rather than tracked here, so
+     * there is one answer to "when did this stream begin" and not two that can
+     * disagree. It is null whenever the channel is not live, which is what
+     * stops the client ticking a clock for a stream that is over.
+     *
+     * Cannot throw: the bus swallows listener failures and nothing here is
+     * awaited, so a watching desktop app can never delay or break a session
+     * transition.
+     */
+    private publishStatus(): void {
+        this.bus.publish(this.channelId, {
+            type: 'channel.status',
+            channelId: this.channelId,
+            at: new Date().toISOString(),
+            live: this.live,
+            sessionState: this.state,
+            startedAt: this.live ? (this.streams?.startedAt()?.toISOString() ?? null) : null
+        });
     }
 
     isLive(): boolean {
@@ -110,6 +150,18 @@ export class ChannelSession {
              */
             await this.streams?.load();
 
+            /*
+             * Adopt the recovered stream's liveness.
+             *
+             * `load()` resumes the stream that was open before the restart, but
+             * the live flag started false — so without this a restart mid-stream
+             * left the session reporting offline until the broadcaster ended the
+             * stream, and the dashboard would show OFFLINE with no uptime over a
+             * channel that was very much live. The stream service is the one
+             * that knows; this just stops the session disagreeing with it.
+             */
+            this.live = this.streams?.isLive ?? false;
+
             // Started only once the session is otherwise ready, so a failed
             // load cannot leave a poller running for a session that never came up.
             this.monitor?.start();
@@ -117,6 +169,7 @@ export class ChannelSession {
 
             this.state = 'running';
             this.logger.info({ channelId: this.channelId }, 'Channel session started');
+            this.publishStatus();
         } catch (err) {
             // A half-started session must not masquerade as running.
             this.state = 'stopped';
@@ -149,6 +202,10 @@ export class ChannelSession {
 
         this.state = 'stopped';
         this.logger.info({ channelId: this.channelId }, 'Channel session stopped');
+
+        // Announced after the state is final, so a watcher never sees
+        // `stopping` as the last word on a session that has fully stopped.
+        this.publishStatus();
     }
 
     private async runTeardownStep(description: string, step: () => Promise<void>): Promise<void> {
@@ -187,12 +244,18 @@ export class ChannelSession {
         switch (event.kind) {
         case 'stream_online':
             this.live = true;
+            // Published AFTER the stream is recorded, never before: the event
+            // carries `startedAt`, and the stream service is where that comes
+            // from. Announcing first would send a live status with a null start
+            // time and stall the client's clock until the next transition.
             await this.streams?.onOnline(event.streamId, new Date(event.startedAt));
+            this.publishStatus();
             return null;
 
         case 'stream_offline':
             this.live = false;
             await this.streams?.onOffline();
+            this.publishStatus();
             return null;
 
         case 'redemption':

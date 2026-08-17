@@ -1235,6 +1235,163 @@ Server **819/819** (47 files) · app 129/129 · lint 0 · typecheck exit 0. Scre
 
 ---
 
+### Completion report — P1-WP9a screens half (engineer, 2026-08-16)
+
+**Status: code delivered, deployed, live proof pending the owner.** Server **846/846** (48 files) · app **199/199** (10 files) · lint 0 · `npm run typecheck` exit 0 · production deployed and healthy. Twenty reintroductions (#59–#80), **four of which exposed vacuous tests that were then made load-bearing**.
+
+**Contract additions — three, not the two approved.** The two named ones landed as specified: `channel.status.startedAt: string | null` and `ChannelSettings.spotifyConnected: boolean`. The third is `DashboardSummary` + `DashboardNumbers` with a `GET /api/v1/dashboard` behind it, and it is named here rather than buried because it was not in the approved list. The interim audit recorded today's-numbers sources as "PRESENT", which was true of the **data** and not of any way to read it: `AnalyticsSummary` is lifetime-scoped, and nothing exposed per-stream figures at all. Without a read model the "today's numbers" row — explicitly in scope — could not have been built truthfully. It is reads only, over existing tables, no new table and no new write.
+
+**Two further gaps the audit missed, both load-bearing and both fixed:**
+1. **`channel.status` was never published by anything.** The event type has existed in the contract since WP7; no code path emitted it. The uptime re-sync, the live status strip and the header pill all depend on it, so the "add `startedAt` to the event" task had no event to add it to. `ChannelSession` now publishes on the four transitions the dashboard renders (session up/down, stream on/off), on the same bus the chat pipeline uses, with the same never-affect-the-pipeline discipline.
+2. **A restart mid-stream reported the channel offline.** `StreamService.load()` resumes the open stream, but `ChannelSession.live` started `false` and nothing adopted it — so after any deploy during a stream the dashboard would have shown OFFLINE with no uptime over a channel that was very much live. One line, with the reasoning in place.
+
+**The uptime seed was wrong in the shipped shell.** `App.tsx` seeded its clock from `event.at` — the moment the event was sent — so the clock would have restarted at every status change and read seconds into an hours-long stream. That is precisely what `startedAt` exists to fix, and it is now taken from the stream's own start on both sides. Reintroduction #73's first version passed anyway because the summary had already seeded the clock correctly before the event arrived; the test now boots offline so only the event can produce the reading.
+
+**The points-redeemed write.** Built as approved — `recordInteraction(..., 'redemption')` plus a `chat_messages` row with the existing enum value, two existing mechanisms. Three decisions worth stating. **Fulfilled only:** a refund hands the points back, and counting one as a spend reports a number the broadcaster can never reconcile against Twitch. **Managed rewards only:** the pipeline deliberately leaves the broadcaster's own rewards alone, so claiming them on the bot's dashboard would attribute someone else's reward economy to us. **Presence is written first, always:** `chat_messages.twitch_user_id` references `viewers` with RESTRICT and someone can redeem on their very first interaction with a channel, so the path uses `touchPresence` — which satisfies the key without claiming roles the redemption path does not know (the P1-1 rule). Tested against the real database for exactly that reason; a stub would have proved nothing about the only thing that could fail. This also heals the lifetime `redemption_count`, a column that had been in the schema and empty since it was added.
+
+**Redemptions no longer inflate the stream's message counter.** `DatabaseAnalyticsSink` bumped `streams.total_messages` for every interaction type; spending points is an interaction but is not a line of chat. Found while wiring the redemption path through the sink.
+
+**The screens.** `2a`/`2b`/`4a`/`4b` are one component with different readings, not four — the whole point of `4b` is that it is the same dashboard being honest. Every rule lives in `dashboardState.ts` as pure functions, for the same reason `channelStatus.ts` exists: this is where "our link to the server" and "the state of the channel" meet, and therefore the only place they could be conflated. Ordering is explicit and tested — unreachable outranks revoked outranks the owner's switch outranks live/offline, because each condition describes a world in which the ones below it are unknowable. `auth.error` has its home in the banner region; that flag closes. The two song-queue stage labels carry no added prose.
+
+**Design fidelity was verified against a real browser, not just the DOM.** Component tests prove the readings; they cannot prove the stylesheet. A throwaway preview harness rendered all four states and computed styles were read back: tile `#1e1c1a`/10px/`14px 16px`, healthy dot `#7f9c6e` running `okGlow` at 6px with the `0s/.45s/.9s/1.35s` stagger, idle the same dot at `.55` with no animation, alert `#c8663f` on `liveGlow`, figures JetBrains Mono 600/30px, `4b` skeletons exactly 96×26, `CMD` `rgba(200,102,63,.14)`/`#e0805a`, `AI` solid `#c8663f` on `#1a1512`, bot wash `rgba(200,102,63,.05)` against a transparent plain row, bottom grid `1fr 372px`, stage labels mono 10px/.1em. Below 1100px the strip wraps to three and the bottom stacks, with no horizontal overflow. Reduced motion drops the animation and keeps the glow. Fonts resolve from the bundled packages. **The harness caught a real defect no test had:** `4a` was showing the `REQUESTS OPEN` pill while Twitch had the bot locked out — a promise the channel cannot keep, since nobody can redeem the reward. Fixed, and now reintroduction #79. The harness was deleted afterwards; no dead source ships.
+
+**Reintroduction validation (#59–#80).** All twenty caught by the named test after being made to bite.
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 59 | `startedAt` seeded from publication time | 3 tests, channelSession |
+| 60 | `channel.status` published before the stream is recorded | 1 |
+| 61 | session does not adopt the stream recovered on start | 1 |
+| 62 | the points-redeemed write removed entirely | 4, redemption |
+| 63 | presence write dropped → RESTRICT key violation | 2 |
+| 64 | refunds counted as redemptions | 1 |
+| 65 | chatters counts rows, not distinct people | 1, dashboard |
+| 66 | redemptions folded back into the message count | 1 |
+| 67 | AI replies counts rows instead of summing usage | 1 |
+| 68 | the numbers query drops its channel filter | 1 (see honesty) |
+| 69 | the SPOTIFY tile hardcoded instead of read from the seam | 1 |
+| 70 | redemptions inflate the stream message counter | 1 (see honesty) |
+| 71 | `4b` conflated with offline | **18**, the matrix |
+| 72 | unreachable numbers render as zeroes | 1 (see honesty) |
+| 73 | uptime seeded from the event timestamp | 1 (see honesty) |
+| 74 | bot wash keyed on `skipped` rather than `fromBot` | 1 |
+| 75 | a chip rendered for lines the bot did not answer | 2 |
+| 76 | the stale chat feed kept after the server goes away | 2 |
+| 77 | a revoked token outranks an unreachable server | 1 |
+| 78 | `auth.error` loses its surface again | 1 |
+| 79 | `REQUESTS OPEN` promised while the bot is locked out | 1 |
+| 80 | healthy dots blink in unison | 1 |
+
+**Honesty items.**
+- **Four vacuous tests, found by the pass and fixed.** #68's tenancy test passed with the channel filter removed, because stream ids are UUIDs and already scope the query — the route-level test could not distinguish the two; replaced with one that hands alpha's repository beta's stream id directly. #70 asserted on `chat_totals` while the mutation touched `streams.total_messages`, a different table; and its first replacement failed on a missing `viewers` row rather than the assertion, so it was "CAUGHT" for the wrong reason until fixed. #72 targeted a redundant guard — `unknown` on `NumbersRow` was the real decision, so the extra `reachable ?` contributed nothing while reading like protection; the redundancy was removed rather than kept. #73 is described above.
+- **The reintroduction harness itself was wrong first.** `--reporter=basic` does not exist in Vitest 4, so every run errored and the driver scored all twelve as "passed anyway". It under-claimed rather than over-claimed, which is the safe direction, but it was silently converting a broken driver into a result — it now reports `HARNESS-ERROR` and refuses to score.
+- **A flaky test was shipped and then caught.** The chat-prepend App test passed in isolation and failed roughly one run in six under load: it sent a frame before the socket was open, so the dashboard was still treating the connection as `4b` and discarding the feed. Fixed to wait for the connection rather than for the shell to render; stable across eight consecutive full runs since.
+- **The design handoff directory was missing from this checkout** (gitignored, so a fresh clone loses it) and was restored from the owner's own `Twitch bot UI design review.zip`. Confirmed still untracked: `git status` reports zero handoff files.
+- **Mod name colouring is not implemented, because it cannot be.** The handoff colours moderator names `#9dbd8c`, but `chat.message` carries only `login` and `displayName` — no role marker. Broadcaster colouring is derived from the channel login and works; mod colouring needs a contract field and is flagged below rather than faked.
+- **The song card's now-playing half has no source.** Spotify playback belongs to 9c's surface, so that stage renders its placeholder rather than an invented track. The stage label still appears, because the label is what explains the queue.
+- **`SESSION = "Off"` is mine, not the handoff's.** The mocks never drew the master-switch-off case, which the switch can produce at any moment. TWITCH deliberately stays "Connected" there: the owner pausing their bot is not Twitch doing anything.
+
+**Deploy.** `scripts/deploy.sh` from a dry-run-first pass. No migration and no new env var in this package. Post-deploy: `healthz` 200, `readyz` both probes green, `/api/v1/me` and `/api/v1/dashboard` both 401 unauthenticated, session started, four subscriptions created and verified. **This deploy activates the periodic reconcile in production**, as instructed — the evidence line is `{"intervalMs":900000,"msg":"Periodic subscription reconciliation scheduled"}` at boot, its first appearance on the box. One deploy defect fixed on the way: `.idea/` was being shipped to the production box (dev IDE state, including a Phase-0 localhost datasource and a `root` user-name; no passwords — those live in the IDE keychain). It is the same category as `.claude`, which was already excluded, so its absence was an oversight rather than a decision.
+
+**Flagged, not fixed.**
+- **Mod role colouring in the chat feed** needs a role marker on `chat.message`; the contract has none. Smallest addition would be a `role` field on the chatter.
+- **`song_queue.updated` carries no `queueLength`.** The contract declares one; the composition root injects only `channelId` and `at`, so the field never arrives. The app refetches instead, which the handoff explicitly permits — but the contract and the wire disagree today.
+- **`streams.unique_chatters` is written by nothing.** It would report 0 for every stream, which is why the dashboard counts distinct chatters from `chat_messages` instead. Either wire it or drop the column.
+- **`chat_messages` still has no retention policy** and now grows slightly faster (fulfilled redemptions added). Unchanged from the standing P1-WP4.3 item; the stale "non-command" comment on that repository was the rider and is fixed.
+- Prior backlog unchanged: Node-20 action runtime deprecations, 6 moderate npm advisories, localStorage-behind-a-seam for the security-audit stage.
+
+**Remaining before close: the live proof with the owner** — their real chat lines showing correct chips as they type (command → `CMD`, plain → no chip), the status strip true to their real state, the uptime pill ticking if live, and `4b` demonstrated against a locally stopped dev server. The owner needs a fresh app build (`npm run tauri dev`, or a new installer) since the dashboard is new code and their installed build predates it.
+
+---
+
+
+### Addendum — live proof, and two defects it surfaced (engineer, 2026-08-16)
+
+Server **847/847** · app **201/201** · lint 0 · typecheck 0. Reintroductions now **#59–#82**.
+
+**The chip matrix is proven live.** The owner's own chat, through the installed app against production: `!discord` → `CMD`, `test` → no chip, `@AlmostHadAI what day is it?` → `AI`, both bot replies carrying the clay wash, their own name in clay. Correlated server-side — two `Chat message sent` lines at `1786930310657` and `1786930383916`, matching the 21:31 and 21:33 rows on screen.
+
+**Defect 1 — the chat feed ran backwards, and the owner caught it in the first minute.** I built it newest-at-top. The README's word for the feed is "prepends", which describes the in-memory operation; I read it as a rendering order. The design mock settles it — its own rows run 21:14 down to 21:17, oldest at the top — and so does every chat client ever made. Now oldest-first with the newest at the bottom, the list bottom-anchored via `margin-top:auto` (not `justify-content:flex-end`, which makes the overflowing top of a full list unreachable), and the feed follows the newest line. The array stays newest-first so the cap evicts the oldest rather than the line that just arrived; the two orders are separate concerns and each says so in place. Two existing tests had encoded the wrong order and were corrected rather than deleted.
+
+**Defect 2 — periodic reconciliation was churning production, and it was worse than churn.** The very first thing the new timer did in production was reveal a latent bug: `create:1 remove:1 keep:3`, every fifteen minutes, forever. We create the redemption subscription with `{broadcaster_user_id}`; Twitch echoes it back with `reward_id: ""`; `identity()` compared key-for-key, failed to recognise our own subscription, diffed it as orphaned, deleted it and created a fresh one. **The cost is not the two wasted API calls.** Between the delete and the create there is a window in which a viewer's redemption is never delivered — points spent, nothing given back, which is the precise failure the whole redemption pipeline exists to prevent. Fixed by dropping empty condition values from the identity: an unset field and an absent one are the same fact to Twitch, so they must hash the same. Redeployed; the boot reconcile now reports `create:0 remove:0 keep:4` where it previously reported `create:1 remove:1 keep:3`.
+
+**Why no test caught it: the fixture disagreed with the wire.** `redemptionSub` in the reconciler suite omitted `reward_id` entirely, so every test agreed with the code and neither agreed with Twitch. The fixture now carries `reward_id: ''` as production returns it, which turns the pre-existing "creates nothing when everything already exists" test into a regression test on its own, plus one named explicitly for the case. This is the same class as the vacuous tests found earlier in this package, one layer further out: not a test that asserted nothing, but a test whose *input* was fiction.
+
+**CI installer fix (lead ruling 1), delivered.** `VITE_API_BASE_URL: https://almosthadai.duckdns.org` set as an explicit env on the installer job, commented with why it is required and where the rebrand will need to look; tag and dispatch both target production as ruled. The loud failure is a `Verify the installer points at production` step between packaging and upload that greps the built bundle and fails the job if the production host is absent. It asserts *after* `tauri build` rather than before, deliberately: `tauri build` runs the front-end build itself via `beforeBuildCommand`, so `app/dist` at that point is precisely the tree NSIS packaged rather than an earlier one that happened to be built the same way. Workflow re-parsed; seven jobs, the verify step sits between build and upload.
+
+**Reintroduction validation (added).**
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 81 | installer bundle built against the dev-server fallback | the new CI verify step, proven both ways locally: production bundle exit 0, rewritten dev-fallback bundle exit 1 |
+| 82 | `identity()` compares empty condition values again | 2 reconciler tests, including the realistic fixture |
+
+**Honesty items (added).**
+- **My verification harness produced two false results in a row and both were caught by looking rather than by trusting.** The "installer ready" notification matched a **four-hour-old** artifact because the wait loop tested existence rather than freshness — I announced a ready installer that was the previous build, then retracted it; the real build was still running (`cargo`/`rustc` live). Separately, the first run of the CI-guard proof reported the dev-fallback bundle PASSING, which would have been a green light on a guard that does nothing: Git Bash's `/tmp` and native Python's `/tmp` resolve to different directories on Windows, so the rewrite silently touched no files. Both are the same lesson as the `--reporter=basic` incident earlier in this package — a harness that cannot fail is not evidence.
+- **The uptime tick is not proven live.** The owner was not streaming. It is covered by tests on both sides (server publishes the stream's own `startedAt`; the app seeds from it and ticks locally) and by #59/#60/#73, but that is not the same as having watched it count. Recorded as a deferred live observation per the lead's ruling, to be confirmed incidentally at the next stream.
+- **`4b` was not demonstrated by the owner in this session.** The wifi-off procedure was prepared and approved but the owner reported only the chat result. The state is covered by the eighteen-case matrix, by #71/#72/#76, and was verified visually in a real browser against computed styles.
+
+**Flag routing recorded** (per lead): mod-role colouring → 9b with a `role` marker on the chatter; `song_queue.updated`'s missing `queueLength` → 9c, to be resolved deliberately either way; `streams.unique_chatters` → 9c decision, lead leaning toward dropping the column. `SESSION = "Off"` noted for Claude Design as a faithful extension. **The restored design-handoff copy is subject to the 9c exit criterion** — deleted entirely at that tranche's close, including the extraction source in the owner's Downloads, and re-proven absent.
+
+---
+
+
+### Addendum 2 — the reconnect defect, and the churn's blast radius (engineer, 2026-08-16)
+
+Server **847/847** · app **209/209** · lint 0 · typecheck 0. Reintroductions **#59–#86**.
+
+**The churn's blast radius, as asked.** It predates the timer. The mismatch has existed since the redemption subscription first shipped, and the boot reconcile runs the same comparison — so **every deploy since then did exactly one delete-and-recreate of the redemption subscription**, opening one gap of roughly 200ms (measured from the production logs: remove at `…281215`, create at `…281426`). The timer did not create the bug; it multiplied one gap per deploy into ninety-six per day. **Could a real redemption have fallen in a boot-window gap? Almost certainly not, and here is the reasoning rather than the assumption:** deploys are run by hand from this machine, every one to date has happened while the owner was not streaming, and channel-point redemptions essentially only occur during a stream. The exposure is one 200ms window per deploy against an audience of zero. Not provable from logs — a redemption that was never delivered leaves no trace on our side, which is precisely what made this worth fixing rather than measuring — but the shape of the risk is small and the reasoning is stated so it can be disagreed with.
+
+**Steady state confirmed in production.** The boot reconcile after the fix reads `create:0 remove:0 keep:4` where it previously read `create:1 remove:1 keep:3`. More conclusively: reconciliation is quiet-when-unchanged, so a converged tick logs nothing at all — and **1,687 seconds (at least one full 900s tick) have now passed with complete silence on the subscription lines**, where before the fix every tick emitted a summary plus a `Removed subscription` and a `Created subscription`. The empty log is the evidence, the same way WP8b's silent off-window was.
+
+**A third defect, found in the owner's `4b` screenshot — and it was not the wifi test.** The owner reported the dashboard showing `4b` while production was healthy, and it stayed there. Diagnosis: **the realtime connection could never recover from any drop after the first fifteen minutes.** Access tokens live 900 seconds. The shell captured one at boot (`setAccessToken` only ever runs in `loadMe`) and `LiveConnection` reused that same string in the URL for every reconnect attempt, forever. A browser WebSocket does not expose the handshake's status code — a rejected upgrade arrives as an ordinary close — so the loop retried with a token the server would never accept and never learned why. My own redeploy dropped their socket; their token was by then older than fifteen minutes; the app was stuck. It would have taken an app restart to recover, and nothing on screen would ever have hinted at that.
+
+That is the dashboard going permanently blind, and reporting "we cannot reach our server" over a server that is perfectly healthy — the exact lie the `4b` design exists to prevent, arrived at from the opposite direction. Fixed with `freshAccessToken()`, which reads the token's own `exp`, refreshes anything expired or within a sixty-second margin, and persists the rotation; `LiveConnection` now takes `token: () => Promise<string>` and asks per attempt rather than per lifetime. A refresh that fails is treated as a drop — it backs off and retries, because the network being down is exactly when reconnecting matters and signing a user out over a blip would be worse than waiting. A connection stopped mid-refresh builds no socket.
+
+**A fourth, cosmetic, also from the screenshot:** the banner's title and description ran together into one sentence — "We cannot reach our serverYour bot is probably still running" — because `.banner__title` was styled for block children and I gave it spans, so `margin-top` on the description did nothing. Both are now explicitly `display: block`, stated in the stylesheet rather than left to whichever element a call site reaches for.
+
+**Reintroduction validation (added).**
+
+| # | Defect reintroduced | Caught by |
+|---|---|---|
+| 83 | the connection captures one token for its lifetime again | 1 |
+| 84 | a failed refresh ends the reconnect loop instead of retrying | 1 |
+| 85 | a connection stopped mid-refresh still builds a socket | 1 |
+| 86 | `freshAccessToken` hands back an expired token | 3 |
+
+**Honesty items (added).**
+- **#86 passed anyway on its first run** — the App-level test could not see it, because its fixture token was always fresh. Five direct tests of `freshAccessToken` now cover valid, expired, within-margin, unparseable and no-session. Fifth vacuous test this package; the pass keeps earning its place.
+- **I broke a passing test with a convenience and had to back it out.** Adding a default `/auth/app/refresh` route to the shared fetch stub made the connection tests pass, and silently changed the behaviour of "signs out when the session is genuinely rejected". Reverted; the correct fix was fixtures carrying a readable expiry so no refresh is provoked at all. A shared default that alters what other tests assert is not a convenience.
+- **The `4b` state in the owner's screenshot is genuine but was not the wifi-off procedure.** Every element of `4b` rendered correctly — `?` across all five tiles, skeleton stat blocks, "reconnecting…", the missed-lines copy, the inert switch, `?` on the queue — so it stands as live evidence of the screen. It just happened for a reason that turned out to be a bug in us rather than the intended test.
+- **The owner's status-strip reading in its healthy offline (`2b`) form is still unobserved**, because their app was stuck in `4b` for the whole window. It is covered by tests and by the browser fidelity pass. Recommend re-checking after installing a build with the reconnect fix; the currently-installed installer does NOT contain it.
+
+**The installer handed to the owner predates the reconnect fix.** It contains the dashboard, the chat-direction bug, and the stale-token defect. It should be rebuilt before it is treated as the shipping artifact — noting it rather than rebuilding unprompted, since the lead's dispatch CI run will produce the authoritative one and would now also prove the new guard.
+
+> **P1-WP9a CLOSED — verified by lead 2026-08-16.** Battery re-proven by the lead's own hands: server **847/847** on the sanctioned throwaway DB with `REQUIRE_DB_TESTS=1`, app **209/209**, lint 0, `npm run typecheck` exit 0. Critical diffs read: the `identity()` empty-value filter (unset ≡ absent, with the whole churn story in the function's own comment); the CI installer env + the grep-the-packaged-tree guard (asserting after `tauri build` so the tree checked is the tree shipped); `LiveConnection`'s per-attempt token provider (refresh-failure treated as an ordinary drop that backs off, abandoned-attempt check after the await); the dashboard route (`rejectApiKey`, tenancy from claims only); the redemption analytics write (fulfilled-only, managed-only, presence-before-history for the RESTRICT key, best-effort on a live path); `dashboardState`'s ordering (unreachable > revoked > switch > live, each condition making the ones below unknowable). **Reintroduction #82 re-run by the lead personally:** the filter removed → exactly the two subscription-identity tests failed, including the wire-realistic fixture → restored → 21/21. **Independent production evidence over SSH:** zero `Removed/Created subscription` lines in the last 90 minutes spanning multiple timer ticks, boot reconcile `create:0 remove:0 keep:4` — the churn is dead and the quiet-when-unchanged silence is itself the proof. **On the package's shape:** three defects were found after the code was "done" — the chat direction (owner's eyes), the reconciler churn (owner's chat lines chased through logs), and the reconnect death-after-15-minutes (owner's stuck screenshot, a healthy server reported unreachable — `4b`'s own lie reached from the opposite direction). The live proof is not a demo; it is a stage of testing, and this package is the record of that. Blast-radius answer accepted as honestly labeled reasoning (one ~200ms gap per deploy since the subscription shipped; deploys never mid-stream; an undelivered redemption leaves no trace on our side — which is itself an argument the periodic reconcile earns its keep). Five vacuous tests caught by the reintroduction pass this package, and the harness itself twice — **standing lesson, now thrice proven: a harness that cannot fail is not evidence.** The backed-out shared-stub default ("a shared default that alters what other tests assert is not a convenience") is endorsed as a keeper. **Two deferred live observations, to be confirmed incidentally:** the healthy `2b` strip reading (the owner's next install — their current build predates the reconnect fix and MUST be replaced by the dispatch artifact) and the uptime tick (next real stream). Flags carried: mod-role marker → 9b (below); `queueLength` contract/wire disagreement + `streams.unique_chatters` wire-or-drop (lead lean: drop, per the `viewers.context` precedent) + Spotify surface → 9c; retention unchanged; localStorage seam → security audit. Committed by lead; dispatch run triggered for the authoritative artifact.
+
+---
+
+## P1-WP9b — Content domains  [STATUS: ISSUED 2026-08-16]
+
+**Goal:** the three management screens — commands, emotes, quotes — full CRUD against the real API, with the design README ids `2c`, `4d`, `4e`, `3a`, `3b` as the acceptance spec. The owner's 22 commands, 3 emotes, and 4 quotes appear in the app for the first time.
+
+**Scope guard:** `app/`, `server/` (only the addition named below), `shared/`, docs. No 9c screens. Contract wins over any doc.
+
+**Lead calls (locked):**
+- **Server rider — the mod-role marker (closes 9a's deferred mod coloring):** `role` on the `chat.message` chatter (contract-first; smallest useful shape, e.g. `'broadcaster' | 'moderator' | 'vip' | 'viewer'` — the pipeline already computes permissions per message, so this is exposure, not new derivation). The 9a chat feed's mod-green turns on with it. Reintroduction: role dropped from the event; a mod rendered as a viewer.
+- **Commands (`2c`/`4d`/`4e`):** the grid with static vs handler-backed rows (BUILT IN chip, behavior description in the reply column, lock, never editable), hover-revealed actions, footer pagination, All/Yours/Built-in chips, search. Empty state with the three suggestion chips and the built-ins card. Editor modal with validation mirroring `commandNameSchema` exactly (leading `!`, no spaces, 2–64, lowercased on submit), reply 1–500 with live counter, WHO chips, `conflict` surfacing on the name field.
+- **Emotes (`3a`):** composer-as-first-row (not a modal), trigger lowercased/trimmed, exact-match footnote verbatim, delete-and-re-add as the only edit model.
+- **Quotes (`3b`):** two-column grid, retired-number gaps with the footnote verbatim, ghost Random, permanent delete.
+- **Interaction rules from the README:** optimistic mutation with rollback; one error presentation for the envelope (field-level `bad_request`/`conflict`, banner `unauthorized`/`unavailable`/transport, inline non-scary `rate_limited` with Retry-After).
+- **Tests:** validation-mirror tests (schema and UI agree or a test fails), CRUD component tests, the tile/pill patterns from 9a reused not reinvented; reintroduction validation with the table.
+- **Live proof (the full-stack loop, cheap and strong):** owner creates a command in the app → uses it in their chat → the bot answers; edits the reply → the bot answers with the new text; deletes it → silence. Adds an emote via the composer → triggers it → bot replies. Adds a quote → `!quote` can return it. Mod coloring visible on a real moderator line if one appears; otherwise deferred to incidental observation like the uptime tick.
+- **Close-out:** deploy rides at close (the role marker is the only server change); dispatch run for the artifact if app-visible changes warrant a rebuilt installer.
+
+### Exit criteria
+- Suites/lint/typecheck green across workspaces; validation mirrors proven; the live CRUD loop witnessed in the owner's chat; reintroduction table; report with honesty items and flagged-not-fixed.
+
+---
+
 ## FUTURE — Security review (owner-requested 2026-08-16)
 **A dedicated security-audit stage, run by a SEPARATE Fable session (fresh eyes, not this build thread), before any public/promoted launch.** Scope: system-design vulnerabilities across the whole surface — auth/OAuth flows and token handling, the public webhook, API authz/tenant isolation, secret handling, dependency CVEs, AND the **public GitHub repo** itself (history for leaked secrets, workflow permissions, exposed config). Rationale: the repo is public now, and the open-redirect find proves design-level vulns exist and are worth a deliberate pass rather than incidental catches. Constraint (owner): keep routine per-package compute lean — this is a concentrated audit stage, not ongoing overhead on every package. Trigger: before public launch, or sooner if the threat surface changes materially. Deliverable: a findings report ranked by severity, fixes issued as normal packages.
 

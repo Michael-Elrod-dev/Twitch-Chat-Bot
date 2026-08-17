@@ -248,9 +248,30 @@ export class SubscriptionReconciler {
     }
 }
 
-/** Type + version + condition is what makes two subscriptions the same subscription. */
+/**
+ * Type + version + condition is what makes two subscriptions the same
+ * subscription.
+ *
+ * **Empty condition values are dropped, not compared.** Twitch echoes optional
+ * condition fields back as empty strings: we create the redemption subscription
+ * with `{broadcaster_user_id}` and it is returned as
+ * `{broadcaster_user_id, reward_id: ""}`. Comparing those key-for-key made the
+ * reconciler fail to recognise its own subscription — it diffed as an orphan,
+ * was deleted, and was immediately recreated, every single run.
+ *
+ * That was invisible while reconciliation only happened at boot and on
+ * membership changes. The moment it ran on a timer it became a delete-and-
+ * recreate cycle every fifteen minutes, and the window between the two calls is
+ * a window in which a viewer's redemption is never delivered — points spent,
+ * nothing given back, which is the exact failure the redemption pipeline exists
+ * to prevent. Found in production logs within an hour of the timer going live.
+ *
+ * An unset condition field and an absent one are the same fact, so they must
+ * produce the same identity.
+ */
 function identity(type: string, version: string, condition: EventSubCondition): string {
     const normalized = Object.keys(condition)
+        .filter((key) => (condition[key] ?? '') !== '')
         .sort()
         .map((key) => `${key}=${condition[key] ?? ''}`)
         .join('&');

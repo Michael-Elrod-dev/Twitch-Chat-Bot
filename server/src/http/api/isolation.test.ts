@@ -16,6 +16,7 @@ import { createRateLimit } from './rateLimit.js';
 import { ChannelRepository } from '../../db/repositories/channelRepository.js';
 import { ApiKeyRepository } from '../../db/repositories/apiKeyRepository.js';
 import { AnalyticsRepository } from '../../db/repositories/analyticsRepository.js';
+import { DashboardRepository } from '../../db/repositories/dashboardRepository.js';
 import { SongQueueRepository } from '../../db/repositories/songQueueRepository.js';
 import { createChannelRepositories } from '../../bootstrap.js';
 import { signJwt } from '../../auth/jwt.js';
@@ -83,6 +84,7 @@ describeDb('API tenant isolation', () => {
             channels,
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
+            dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
             songs: (channelId) => new SongQueueRepository(handle.db, channelId)
         }));
 

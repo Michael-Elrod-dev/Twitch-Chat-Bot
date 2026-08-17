@@ -95,6 +95,25 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
             });
     }
 
+    /**
+     * @returns whether this channel has credentials for a provider at all.
+     *
+     * Deliberately never touches the cipher. The dashboard only needs to know
+     * that Spotify is linked, and answering that by decrypting a token would
+     * put a plaintext credential in memory to compute a boolean — and would
+     * make the tile report "not connected" for a row this build cannot decrypt,
+     * which is a different and more alarming fact than the one being asked.
+     */
+    async has(provider: TokenProvider): Promise<boolean> {
+        const [row] = await this.db
+            .select({ id: channelTokens.id })
+            .from(channelTokens)
+            .where(and(eq(channelTokens.channelId, this.channelId), eq(channelTokens.provider, provider)))
+            .limit(1);
+
+        return row !== undefined;
+    }
+
     async delete(provider: TokenProvider): Promise<boolean> {
         const removed = await this.db
             .delete(channelTokens)

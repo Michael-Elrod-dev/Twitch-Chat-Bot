@@ -134,6 +134,35 @@ describeDb('chat totals', () => {
         expect(row?.total_messages).toBe(2);
     });
 
+    it('does NOT roll the stream message count for a redemption', async () => {
+        // Spending channel points is an interaction, and it belongs in the
+        // viewer's totals — but it is not a line of chat, and counting it as one
+        // would inflate the stream's message figure by every reward redeemed.
+        const streamRepository = new StreamRepository(handle.db, alphaId);
+        const open = await streamRepository.findOpen();
+        if (open) await streamRepository.close(open.id, new Date());
+
+        const streams = new StreamService({
+            channelId: alphaId,
+            broadcasterTwitchId: '1001',
+            streams: streamRepository,
+            logger
+        });
+        const sink = sinkFor(alphaId, () => streams.currentStreamId());
+        await streams.onOnline(`redem-${Date.now()}`, new Date());
+
+        // `t1` is one of the viewers seeded above; chat_totals references
+        // viewers, so an id invented here would fail the key rather than the
+        // assertion.
+        await sink.recordInteraction(alphaId, message('t1', 'chatterone'), 'message');
+        await sink.recordInteraction(alphaId, message('t1', 'chatterone'), 'redemption');
+
+        const [row] = await handle.sql<{ total_messages: number }[]>`
+            select total_messages from streams where id = ${streams.currentStreamId() as string}`;
+        // One, not two: the chat line counted, the redemption did not.
+        expect(row?.total_messages).toBe(1);
+    });
+
     it('reports the real numbers through the analytics summary', async () => {
         // The end of the wire: the API surface that has been returning
         // structurally-correct zeroes since P1-WP7 now returns history.

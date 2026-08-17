@@ -66,6 +66,17 @@ export class StreamService {
         return this.current !== null;
     }
 
+    /**
+     * @returns when the current stream began, or null offline.
+     *
+     * Twitch's own start time from the `stream.online` payload, not the moment
+     * we noticed — a bot that restarts mid-stream would otherwise tell the
+     * broadcaster their four-hour stream is two minutes old.
+     */
+    startedAt(): Date | null {
+        return this.current?.startedAt ?? null;
+    }
+
     /** @returns the AI's stream context, or null offline. */
     context(): StreamContext | null {
         if (!this.current) return null;

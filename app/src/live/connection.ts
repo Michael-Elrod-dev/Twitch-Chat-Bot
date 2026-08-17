@@ -27,7 +27,17 @@ import { API_BASE_URL } from '../api/config.js';
 export type ConnectionState = 'connecting' | 'open' | 'reconnecting' | 'down';
 
 export interface ConnectionOptions {
-    accessToken: string;
+    /**
+     * Supplies a token for EACH attempt, rather than one captured for the life
+     * of the connection.
+     *
+     * A browser WebSocket does not expose the handshake's status code — a
+     * rejected upgrade arrives as an ordinary close — so a socket reconnecting
+     * with an expired token retries forever and never learns why. Access tokens
+     * live fifteen minutes; asking for a fresh one per attempt is what lets
+     * this loop heal itself instead of going permanently silent after a drop.
+     */
+    token: () => Promise<string>;
     onEvent: (event: LiveEvent) => void;
     onStateChange: (state: ConnectionState) => void;
     /** Injected in tests. */
@@ -112,6 +122,23 @@ export class LiveConnection {
 
     private open(as: ConnectionState): void {
         this.setState(as);
+        void this.connect();
+    }
+
+    private async connect(): Promise<void> {
+        let accessToken: string;
+        try {
+            accessToken = await this.options.token();
+        } catch {
+            // No usable token: a failure to connect like any other, so it backs
+            // off and tries again rather than stopping. A refresh that fails
+            // because the network is down must not end the session.
+            this.handleDrop();
+            return;
+        }
+
+        // The attempt was abandoned while we were fetching a token.
+        if (this.stopped) return;
 
         /*
          * The token rides in the query string because a browser WebSocket
@@ -121,7 +148,7 @@ export class LiveConnection {
          */
         const base = API_BASE_URL.replace(/^http/, 'ws');
         const socket = this.newSocket(
-            `${base}${LIVE_PATH}?access_token=${encodeURIComponent(this.options.accessToken)}`
+            `${base}${LIVE_PATH}?access_token=${encodeURIComponent(accessToken)}`
         );
         this.socket = socket;
 

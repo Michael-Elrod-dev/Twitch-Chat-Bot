@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { pino } from 'pino';
-import type { TransportEvent } from '@almosthadai/shared';
+import type { TransportEvent, LiveEvent, LiveChannelStatus } from '@almosthadai/shared';
 import { ChannelSession } from './channelSession.js';
 import { SessionManager } from './sessionManager.js';
 import { FakeTransport } from '../transport/fakeTransport.js';
 import type { ChatPipeline } from './chatPipeline.js';
 import type { CommandManager } from '../domain/commandManager.js';
 import type { EmoteManager } from '../domain/emoteManager.js';
+import type { EventBus } from '../live/eventBus.js';
 
 /**
  * Lifecycle discipline ported from Phase 0 tests/bot/bot.lifecycle.test.js and
@@ -190,6 +191,136 @@ describe('ChannelSession', () => {
 
             expect(pipeline.handle).toHaveBeenCalledTimes(2);
         });
+    });
+});
+
+/**
+ * The status the dashboard renders.
+ *
+ * The client ticks its uptime clock locally and re-syncs on every one of these,
+ * so the load-bearing property is not that an event is published but that
+ * `startedAt` is the STREAM's start — the thing that does not move — rather than
+ * the moment of publication, which does.
+ */
+describe('ChannelSession channel.status', () => {
+    const published: LiveEvent[] = [];
+    const bus: EventBus = {
+        publish: (_channelId, event) => { published.push(event); },
+        subscribe: () => () => undefined
+    };
+
+    const statuses = (): LiveChannelStatus[] =>
+        published.filter((e): e is LiveChannelStatus => e.type === 'channel.status');
+
+    /** A stream service with the one method the session reads, plus liveness. */
+    const streamsStub = (startedAt: Date | null) => ({
+        load: vi.fn(async () => undefined),
+        onOnline: vi.fn(async () => undefined),
+        onOffline: vi.fn(async () => undefined),
+        startedAt: () => startedAt,
+        get isLive() { return startedAt !== null; }
+    });
+
+    const makeSession = (streams?: ReturnType<typeof streamsStub>): ChannelSession =>
+        new ChannelSession({
+            channelId: 'c1',
+            broadcasterTwitchId: '1',
+            logger,
+            pipeline: { handle: vi.fn(async () => ({ action: 'none' as const })) } as never,
+            commands: { load: vi.fn(async () => undefined) } as never,
+            emotes: { load: vi.fn(async () => undefined) } as never,
+            ...(streams ? { streams: streams as never } : {}),
+            bus
+        });
+
+    beforeEach(() => { published.length = 0; });
+
+    it('announces the session coming up and going down', async () => {
+        const session = makeSession();
+
+        await session.start();
+        await session.stop();
+
+        expect(statuses().map((s) => s.sessionState)).toEqual(['running', 'stopped']);
+    });
+
+    it('reports the stream start time, not the moment it published', async () => {
+        // The distinction this whole field exists for: a client seeded from the
+        // publication time would restart its clock at every status change and
+        // read minutes into an hours-long stream.
+        const startedAt = new Date('2026-08-16T18:00:00.000Z');
+        const session = makeSession(streamsStub(startedAt));
+
+        await session.start();
+        await session.handleEvent(streamOnlineEvent('m1'));
+
+        const live = statuses().at(-1)!;
+        expect(live.live).toBe(true);
+        expect(live.startedAt).toBe('2026-08-16T18:00:00.000Z');
+        expect(live.startedAt).not.toBe(live.at);
+    });
+
+    it('publishes AFTER the stream is recorded, so startedAt is never null while live', async () => {
+        // Ordering, asserted rather than assumed: announcing first would send a
+        // live status with no start time and stall the client's clock until the
+        // next transition — which may be hours away.
+        let recorded = false;
+        const streams = {
+            load: vi.fn(async () => undefined),
+            onOnline: vi.fn(async () => { recorded = true; }),
+            onOffline: vi.fn(async () => undefined),
+            startedAt: () => (recorded ? new Date('2026-08-16T18:00:00.000Z') : null),
+            get isLive() { return recorded; }
+        };
+        const session = makeSession(streams as never);
+
+        await session.start();
+        await session.handleEvent(streamOnlineEvent('m1'));
+
+        expect(statuses().at(-1)!.startedAt).toBe('2026-08-16T18:00:00.000Z');
+    });
+
+    it('clears startedAt when the stream ends', async () => {
+        const session = makeSession(streamsStub(new Date('2026-08-16T18:00:00.000Z')));
+        await session.start();
+        await session.handleEvent(streamOnlineEvent('m1'));
+
+        await session.handleEvent({
+            kind: 'stream_offline', messageId: 'm2', broadcasterTwitchId: '1'
+        });
+
+        const last = statuses().at(-1)!;
+        expect(last.live).toBe(false);
+        // Null, not a stale timestamp: a client that kept ticking would show an
+        // uptime for a stream that is over.
+        expect(last.startedAt).toBeNull();
+    });
+
+    it('adopts the stream recovered on start, so a restart mid-stream is not reported offline', async () => {
+        // The restart case: `load()` resumes the open stream, and without the
+        // session adopting its liveness the dashboard showed OFFLINE with no
+        // uptime over a channel that was very much live.
+        const session = makeSession(streamsStub(new Date('2026-08-16T18:00:00.000Z')));
+
+        await session.start();
+
+        const first = statuses()[0]!;
+        expect(first.live).toBe(true);
+        expect(first.startedAt).toBe('2026-08-16T18:00:00.000Z');
+    });
+
+    it('costs nothing when nothing is watching', async () => {
+        // The default bus goes nowhere; a session with no observers must not
+        // need one wired to start.
+        const session = new ChannelSession({
+            channelId: 'c1', broadcasterTwitchId: '1', logger,
+            pipeline: { handle: vi.fn() } as never,
+            commands: { load: vi.fn(async () => undefined) } as never,
+            emotes: { load: vi.fn(async () => undefined) } as never
+        });
+
+        await expect(session.start()).resolves.toBeUndefined();
+        expect(published).toHaveLength(0);
     });
 });
 

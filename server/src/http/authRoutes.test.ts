@@ -171,6 +171,7 @@ function buildHarness(overrides: {
         channels,
         apiKeys: {} as never,
         analytics: () => ({}) as never,
+        dashboard: () => ({}) as never,
         songs: () => ({}) as never
     }));
 

@@ -51,6 +51,17 @@ export interface ChannelSettings {
     songRequestsEnabled: boolean;
     /** Write-only in practice: the API reports whether one is set, never its value. */
     discordWebhookConfigured: boolean;
+    /**
+     * Whether a Spotify account is linked.
+     *
+     * A boolean and nothing more, for the same reason the webhook is: the
+     * dashboard's SPOTIFY tile needs to say "Connected" or "Not set up" and
+     * needs no part of the credential to do it. The full surface — account
+     * name, linked-since date, disconnect — belongs to the songs settings
+     * screen and lands with it; putting it here would ship a payload nothing
+     * reads yet and commit us to keeping it right.
+     */
+    spotifyConnected: boolean;
 }
 
 export interface MeResponse {
@@ -138,6 +149,57 @@ export interface QueuedSong {
 
 export const toggleSongRequestsSchema = z.object({ enabled: z.boolean() });
 export type ToggleSongRequestsRequest = z.infer<typeof toggleSongRequestsSchema>;
+
+// ---- dashboard -------------------------------------------------------------
+
+/**
+ * The four figures across the top of the dashboard.
+ *
+ * Scoped to ONE stream — the open one while live, the most recent one when
+ * offline. Deliberately not lifetime totals: the dashboard is the glance from
+ * the second monitor during a stream, and "4,182 messages" means nothing there
+ * if it silently includes every stream that came before.
+ */
+export interface DashboardNumbers {
+    messages: number;
+    /** Distinct people who said something, not people watching. */
+    chatters: number;
+    aiReplies: number;
+    pointsRedeemed: number;
+}
+
+/**
+ * Everything the dashboard needs that is a fact about *now* rather than a
+ * change.
+ *
+ * The realtime feed carries transitions; this carries state. A client that
+ * connected mid-stream has missed every transition that ever happened, so
+ * without this endpoint the uptime clock would not start until the broadcaster
+ * went offline — which is exactly when it stops being interesting.
+ *
+ * Nothing here is a new table. Every field is a read over rows the bot already
+ * writes.
+ */
+export interface DashboardSummary {
+    live: boolean;
+    /**
+     * The open stream's start, or null offline. Seeds the uptime clock; the
+     * `channel.status` event re-syncs it.
+     */
+    startedAt: string | null;
+    /**
+     * The current stream's figures while live, the last stream's when offline.
+     * Zeroes only ever mean a real zero — a client that cannot reach the server
+     * renders `?`, never this.
+     */
+    numbers: DashboardNumbers;
+    /**
+     * The stream `numbers` describes, for the offline screen's
+     * `Last stream / Thursday · 4h 02m` caption. Null until a channel has
+     * streamed once with the bot connected.
+     */
+    lastStream: { startedAt: string; endedAt: string | null } | null;
+}
 
 // ---- analytics -------------------------------------------------------------
 

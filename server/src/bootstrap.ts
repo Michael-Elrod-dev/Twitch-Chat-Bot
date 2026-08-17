@@ -250,7 +250,13 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             logger: channelLogger,
             sendMessage: async (text: string) => {
                 await chatSink.send({ channelId, broadcasterTwitchId: channel.twitchBroadcasterId, text });
-            }
+            },
+            // The same three mechanisms the chat path uses, pointed at the
+            // redemption path — which until now wrote no analytics at all.
+            analytics: deps.analytics,
+            roles: repositories.roles,
+            ...(repositories.history ? { history: repositories.history } : {}),
+            ...(streams ? { currentStreamId: () => streams.currentStreamId() } : {})
         });
     }
 
@@ -396,7 +402,11 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         // left a queued track untouched through ninety minutes of playback.
         ...(monitor ? { monitor } : {}),
         ...(streams ? { streams } : {}),
-        ...(presence ? { presence } : {})
+        ...(presence ? { presence } : {}),
+        // The same bus the pipeline publishes chat on. The session's own
+        // announcements — session up/down, stream on/off — are what drive the
+        // dashboard's status strip and uptime clock.
+        ...(deps.bus ? { bus: deps.bus } : {})
     });
 }
 

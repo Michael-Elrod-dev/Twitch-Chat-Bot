@@ -12,9 +12,13 @@ import type { ChatHistoryEntry } from '../../ai/promptBuilder.js';
  * minimal write path lives here so the AI has context to work with, and the
  * full analytics pipeline replaces it rather than duplicating it.
  *
- * **Cost, stated plainly:** one INSERT per non-command chat message per channel.
- * At a busy channel's ~1 message/second that is 86k rows/day; the table is
- * indexed on (channel_id, message_time) and nothing prunes it yet. Retention is
+ * **Cost, stated plainly:** one INSERT per chat message per channel — commands
+ * included, recorded with the `command` message type, and now fulfilled
+ * redemptions too. (An earlier version of this comment said "non-command",
+ * which was never true of the code below it: the chat pipeline records every
+ * message it sees and only varies the type.) At a busy channel's ~1
+ * message/second that is 86k rows/day; the table is indexed on
+ * (channel_id, stream_id, message_time) and nothing prunes it yet. Retention is
  * a P1-WP4.3 decision, and it needs one — this grows without bound.
  */
 export class ChatHistoryRepository extends ChannelScopedRepository {

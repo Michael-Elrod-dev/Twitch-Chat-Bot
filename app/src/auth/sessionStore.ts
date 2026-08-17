@@ -137,3 +137,69 @@ export async function withFreshSession<T>(
         return await call(rotated.accessToken);
     }
 }
+
+/**
+ * How close to expiry a token has to be before it is replaced up front.
+ *
+ * A WebSocket authenticates once, at the upgrade, and a handshake that starts
+ * with sixty seconds left would be racing the clock for no reason.
+ */
+const REFRESH_MARGIN_SECONDS = 60;
+
+/**
+ * @returns the access token's expiry in epoch seconds, or null if it cannot be
+ * read.
+ *
+ * These are our own tokens, so the payload is ours to read; a token we cannot
+ * parse is treated as expired rather than trusted, which fails towards a
+ * refresh instead of towards a rejected connection.
+ */
+function expiryOf(accessToken: string): number | null {
+    const payload = accessToken.split('.')[1];
+    if (!payload) return null;
+
+    try {
+        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+        const exp = (JSON.parse(json) as { exp?: unknown }).exp;
+        return typeof exp === 'number' ? exp : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * An access token that will still be valid when it is used.
+ *
+ * **This exists because the realtime connection cannot ask for one lazily.**
+ * `withFreshSession` refreshes in reaction to a 401, which works for HTTP where
+ * the rejection is visible. A browser WebSocket does not expose the handshake's
+ * status code — a rejected upgrade arrives as an ordinary close — so a socket
+ * reconnecting with a stale token retries forever and never learns why.
+ *
+ * That is not hypothetical. Access tokens live fifteen minutes and the shell
+ * captured one at boot and reused it for every reconnect, so any drop after the
+ * first fifteen minutes — a deploy, a blip, a closed laptop lid — left the
+ * dashboard permanently unable to reconnect, showing "we cannot reach our
+ * server" over a server that was perfectly healthy. Found on the owner's own
+ * machine, in exactly that state, after a redeploy.
+ *
+ * Checking expiry BEFORE connecting is what makes the reconnect loop able to
+ * heal itself.
+ */
+export async function freshAccessToken(
+    storage: SessionStorage,
+    fetchImpl?: typeof fetch,
+    now: () => number = Date.now
+): Promise<string> {
+    const session = storage.read();
+    if (!session) throw new ApiError('unauthorized', 'Not signed in');
+
+    const expiry = expiryOf(session.accessToken);
+    const stillGood = expiry !== null
+        && expiry - REFRESH_MARGIN_SECONDS > Math.floor(now() / 1000);
+    if (stillGood) return session.accessToken;
+
+    const rotated = await refreshSession(session.refreshToken, fetchImpl);
+    storage.write(rotated);
+    return rotated.accessToken;
+}

@@ -58,7 +58,7 @@ ssh -o BatchMode=yes "$HOST" "mkdir -p '${REMOTE_DIR}'"
 # every level, so leaving these unanchored silently ships a repo with no source.
 EXCLUDE_ANYWHERE=(
     '.git' '.github' 'node_modules' 'dist' '*.tsbuildinfo'
-    'coverage' 'logs' 'temp_backups' '.claude'
+    'coverage' 'logs' 'temp_backups' '.claude' '.idea'
 )
 # Anchored to the transfer root: root-level names, plus specific nested paths
 # that must not be matched by name alone.

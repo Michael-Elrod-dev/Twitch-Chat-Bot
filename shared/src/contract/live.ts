@@ -54,6 +54,18 @@ export interface LiveChannelStatus {
     at: string;
     live: boolean;
     sessionState: 'stopped' | 'starting' | 'running' | 'stopping';
+    /**
+     * When the current stream began, or null when the channel is not live.
+     *
+     * The uptime clock's source of truth. It is deliberately the stream's own
+     * start time and NOT `at`: `at` is when this event was emitted, so a client
+     * that seeded its clock from it would restart the count at every status
+     * change and read `0:00:03` an hour into a stream. The client ticks locally
+     * once a second from this value and re-syncs whenever a new status arrives,
+     * which is what keeps a machine with a drifting clock — or one that just
+     * woke from sleep — honest.
+     */
+    startedAt: string | null;
 }
 
 /** Sent once on connect so a client can render immediately rather than waiting. */

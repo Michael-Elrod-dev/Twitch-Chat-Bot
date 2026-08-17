@@ -9,5 +9,6 @@ export * from './channelRoleRepository.js';
 export * from './apiKeyRepository.js';
 export * from './songQueueRepository.js';
 export * from './analyticsRepository.js';
+export * from './dashboardRepository.js';
 export * from './chatHistoryRepository.js';
 export * from './channelRewardRepository.js';

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MeResponse } from '@almosthadai/shared';
 import { App } from './App.js';
@@ -19,7 +19,12 @@ const ME: MeResponse = {
     twitchUserId: '1001',
     login: 'streamer',
     channel: { id: 'c1', login: 'streamer', displayName: null, status: 'active', enabled: true },
-    settings: { aiEnabled: true, songRequestsEnabled: true, discordWebhookConfigured: false }
+    settings: {
+        aiEnabled: true,
+        songRequestsEnabled: true,
+        discordWebhookConfigured: false,
+        spotifyConnected: false
+    }
 };
 
 const ME_NO_CHANNEL: MeResponse = {
@@ -54,6 +59,20 @@ function harness(
             canReceiveCallback: async () => canReceiveCallback
         }
     };
+}
+
+/**
+ * An access token with a readable, distant expiry.
+ *
+ * The realtime connection asks for a fresh token before every attempt and
+ * refreshes anything close to expiry — a fixture of `'at'` has no expiry it can
+ * read, so it is treated as expired and every test would exercise the refresh
+ * path it is not about. Only the `exp` claim is ever read; nothing here
+ * verifies a signature.
+ */
+function liveToken(secondsFromNow = 3600): string {
+    const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + secondsFromNow }));
+    return `header.${payload}.signature`;
 }
 
 /** Routes by path so a test states only the responses it cares about. */
@@ -234,7 +253,7 @@ describe('the auth arc', () => {
             '/healthz': () => new Response('ok'),
             '/api/v1/me': () => ok(ME_NO_CHANNEL)
         });
-        const h = harness(memorySessionStorage({ accessToken: 'at', refreshToken: 'rt' }));
+        const h = harness(memorySessionStorage({ accessToken: liveToken(), refreshToken: 'rt' }));
 
         render(<App platform={h.platform} storage={h.storage} />);
 
@@ -262,7 +281,7 @@ describe('the auth arc', () => {
             '/api/v1/me': () => json({ ok: false, error: { code: 'unauthorized', message: 'no' } }, 401),
             '/auth/app/refresh': () => json({ ok: false, error: { code: 'unauthorized', message: 'no' } }, 401)
         });
-        const h = harness(memorySessionStorage({ accessToken: 'at', refreshToken: 'rt' }));
+        const h = harness(memorySessionStorage({ accessToken: liveToken(), refreshToken: 'rt' }));
 
         render(<App platform={h.platform} storage={h.storage} />);
 
@@ -273,7 +292,7 @@ describe('the auth arc', () => {
 
 describe('the master switch, against the API', () => {
     const signedIn = async (): Promise<Harness> => {
-        const h = harness(memorySessionStorage({ accessToken: 'at', refreshToken: 'rt' }));
+        const h = harness(memorySessionStorage({ accessToken: liveToken(), refreshToken: 'rt' }));
         render(<App platform={h.platform} storage={h.storage} />);
         await screen.findByRole('navigation', { name: 'Sections' });
         return h;
@@ -335,5 +354,160 @@ describe('the master switch, against the API', () => {
         expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
         expect(screen.queryByText('OFFLINE')).not.toBeInTheDocument();
         expect(screen.getByRole('switch')).toBeDisabled();
+    });
+});
+
+/**
+ * The dashboard, wired through the real App.
+ *
+ * The component tests prove what each state reads; these prove the seams — that
+ * the uptime clock is seeded from the stream's start rather than the event's
+ * timestamp, and that a chat line arriving on the socket reaches the screen.
+ * Both were live defects: the shell shipped seeding its clock from `at`.
+ */
+describe('the dashboard wiring', () => {
+    const SUMMARY = {
+        live: true,
+        startedAt: '2026-08-16T18:00:00.000Z',
+        numbers: { messages: 4182, chatters: 137, aiReplies: 61, pointsRedeemed: 22 },
+        lastStream: { startedAt: '2026-08-16T18:00:00.000Z', endedAt: null }
+    };
+
+    /** Every socket the app opened, so a frame goes to the live one. */
+    interface FakeSocket {
+        onopen: (() => void) | null;
+        onmessage: ((e: { data: unknown }) => void) | null;
+    }
+    let sockets: FakeSocket[] = [];
+
+    const stubLiveSocket = (): void => {
+        sockets = [];
+        vi.stubGlobal('WebSocket', class {
+            onopen: (() => void) | null = null;
+            onclose: (() => void) | null = null;
+            onerror: (() => void) | null = null;
+            onmessage: ((e: { data: unknown }) => void) | null = null;
+
+            constructor() {
+                sockets.push(this);
+                queueMicrotask(() => { this.onopen?.(); });
+            }
+
+            close(): void { /* nothing to close */ }
+        });
+    };
+
+    const boot = async (summary: unknown = SUMMARY): Promise<void> => {
+        stubLiveSocket();
+        stubFetch({
+            '/healthz': () => new Response('ok'),
+            '/api/v1/dashboard': () => ok(summary),
+            '/api/v1/songs': () => ok({ items: [], total: 0 }),
+            '/api/v1/me': () => ok(ME)
+        });
+
+        const h = harness(memorySessionStorage({ accessToken: liveToken(), refreshToken: 'r' }));
+        render(<App platform={h.platform} storage={h.storage} />);
+
+        /*
+         * Wait for the socket to be OPEN, not merely for the shell to render.
+         *
+         * The switch becomes operable only at `connection === 'open'`, which is
+         * also the point the dashboard starts trusting anything it is told —
+         * sending a frame before then is delivered to a connection the screen is
+         * still treating as `4b`, and the assertion fails for a reason that has
+         * nothing to do with what it is testing. This was flaky until it waited.
+         */
+        await waitFor(() => { expect(screen.getByRole('switch')).toBeEnabled(); });
+    };
+
+    const send = (event: unknown): void => {
+        act(() => {
+            // The most recent socket is the live one; an earlier mount's is
+            // already detached.
+            sockets.at(-1)?.onmessage?.({ data: JSON.stringify(event) });
+        });
+    };
+
+    it('renders the live dashboard from the summary the server answers with', async () => {
+        await boot();
+
+        expect(await screen.findByText('4,182')).toBeInTheDocument();
+        expect(screen.getByText('Running')).toBeInTheDocument();
+    });
+
+    it('seeds the uptime clock from the stream start, not from the event timestamp', async () => {
+        // The defect that shipped: the shell read `at`, so the clock restarted
+        // at every status change and read seconds into an hours-long stream.
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        vi.setSystemTime(new Date('2026-08-16T20:14:07.000Z'));
+
+        try {
+            /*
+             * Booted OFFLINE on purpose.
+             *
+             * If the summary already carried the stream's start, the clock would
+             * be correct before the event arrived and this test would pass over a
+             * broken event path — which it did, until the reintroduction pass
+             * showed the mutation surviving it.
+             */
+            await boot({ ...SUMMARY, live: false, startedAt: null });
+            send({
+                type: 'channel.status',
+                channelId: 'c1',
+                // Hours after the stream began. Seeding from this would read 0:00:00.
+                at: '2026-08-16T20:14:07.000Z',
+                live: true,
+                sessionState: 'running',
+                startedAt: '2026-08-16T18:00:00.000Z'
+            });
+
+            await waitFor(() => { expect(screen.getByText(/LIVE 2:14:0/)).toBeInTheDocument(); });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('stops the clock when the stream ends', async () => {
+        await boot();
+        send({
+            type: 'channel.status', channelId: 'c1', at: '2026-08-16T22:00:00.000Z',
+            live: false, sessionState: 'running', startedAt: null
+        });
+
+        await waitFor(() => { expect(screen.getByText('OFFLINE')).toBeInTheDocument(); });
+    });
+
+    it('prepends a chat line arriving on the socket, with its chip', async () => {
+        await boot();
+        send({
+            type: 'chat.message', channelId: 'c1', at: '2026-08-16T20:14:00.000Z',
+            chatter: { login: 'viewer', displayName: 'Viewer' },
+            text: '!discord', outcome: 'command', fromBot: false
+        });
+
+        expect(await screen.findByText('!discord')).toBeInTheDocument();
+        expect(screen.getByText('CMD')).toBeInTheDocument();
+    });
+
+    it('shows `?` rather than zeroes when the summary cannot be loaded', async () => {
+        // A reachable-enough socket with an unreachable API is still `4b` for
+        // the numbers: we have nothing, and nothing is not zero.
+        stubLiveSocket();
+        stubFetch({
+            '/healthz': () => new Response('ok'),
+            '/api/v1/dashboard': () => { throw new Error('offline'); },
+            '/api/v1/songs': () => { throw new Error('offline'); },
+            '/api/v1/me': () => ok(ME)
+        });
+
+        const h = harness(memorySessionStorage({ accessToken: liveToken(), refreshToken: 'r' }));
+        render(<App platform={h.platform} storage={h.storage} />);
+        await waitFor(() => { expect(screen.getByRole('switch')).toBeEnabled(); });
+
+        await waitFor(() => {
+            expect(screen.queryByText('4,182')).not.toBeInTheDocument();
+        });
+        expect(screen.queryByText('0')).not.toBeInTheDocument();
     });
 });

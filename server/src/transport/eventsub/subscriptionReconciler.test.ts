@@ -30,12 +30,21 @@ const offlineSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSub
     condition: { broadcaster_user_id: broadcasterId }
 });
 
-/** Joined DESIRED_SUBSCRIPTIONS in P1-WP4.2, alongside its handler. */
+/**
+ * Joined DESIRED_SUBSCRIPTIONS in P1-WP4.2, alongside its handler.
+ *
+ * **The `reward_id: ''` is not decoration — it is what Twitch actually returns.**
+ * We create this subscription with `{broadcaster_user_id}` alone and Twitch
+ * echoes the optional field back as an empty string. This fixture used to omit
+ * it, which is precisely why the reconciler shipped unable to recognise its own
+ * redemption subscription: every test agreed with the code and neither agreed
+ * with Twitch. A fixture that does not match the wire proves nothing.
+ */
 const redemptionSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSubscription, 'id'> => ({
     type: SUBSCRIPTION_TYPES.redemptionAdd,
     version: '1',
     status,
-    condition: { broadcaster_user_id: broadcasterId }
+    condition: { broadcaster_user_id: broadcasterId, reward_id: '' }
 });
 
 describe('SubscriptionReconciler', () => {
@@ -69,6 +78,31 @@ describe('SubscriptionReconciler', () => {
             expect(plan.create).toHaveLength(0);
             expect(plan.remove).toHaveLength(0);
             expect(plan.keep).toHaveLength(DESIRED_SUBSCRIPTIONS.length);
+        });
+
+        it('recognises its own subscription when Twitch echoes an empty optional field', () => {
+            /*
+             * The production defect, as a test.
+             *
+             * Found in the logs within an hour of periodic reconciliation going
+             * live: `create:1 remove:1 keep:3`, every fifteen minutes, forever.
+             * The reconciler was deleting and recreating the redemption
+             * subscription on every run because Twitch's echoed
+             * `reward_id: ''` made it hash differently from the desired one.
+             *
+             * The cost was not just churn. Between the delete and the create
+             * there is a window in which a viewer's redemption is never
+             * delivered - points spent, nothing given back, which is the exact
+             * failure the redemption pipeline exists to prevent.
+             */
+            const asTwitchReturnsIt = client.seed(redemptionSub('1001'));
+
+            const plan = reconciler.plan(['1001'], [asTwitchReturnsIt]);
+
+            expect(plan.remove).toHaveLength(0);
+            expect(plan.keep).toContainEqual(asTwitchReturnsIt);
+            expect(plan.create.map((c) => c.type))
+                .not.toContain(SUBSCRIPTION_TYPES.redemptionAdd);
         });
 
         it('removes subscriptions for a channel that is no longer active', () => {

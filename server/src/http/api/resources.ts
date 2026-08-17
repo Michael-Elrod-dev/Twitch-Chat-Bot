@@ -17,7 +17,9 @@ import {
     type Emote,
     type Quote,
     type MeResponse,
+    type ChannelSettings,
     type ChannelEnabledResponse,
+    type DashboardSummary,
     type ApiKeySummary,
     type CreatedApiKey,
     type AnalyticsSummary,
@@ -36,6 +38,7 @@ import type { ChannelRepositories } from '../../bootstrap.js';
 import type { ChannelRepository } from '../../db/repositories/channelRepository.js';
 import type { ApiKeyRepository } from '../../db/repositories/apiKeyRepository.js';
 import type { AnalyticsRepository } from '../../db/repositories/analyticsRepository.js';
+import type { DashboardRepository } from '../../db/repositories/dashboardRepository.js';
 import type { SongQueueRepository } from '../../db/repositories/songQueueRepository.js';
 
 /**
@@ -53,9 +56,21 @@ export interface ResourceOptions {
     channels: ChannelRepository;
     apiKeys: ApiKeyRepository;
     analytics: (channelId: string) => AnalyticsRepository;
+    dashboard: (channelId: string) => DashboardRepository;
     songs: (channelId: string) => SongQueueRepository;
     /** Notifies live sockets. Optional so tests can omit it. */
     publish?: (channelId: string, event: { type: string }) => void;
+    /**
+     * Whether a channel has Spotify linked.
+     *
+     * A seam rather than a repository, because the token repository needs the
+     * cipher and this router has no business holding one — the question is
+     * "is there a row", and answering it should not put the key to every stored
+     * credential within reach of a route handler. Optional, and absent means
+     * "not connected": a build wired without it under-reports a tile rather
+     * than claiming a connection that may not exist.
+     */
+    spotifyConnected?: (channelId: string) => Promise<boolean>;
     /**
      * Starts or stops the channel's session to match the switch.
      *
@@ -79,7 +94,7 @@ const handle = (
 };
 
 export function createResourceRouter(options: ResourceOptions): Router {
-    const { logger, repositories, apiKeys, analytics, songs } = options;
+    const { logger, repositories, apiKeys, analytics, dashboard, songs } = options;
     const router = Router();
     const ok = handle.bind(null, logger);
 
@@ -96,6 +111,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
         // `me` is the one route that tolerates having no channel: being signed
         // in without one is an ordinary state the client must be able to render.
         const settings = channel ? await repositories(channel.id).settings.get() : null;
+        const spotify = channel ? await (options.spotifyConnected?.(channel.id) ?? false) : false;
 
         const body: MeResponse = {
             twitchUserId: claims.sub,
@@ -116,7 +132,9 @@ export function createResourceRouter(options: ResourceOptions): Router {
                     // Reported as a boolean, never as the URL: a webhook URL is
                     // a capability, and echoing it back would let a stolen token
                     // exfiltrate one.
-                    discordWebhookConfigured: settings.discordWebhookUrl !== null
+                    discordWebhookConfigured: settings.discordWebhookUrl !== null,
+                    // Same rule, same reason: presence, never the credential.
+                    spotifyConnected: spotify
                 }
                 : null
         };
@@ -138,11 +156,15 @@ export function createResourceRouter(options: ResourceOptions): Router {
             await repositories(channel.id).settings.update(req.body);
             const updated = await repositories(channel.id).settings.get();
 
+            // `satisfies` rather than a bare literal: this and `/me` are two
+            // places that build the same contract type, and the compiler is
+            // what stops them drifting apart when a field is added to one.
             res.status(200).json(apiSuccess({
                 aiEnabled: updated?.aiEnabled ?? true,
                 songRequestsEnabled: updated?.songRequestsEnabled ?? true,
-                discordWebhookConfigured: (updated?.discordWebhookUrl ?? null) !== null
-            }));
+                discordWebhookConfigured: (updated?.discordWebhookUrl ?? null) !== null,
+                spotifyConnected: await (options.spotifyConnected?.(channel.id) ?? false)
+            } satisfies ChannelSettings));
         })
     );
 
@@ -397,6 +419,47 @@ export function createResourceRouter(options: ResourceOptions): Router {
             res.status(200).json(apiSuccess({ songRequestsEnabled: enabled }));
         })
     );
+
+    // ---- dashboard ---------------------------------------------------------
+
+    /**
+     * The state the dashboard opens on.
+     *
+     * The realtime feed carries transitions; this carries the state those
+     * transitions change. A client that connects mid-stream has missed every
+     * transition that ever happened, so without this its uptime clock would not
+     * start until the broadcaster went offline.
+     *
+     * Reports the CURRENT stream's numbers while live and the LAST stream's
+     * when offline — the same shape either way, with `live` saying which. A
+     * channel that has never streamed answers `null` and zeroes, and the client
+     * renders the empty state; it never renders zeroes for a server it could
+     * not reach, which is the `4b` rule and is enforced client-side because
+     * this response cannot exist in that case.
+     */
+    router.get('/api/v1/dashboard', rejectApiKey, ok(async (req, res) => {
+        const stream = await dashboard(req.channel!.id).currentOrLastStream();
+
+        const numbers = stream
+            ? await dashboard(req.channel!.id).numbersForStream(stream.id)
+            : { messages: 0, chatters: 0, aiReplies: 0, pointsRedeemed: 0 };
+
+        res.status(200).json(apiSuccess({
+            // Live is a property of the stream row, not of the session: a
+            // session that is stopped because the owner switched the bot off
+            // does not make the broadcaster offline, and saying so would put
+            // OFFLINE over a channel that is streaming.
+            live: stream !== null && stream.endedAt === null,
+            startedAt: stream && stream.endedAt === null ? stream.startedAt.toISOString() : null,
+            numbers,
+            lastStream: stream
+                ? {
+                    startedAt: stream.startedAt.toISOString(),
+                    endedAt: stream.endedAt ? stream.endedAt.toISOString() : null
+                }
+                : null
+        } satisfies DashboardSummary));
+    }));
 
     // ---- analytics ---------------------------------------------------------
 

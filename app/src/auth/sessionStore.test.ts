@@ -3,6 +3,7 @@ import { ApiError } from '../api/client.js';
 import {
     browserSessionStorage,
     memorySessionStorage,
+    freshAccessToken,
     refreshSession,
     signOut,
     withFreshSession
@@ -168,5 +169,57 @@ describe('withFreshSession', () => {
     it('refuses when there is no session at all', async () => {
         await expect(withFreshSession(memorySessionStorage(null), async () => 'x'))
             .rejects.toThrow('Not signed in');
+    });
+});
+
+/**
+ * The token the realtime socket connects with.
+ *
+ * Separate from `withFreshSession`, which reacts to a 401 — a browser WebSocket
+ * never shows one, so this has to decide BEFORE connecting. The defect it
+ * exists for: the shell captured a token at boot and reconnected with it
+ * forever, so any drop past the fifteen-minute expiry left the dashboard
+ * permanently unable to reconnect to a perfectly healthy server.
+ */
+describe('freshAccessToken', () => {
+    /** Only the `exp` claim is ever read; nothing verifies a signature. */
+    const token = (expSecondsFromNow: number, now = Date.now()): string =>
+        `header.${btoa(JSON.stringify({ exp: Math.floor(now / 1000) + expSecondsFromNow }))}.sig`;
+
+    const rotated = { ok: true, data: { access_token: 'rotated', refresh_token: 'r2' } };
+
+    it('returns the stored token while it is comfortably valid', async () => {
+        const fetchImpl = jsonFetch(200, rotated);
+        const storage = memorySessionStorage({ accessToken: token(600), refreshToken: 'r1' });
+
+        expect(await freshAccessToken(storage, fetchImpl)).toBe(storage.read()?.accessToken);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('refreshes a token that has already expired', async () => {
+        const storage = memorySessionStorage({ accessToken: token(-30), refreshToken: 'r1' });
+
+        expect(await freshAccessToken(storage, jsonFetch(200, rotated))).toBe('rotated');
+        // Persisted, so the next attempt does not refresh again.
+        expect(storage.read()?.accessToken).toBe('rotated');
+    });
+
+    it('refreshes one that expires within the margin, rather than racing the clock', async () => {
+        // A handshake starting with thirty seconds left would be a coin flip.
+        const storage = memorySessionStorage({ accessToken: token(30), refreshToken: 'r1' });
+
+        expect(await freshAccessToken(storage, jsonFetch(200, rotated))).toBe('rotated');
+    });
+
+    it('treats a token it cannot read as expired', async () => {
+        // Fails towards a refresh rather than towards a rejected connection.
+        const storage = memorySessionStorage({ accessToken: 'not-a-jwt', refreshToken: 'r1' });
+
+        expect(await freshAccessToken(storage, jsonFetch(200, rotated))).toBe('rotated');
+    });
+
+    it('refuses when there is no session at all', async () => {
+        await expect(freshAccessToken(memorySessionStorage(null), jsonFetch(200, rotated)))
+            .rejects.toBeInstanceOf(ApiError);
     });
 });

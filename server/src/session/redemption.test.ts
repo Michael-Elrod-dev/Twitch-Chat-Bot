@@ -6,6 +6,12 @@ import { connectTestDatabase } from '../db/testing.js';
 import { ChannelRepository } from '../db/repositories/channelRepository.js';
 import { ChannelRewardRepository } from '../db/repositories/channelRewardRepository.js';
 import { QuoteRepository } from '../db/repositories/quoteRepository.js';
+import { AnalyticsRepository } from '../db/repositories/analyticsRepository.js';
+import { DashboardRepository } from '../db/repositories/dashboardRepository.js';
+import { ChatHistoryRepository } from '../db/repositories/chatHistoryRepository.js';
+import { ChannelRoleRepository } from '../db/repositories/channelRoleRepository.js';
+import { StreamRepository } from '../db/repositories/streamRepository.js';
+import { DatabaseAnalyticsSink } from '../services/analytics.js';
 import { RedemptionPipeline } from './redemptionPipeline.js';
 import { RedemptionSettlement } from '../services/redemptionSettlement.js';
 import { createQuoteRedemptionHandler, parseQuote } from '../domain/quoteRedemption.js';
@@ -378,6 +384,201 @@ describeDb('RedemptionPipeline', () => {
             expect(alphaQuotes.some((q) => q.quoteText === 'alpha quote')).toBe(true);
             expect(alphaQuotes.some((q) => q.quoteText === 'beta quote')).toBe(false);
             expect(betaQuotes.some((q) => q.quoteText === 'beta quote')).toBe(true);
+        });
+    });
+
+    /**
+     * The write that was never there.
+     *
+     * Before this, the redemption path recorded no analytics at all: the
+     * dashboard's "points redeemed" tile read zero forever, and so did every
+     * viewer's lifetime `redemption_count` — a column that had been in the
+     * schema, and empty, since it was added.
+     *
+     * Against the real database on purpose. The risk in this write is not the
+     * arithmetic, it is the foreign key: `chat_messages.twitch_user_id`
+     * references `viewers` with RESTRICT, and someone can redeem a reward
+     * without ever having typed in chat. A stub would have proved nothing about
+     * the one thing that could fail.
+     */
+    describe('the points-redeemed write', () => {
+        const pipelineWithAnalytics = (
+            channelId: string,
+            options: { streamId?: string | null } = {}
+        ): RedemptionPipeline =>
+            new RedemptionPipeline({
+                channelId,
+                rewards: new ChannelRewardRepository(handle.db, channelId),
+                settlement: settlementStub(),
+                handlers: {
+                    add_quote: createQuoteRedemptionHandler({
+                        quotes: new QuoteRepository(handle.db, channelId),
+                        logger
+                    })
+                },
+                logger,
+                sendMessage: async (text) => { sent.push(text); },
+                analytics: new DatabaseAnalyticsSink({
+                    analytics: new AnalyticsRepository(handle.db, channelId)
+                }),
+                history: new ChatHistoryRepository(handle.db, channelId),
+                roles: new ChannelRoleRepository(handle.db, channelId),
+                currentStreamId: () => options.streamId ?? null
+            });
+
+        const redemptionsFor = async (channelId: string, streamId: string): Promise<number> =>
+            (await new DashboardRepository(handle.db, channelId).numbersForStream(streamId))
+                .pointsRedeemed;
+
+        it('counts a fulfilled redemption against the stream it happened in', async () => {
+            const streamId = (await new StreamRepository(handle.db, alphaId).open({
+                twitchStreamId: `points-${Date.now()}`,
+                startedAt: new Date(),
+                title: null,
+                category: null
+            })).id;
+
+            await pipelineWithAnalytics(alphaId, { streamId }).handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: 'points-viewer', login: 'pointsviewer', displayName: 'P' },
+                userInput: '"counted" - someone'
+            }));
+
+            expect(await redemptionsFor(alphaId, streamId)).toBe(1);
+        });
+
+        it('records a redeemer who has never chatted', async () => {
+            // The foreign key case, and the reason presence is written first.
+            // A viewer can spend points on their very first interaction with a
+            // channel, and an insert that assumed the chat path had already
+            // created them would fail on RESTRICT and lose the count.
+            const streamId = (await new StreamRepository(handle.db, alphaId).open({
+                twitchStreamId: `fk-${Date.now()}`,
+                startedAt: new Date(),
+                title: null,
+                category: null
+            })).id;
+            const stranger = `stranger-${Date.now()}`;
+
+            await pipelineWithAnalytics(alphaId, { streamId }).handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: stranger, login: 'stranger', displayName: 'S' },
+                userInput: '"first ever interaction" - nobody'
+            }));
+
+            expect(await redemptionsFor(alphaId, streamId)).toBe(1);
+        });
+
+        it('rolls into the viewer lifetime totals, which were never counted before', async () => {
+            // `redemption_count` has been in `chat_totals` since it was added
+            // and no code path had ever incremented it. This is the assertion
+            // that the column now means something.
+            const stamp = Date.now();
+            const login = `lifetime${stamp}`;
+
+            await pipelineWithAnalytics(alphaId).handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: `lifetime-${stamp}`, login, displayName: 'L' },
+                userInput: '"lifetime" - someone'
+            }));
+
+            const totals = await new AnalyticsRepository(handle.db, alphaId).totalsForLogin(login);
+
+            expect(totals?.redemptionCount).toBe(1);
+            // Counted as an interaction, but NOT as a chat message: spending
+            // points is not a line of chat, and reporting it as one would
+            // inflate "messages this stream" by every reward redeemed.
+            expect(totals?.messageCount).toBe(0);
+            expect(totals?.totalCount).toBe(1);
+        });
+
+        it('does NOT count a refunded redemption', async () => {
+            // The points went back. Counting a refund as a spend would report a
+            // number the broadcaster can never reconcile against Twitch.
+            const streamId = (await new StreamRepository(handle.db, alphaId).open({
+                twitchStreamId: `refund-${Date.now()}`,
+                startedAt: new Date(),
+                title: null,
+                category: null
+            })).id;
+
+            await pipelineWithAnalytics(alphaId, { streamId }).handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: 'refund-viewer', login: 'refundviewer', displayName: 'R' },
+                // Malformed: the handler refuses and the pipeline refunds.
+                userInput: 'not a quote at all'
+            }));
+
+            expect(settled).toEqual([{ status: 'CANCELED', redemptionId: 'redemption-1' }]);
+            expect(await redemptionsFor(alphaId, streamId)).toBe(0);
+        });
+
+        it('does NOT count an unmanaged reward', async () => {
+            // The broadcaster's own rewards are not the bot's to report on.
+            const streamId = (await new StreamRepository(handle.db, alphaId).open({
+                twitchStreamId: `unmanaged-${Date.now()}`,
+                startedAt: new Date(),
+                title: null,
+                category: null
+            })).id;
+
+            await pipelineWithAnalytics(alphaId, { streamId }).handle(redemption({
+                rewardId: 'not-ours',
+                rewardTitle: 'Pick the game',
+                redeemer: { twitchUserId: 'unmanaged-viewer', login: 'unmanagedviewer', displayName: 'U' }
+            }));
+
+            expect(await redemptionsFor(alphaId, streamId)).toBe(0);
+        });
+
+        it('serves the viewer even when the analytics write fails', async () => {
+            // Bookkeeping must never turn a successful redemption into a failed
+            // one — the same rule the chat path follows.
+            const pipeline = new RedemptionPipeline({
+                channelId: alphaId,
+                rewards: new ChannelRewardRepository(handle.db, alphaId),
+                settlement: settlementStub(),
+                handlers: {
+                    add_quote: createQuoteRedemptionHandler({
+                        quotes: new QuoteRepository(handle.db, alphaId),
+                        logger
+                    })
+                },
+                logger,
+                sendMessage: async (text) => { sent.push(text); },
+                analytics: {
+                    recordInteraction: async () => { throw new Error('analytics down'); }
+                },
+                roles: new ChannelRoleRepository(handle.db, alphaId)
+            });
+
+            await expect(pipeline.handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: 'resilient-viewer', login: 'resilient', displayName: 'R' },
+                userInput: '"still stored" - someone'
+            }))).resolves.toMatchObject({ action: 'fulfilled' });
+
+            expect(settled).toEqual([{ status: 'FULFILLED', redemptionId: 'redemption-1' }]);
+        });
+
+        it('keeps one channel redemptions out of another count', async () => {
+            const alphaStream = (await new StreamRepository(handle.db, alphaId).open({
+                twitchStreamId: `iso-a-${Date.now()}`,
+                startedAt: new Date(), title: null, category: null
+            })).id;
+            const betaStream = (await new StreamRepository(handle.db, betaId).open({
+                twitchStreamId: `iso-b-${Date.now()}`,
+                startedAt: new Date(), title: null, category: null
+            })).id;
+
+            await pipelineWithAnalytics(alphaId, { streamId: alphaStream }).handle(redemption({
+                rewardId: 'alpha-quote-reward',
+                redeemer: { twitchUserId: 'iso-viewer', login: 'isoviewer', displayName: 'I' },
+                userInput: '"alpha only" - someone'
+            }));
+
+            expect(await redemptionsFor(alphaId, alphaStream)).toBe(1);
+            expect(await redemptionsFor(betaId, betaStream)).toBe(0);
         });
     });
 });
