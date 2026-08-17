@@ -172,7 +172,9 @@ function buildHarness(overrides: {
         apiKeys: {} as never,
         analytics: () => ({}) as never,
         dashboard: () => ({}) as never,
-        songs: () => ({}) as never
+        songs: () => ({}) as never,
+        // No session in this suite; the reload has nothing to tell.
+        reloadChannelContent: async () => undefined
     }));
 
     return {

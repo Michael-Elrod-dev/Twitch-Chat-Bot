@@ -85,7 +85,9 @@ describeDb('API tenant isolation', () => {
             apiKeys,
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
-            songs: (channelId) => new SongQueueRepository(handle.db, channelId)
+            songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            // No session in this suite; the reload has nothing to tell.
+            reloadChannelContent: async () => undefined
         }));
 
         app = createApp({ logger, version: 'test', routers: [router] });

@@ -80,6 +80,24 @@ export interface ResourceOptions {
      * built. Optional so route tests can observe the call without booting one.
      */
     applyChannelEnabled?: (channelId: string, enabled: boolean) => Promise<void>;
+    /**
+     * Tells the running session that its commands or emotes changed.
+     *
+     * A seam for the same reason `applyChannelEnabled` is one: the route's job
+     * is to record the change, and the composition root is the only place that
+     * knows a session exists. Without it the write lands in the database and
+     * the bot never learns — the managers hold an in-memory map and a populated
+     * cache, and a row inserted behind them stays invisible until restart.
+     *
+     * **Required, unlike the other seams here, and deliberately so.** This is
+     * the shape of the defect that shipped: not a wiring somebody deleted, but
+     * a connection nobody had made, which no type complained about. Optional
+     * would mean a build that forgets it compiles cleanly and saves commands
+     * that never fire — the exact failure, silently available again. Required
+     * makes forgetting it a compile error at the composition root, which is the
+     * only place that can get it wrong.
+     */
+    reloadChannelContent: (channelId: string, kind: 'commands' | 'emotes') => Promise<void>;
 }
 
 /** Wraps an async handler so a rejection becomes a 500 envelope, not a hang. */
@@ -240,6 +258,10 @@ export function createResourceRouter(options: ResourceOptions): Router {
             }
 
             await repo.create({ ...body, handlerName: null });
+            // Before responding: the client types the command in chat the second
+            // it sees the row appear, so a reload that trailed the response
+            // would lose that race for no reason.
+            await options.reloadChannelContent(req.channel!.id, 'commands');
             res.status(201).json(apiSuccess({ ...body, handlerName: null } satisfies Command));
         })
     );
@@ -266,6 +288,8 @@ export function createResourceRouter(options: ResourceOptions): Router {
             if (body.responseText !== undefined) await repo.updateResponse(parsed.data, body.responseText);
             if (body.userLevel !== undefined) await repo.updateUserLevel(parsed.data, body.userLevel);
 
+            await options.reloadChannelContent(req.channel!.id, 'commands');
+
             const updated = (await repo.listAll()).find((c) => c.name === parsed.data);
             res.status(200).json(apiSuccess(updated as Command));
         })
@@ -284,6 +308,9 @@ export function createResourceRouter(options: ResourceOptions): Router {
             return;
         }
 
+        // A deleted command must stop answering, which needs the same reload:
+        // the cache would otherwise keep serving it until the session restarts.
+        await options.reloadChannelContent(req.channel!.id, 'commands');
         res.status(204).end();
     }));
 
@@ -311,6 +338,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
         }
 
         await repo.create(body);
+        await options.reloadChannelContent(req.channel!.id, 'emotes');
         res.status(201).json(apiSuccess(body));
     }));
 
@@ -322,6 +350,8 @@ export function createResourceRouter(options: ResourceOptions): Router {
             res.status(404).json(apiFailure('not_found', 'No such emote'));
             return;
         }
+
+        await options.reloadChannelContent(req.channel!.id, 'emotes');
         res.status(204).end();
     }));
 

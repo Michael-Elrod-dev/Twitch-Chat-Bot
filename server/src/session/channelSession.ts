@@ -96,6 +96,28 @@ export class ChannelSession {
         this.bus = options.bus ?? NULL_EVENT_BUS;
     }
 
+    /**
+     * Re-reads this channel's content into the running session.
+     *
+     * **The API writes to the database; this is what tells the bot.** Both
+     * managers keep an in-memory map AND a populated Redis hash, and their
+     * lookup treats "hash exists, field absent" as an authoritative miss so an
+     * ordinary chat message never pays for a database round trip. That
+     * optimisation is correct and load-bearing — and it means a row inserted
+     * behind the managers' backs is invisible to them, not briefly but
+     * permanently: once the hash expires the fallback consults the in-memory
+     * map, which `loaded` marks as already good.
+     *
+     * So a command created in the app saved fine and never fired in chat. The
+     * screens were writing to storage the bot had stopped reading.
+     */
+    async reloadContent(kind: 'commands' | 'emotes'): Promise<void> {
+        if (kind === 'commands') await this.commands.load();
+        else await this.emotes.load();
+
+        this.logger.debug({ channelId: this.channelId, kind }, 'Reloaded channel content');
+    }
+
     getState(): SessionState {
         return this.state;
     }

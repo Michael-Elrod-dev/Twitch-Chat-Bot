@@ -113,6 +113,8 @@ describeDb('channel master switch', () => {
             analytics: (channelId) => new AnalyticsRepository(handle.db, channelId),
             dashboard: (channelId) => new DashboardRepository(handle.db, channelId),
             songs: (channelId) => new SongQueueRepository(handle.db, channelId),
+            // No session in this suite; the reload has nothing to tell.
+            reloadChannelContent: async () => undefined,
             applyChannelEnabled: (channelId, enabled) => applyChannelEnabled(ports, channelId, enabled)
         }));
 

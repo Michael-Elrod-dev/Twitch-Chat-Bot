@@ -489,6 +489,12 @@ async function main(): Promise<void> {
         repositories: (channelId) => createChannelRepositories(database.db, channelId),
         channels: channelRepository,
         applyChannelEnabled,
+        // The write lands in the database; this is what makes the running bot
+        // read it. Absent session (channel disabled) is a no-op: there is
+        // nothing to tell, and the next start loads from the database anyway.
+        reloadChannelContent: async (channelId, kind) => {
+            await sessionManager.get(channelId)?.reloadContent(kind);
+        },
         apiKeys: apiKeyRepository,
         analytics: (channelId) => new AnalyticsRepository(database.db, channelId),
         dashboard: (channelId) => new DashboardRepository(database.db, channelId),
