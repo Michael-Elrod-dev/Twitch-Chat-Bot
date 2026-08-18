@@ -3,7 +3,7 @@ import type { CacheManager } from '../cache/cacheManager.js';
 import type { OAuthFlow } from '../twitch/oauth.js';
 
 /**
- * OAuth `state` — the CSRF defence for the callback.
+ * OAuth `state` — the CSRF defense for the callback.
  *
  * Without it, anyone could send the owner a crafted callback URL carrying *their*
  * authorization code and silently attach their Twitch account to this server.

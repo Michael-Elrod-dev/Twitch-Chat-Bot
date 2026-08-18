@@ -4,7 +4,7 @@ import type { Logger } from '../logger.js';
 
 /**
  * `Add a quote`, ported from Phase 0 with its format validation and its
- * refund-on-malformed behaviour.
+ * refund-on-malformed behavior.
  *
  * The format is strict on purpose: a quote is recalled later by number and
  * displayed verbatim, so a malformed one is a permanent piece of junk in the

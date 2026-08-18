@@ -6,7 +6,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * (docs/TWITCH_PLATFORM_FACTS.md section 3).
  *
  * Two details are load-bearing and easy to get wrong:
- *  - the *raw* body must be hashed, not a re-serialised parse, because JSON key
+ *  - the *raw* body must be hashed, not a re-serialized parse, because JSON key
  *    order and whitespace are not preserved by a round-trip;
  *  - the comparison must be timing-safe, or the endpoint leaks the correct
  *    signature one byte at a time to anyone willing to measure.

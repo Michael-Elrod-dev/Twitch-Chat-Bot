@@ -36,7 +36,7 @@ export interface SettingsServiceOptions {
     logger: Logger;
 }
 
-/** Per-channel behaviour knobs, replacing Phase 0's key/value drawer. */
+/** Per-channel behavior knobs, replacing Phase 0's key/value drawer. */
 export class SettingsService {
     private readonly channelId: string;
     private readonly repository: ChannelSettingsRepository;
@@ -62,7 +62,7 @@ export class SettingsService {
     /**
      * Fails CLOSED. If the flag cannot be read, the AI stays quiet rather than
      * resurrecting one the broadcaster deliberately switched off (Phase 0 WP-6
-     * task 6, a deliberate behaviour change carried forward).
+     * task 6, a deliberate behavior change carried forward).
      */
     async isAiEnabled(): Promise<boolean> {
         try {

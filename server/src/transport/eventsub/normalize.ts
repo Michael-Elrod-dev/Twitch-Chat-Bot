@@ -52,7 +52,7 @@ export function rolesFromBadges(badges: unknown, broadcasterUserId: string, chat
  * @param messageId the `Twitch-Eventsub-Message-Id` header — the delivery id, and
  * the dedup key. Deliberately *not* the payload's own `message_id`: a redelivery
  * repeats the delivery id, which is exactly what dedup needs to catch.
- * @returns the normalised event, or null for a subscription type this build does
+ * @returns the normalized event, or null for a subscription type this build does
  * not handle.
  */
 export function normalizeEvent(

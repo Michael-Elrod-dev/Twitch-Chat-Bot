@@ -135,7 +135,7 @@ describe('!fursona and !waifu', () => {
 
         it('treats @Name and @name as the same person', async () => {
             // The IMAGE must match; the greeting deliberately echoes back the
-            // capitalisation the viewer typed.
+            // capitalization the viewer typed.
             const url = (reply: string) => /(https:\S+)/.exec(reply)?.[1];
 
             expect(url(await run('waifu', ['@SomeViewer'], 'caller')))

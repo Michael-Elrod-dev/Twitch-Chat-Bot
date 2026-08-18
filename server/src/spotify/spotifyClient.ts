@@ -11,12 +11,12 @@ import { TwitchError } from '../twitch/errors.js';
  *
  *  - **It does not support our auth flow.** The SDK ships PKCE, client
  *    credentials, and a mixed client/server hand-back. We use server-side
- *    authorization-code *with a secret* — the same shape as our Twitch
- *    onboarding — which is not among them.
+ *    authorization-code *with a secret* (the same shape as our Twitch
+ *    onboarding), which is not among them.
  *  - **It refreshes tokens internally.** We already have a token model:
  *    encrypted at rest, rotated atomically, with a distinct
  *    manual-reauth error. Two refresh mechanisms in one process is a real
- *    hazard — the SDK could rotate a refresh token we then overwrite from our
+ *    hazard. The SDK could rotate a refresh token we then overwrite from our
  *    own stored copy, stranding the channel. The docs do not describe
  *    disabling it.
  *  - **1.6 MB unpacked for five endpoints**, last published a year ago with no
@@ -46,13 +46,11 @@ import { TwitchError } from '../twitch/errors.js';
  *
  * ## Response bodies are declared per call, not guessed
  *
- * The path check above was only half the verification. A call can survive with
- * the right URL and still be read wrong, and this one was: the client demanded
- * parseable JSON from EVERY response, so `POST /me/player/queue` — which
- * answers 2xx with no JSON body — was read as a failure on a success. The
- * monitor then correctly declined to remove a track it believed had not been
- * queued, and re-queued it on the next tick. One track entered Spotify's queue
- * four times.
+ * The path check above is only half the verification. A call can hit the right
+ * URL and still be read wrong. `POST /me/player/queue` answers 2xx with no JSON
+ * body, so demanding parseable JSON from every response would read that success
+ * as a failure, and a monitor that believes a queued track was never queued
+ * re-queues it on every tick.
  *
  * So each call now declares what it returns, and a body is parsed only where
  * one is used:
@@ -65,7 +63,7 @@ import { TwitchError } from '../twitch/errors.js';
  *   POST /playlists/{id}/items none    returns a snapshot_id we do not read
  *
  * `none` means the status IS the result: any 2xx is success and the body is
- * never touched. That is not laxness — demanding a shape from a body we never
+ * never touched. That is not laxness. Demanding a shape from a body we never
  * read invents a failure mode with nothing on the other side of it.
  *
  * We operate in **Development Mode**: the app owner must hold Spotify Premium,
@@ -129,7 +127,7 @@ export interface SpotifyClientOptions {
     fetchImpl?: typeof fetch;
 }
 
-/** Recognises the shapes a viewer actually pastes. */
+/** Recognizes the shapes a viewer actually pastes. */
 const TRACK_URI = /^spotify:track:([A-Za-z0-9]+)$/;
 const TRACK_URL = /open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]+)/;
 
@@ -156,7 +154,7 @@ export interface SpotifyClient {
     addToPlaylist: (playlistId: string, uri: string) => Promise<void>;
     /** The linked account's display name, for the Spotify card. */
     getCurrentUser: () => Promise<{ id: string; displayName: string } | null>;
-    /** @returns null when the playlist no longer exists — a deletion in the Spotify app. */
+    /** @returns null when the playlist no longer exists (a deletion in the Spotify app). */
     getPlaylist: (playlistId: string) => Promise<SpotifyPlaylistInfo | null>;
     /** Creates a private playlist owned by the linked account. */
     createPlaylist: (userId: string, name: string) => Promise<SpotifyPlaylistInfo>;
@@ -189,7 +187,7 @@ export class HttpSpotifyClient implements SpotifyClient {
     }
 
     /**
-     * @returns null when nothing is playing at all — Spotify answers 204 with an
+     * @returns null when nothing is playing at all. Spotify answers 204 with an
      * empty body, which is a state rather than an error.
      */
     async getPlaybackState(): Promise<PlaybackState | null> {
@@ -222,7 +220,7 @@ export class HttpSpotifyClient implements SpotifyClient {
         };
     }
 
-    /** Success is the status alone — Spotify sends no JSON body here. */
+    /** Success is the status alone. Spotify sends no JSON body here. */
     async queueTrack(uri: string): Promise<void> {
         await this.request(`/me/player/queue?uri=${encodeURIComponent(uri)}`, {
             method: 'POST',
@@ -247,7 +245,7 @@ export class HttpSpotifyClient implements SpotifyClient {
         /*
          * `fields` keeps this to what the card shows. A requests playlist grows
          * without bound, and the default response embeds the first hundred
-         * tracks — a payload that would grow all season for a name and a count.
+         * tracks, a payload that would grow all season for a name and a count.
          */
         const playlist = await this.request<{
             id?: string; name?: string; tracks?: { total?: number };
@@ -273,7 +271,7 @@ export class HttpSpotifyClient implements SpotifyClient {
      * playlists; past that this answers null and the caller creates a new one.
      * Stated rather than hidden: an unbounded walk of somebody's library on a
      * settings save is a request that can take a minute, and the failure mode
-     * of the bound — a duplicate playlist for a streamer with 500+ of them — is
+     * of the bound (a duplicate playlist for a streamer with 500+ of them) is
      * visible and fixable, where a hung save is neither.
      *
      * Matched case-insensitively, because "Song Requests" and "song requests"
@@ -324,7 +322,7 @@ export class HttpSpotifyClient implements SpotifyClient {
         return { id: created.id, name: created.name ?? name, trackCount: created.tracks?.total ?? 0 };
     }
 
-    /** `/items`, not `/tracks` — the old path was removed in February 2026. */
+    /** `/items`, not `/tracks`. Spotify removed the old path in February 2026. */
     async addToPlaylist(playlistId: string, uri: string): Promise<void> {
         await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
             method: 'POST',
@@ -364,8 +362,8 @@ export class HttpSpotifyClient implements SpotifyClient {
              *
              * Reads only. On a write, 404 means the write did not happen, and
              * reporting that as success would let the monitor drop a track it
-             * never queued — the mirror image of the duplicate bug, and the
-             * worse direction, because a lost song is not visible in any log.
+             * never queued. That is the worse direction, because a lost song
+             * is not visible in any log.
              */
             this.options.logger.debug({ path }, 'Spotify reports no active device');
             return null as T;
@@ -382,8 +380,8 @@ export class HttpSpotifyClient implements SpotifyClient {
         /*
          * The status IS the result for these. Spotify answers the queue-add and
          * skip endpoints with a 2xx and no JSON, so parsing here would turn
-         * every success into a thrown failure — which is precisely what put one
-         * track into Spotify's queue four times in production.
+         * every success into a thrown failure and every queued track into a
+         * repeat.
          */
         if (expects === 'none') return null as T;
 

@@ -68,7 +68,7 @@ export function isUserLevel(value: string): value is UserLevel {
 /**
  * The single place permission is decided.
  *
- * An unrecognised level resolves to `everyone` — deliberately fail-OPEN. The
+ * An unrecognized level resolves to `everyone` — deliberately fail-OPEN. The
  * database CHECK constraint added in P1-WP3 is what keeps bad values out of the
  * data path; failing closed here would instead disable a command on a code typo,
  * which is the worse outcome. (Phase 0 WP-7.1, decision recorded by the lead.)

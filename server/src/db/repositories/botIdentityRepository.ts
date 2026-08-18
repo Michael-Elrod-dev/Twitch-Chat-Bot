@@ -49,7 +49,7 @@ export class BotIdentityRepository {
     }
 
     /** @returns the decrypted refresh token, or null when consent recorded none. */
-    async getRefreshToken(tolerateLegacyPlaintext = false): Promise<string | null> {
+    async getRefreshToken(toleratePlaintext = false): Promise<string | null> {
         if (!this.cipher) throw new Error('BotIdentityRepository was constructed without a cipher');
 
         const [row] = await this.db
@@ -58,7 +58,7 @@ export class BotIdentityRepository {
             .limit(1);
 
         if (!row?.refreshToken) return null;
-        return this.cipher.decrypt(row.refreshToken, TOKEN_PURPOSES.botRefresh, tolerateLegacyPlaintext);
+        return this.cipher.decrypt(row.refreshToken, TOKEN_PURPOSES.botRefresh, toleratePlaintext);
     }
 
     async upsert(identity: BotIdentityUpsert): Promise<void> {

@@ -10,7 +10,7 @@ import type { CacheManager } from './cacheManager.js';
  * the read falls through to the database and the test passes over the defect.
  *
  * So this stores what it is given, in a Map, and returns it again — Redis's
- * observable behaviour for the operations we use.
+ * observable behavior for the operations we use.
  *
  * **TTLs are recorded and never enforced.** Time does not pass inside a test,
  * and the interesting window is the one *before* expiry: a value that has aged

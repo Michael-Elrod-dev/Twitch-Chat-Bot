@@ -1,5 +1,19 @@
 # Cleanup plan
 
+## EXECUTION PROGRESS (updated 2026-08-18 by the first execution session; resume here)
+
+Tasks 1 through 4 are COMPLETE and committed, each at its exact target: docs retired and DECISIONS.md created (task 1), README rewritten with the diagram plus env example completed and the backup header fixed (task 2), server suite at exactly 877 (task 3), app suite at exactly 353 (task 4). One plan/tree conflict recorded for the final report: four of task 2's "nine missing" env variables (PUBLIC_URL, BOT_TWITCH_USER_ID, AI_TRIGGERS, MIGRATION_DATABASE_URL) were already present in .env.example; the five genuinely missing ones were added, and MIGRATION_DATABASE_URL was moved out of the wrongly-labeled compose-only section.
+
+Task 5 is PARTIAL. Done, verified green, and clean of all sweep patterns:
+
+- The British-to-US spelling pass across all 92 flagged files, word-diff reviewed line by line. Includes both planned identifier renames (canceled variable, list-row__behavior class) plus these additional internal renames, all typechecked: DumpViewer, DumpTokenSource, dumpStreamToUuid, dumpStreamId, toleratePlaintext.
+- import-legacy.ts renamed to import-dump.ts; scripts/etl-import.sh updated including the throwaway MySQL database name (now "recovered").
+- Fully swept files (em dashes, glyphs, phase markers, legacy wording, narrative comments): all of server/scripts/etl/, server/src/http/api/resources.ts, server/src/db/schema/content.ts, server/src/spotify/spotifyClient.ts, README.md, .env.example (the touched lines), docs/DECISIONS.md (born clean).
+
+NOT yet swept (the sweep patterns to grep for are in the exit-criteria table): the rest of server/src (roughly 190 em dashes plus phase markers and legacy prose across ~45 files; worst remaining: bootstrap.ts, subscriptionReconciler.ts, thirdPartyHandlers.ts, analyticsRepository.ts, channels.ts schema, index.ts, statsHandlers.ts, songRedemption.ts, aiService.ts, playbackMonitor.ts, and the test files), all of shared/src, all of app/src (~130), scripts/*.sh and CI yml comment text, eslint.config.js (historical header comment), and the four surviving docs (TWITCH_PLATFORM_FACTS ~59, UI_FUNCTIONALITY ~33 plus its stale feature markers and audience framing, APP_COVERAGE_LEDGER ~19, DEPENDENCIES ~15 plus its two stale claims). Tasks 6 (owner-gated chat strings; the inventory was presented to the owner, approvals may already be in the conversation), 7 (deploy) and 8 (delete this file, measure exit criteria) remain.
+
+Method notes for the resuming session: rewrite em-dash sentences by hand (comma, period, parentheses), never sed; spelling-style word swaps may be scripted but the diff must be read; test names count as text; keep every gate green and commit at green points; the exemption list at the top of this file is byte-sacred.
+
 This document is the full instruction set for the close-out cleanup cycle. It was produced by a review session that audited every test, every doc, and the full readable-text surface of the repo. The execution session works through it top to bottom. Deleting this file is the executor's final act (task 8), so the final glyph counts are measured after it is gone.
 
 Ground rules, restated from the owner:

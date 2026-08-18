@@ -1,8 +1,9 @@
 /**
- * Imports the Phase-0 single-channel MySQL database into schema v2 as channel #1.
+ * Imports the recovered single-channel MySQL database into the current schema
+ * as channel #1.
  *
- * SECRECY: the legacy `tokens` table holds live credentials. This script moves
- * them opaquely — no token value is ever logged, printed, or included in the
+ * SECRECY: the dump's `tokens` table holds live credentials. This script moves
+ * them opaquely. No token value is ever logged, printed, or included in the
  * summary. The report is counts only.
  *
  * IDEMPOTENT: re-running deletes the channel's v2 CONTENT rows and re-imports.
@@ -15,14 +16,14 @@
  * to install a token that cannot work. See ./tokens.ts.
  *
  * Usage (see run-import.sh, which supplies the throwaway MySQL):
- *   MYSQL_URL=... DATABASE_URL=... tsx server/scripts/etl/import-legacy.ts
+ *   MYSQL_URL=... DATABASE_URL=... tsx server/scripts/etl/import-dump.ts
  */
 
 import mysql from 'mysql2/promise';
 import postgres from 'postgres';
 import { routeTokenKey, splitViewer, resolveRequester, assignQuoteNumbers } from './transform.js';
 import { importChannelTokens, importBotIdentity } from './tokens.js';
-import type { LegacyViewer } from './transform.js';
+import type { DumpViewer } from './transform.js';
 
 const MYSQL_URL = process.env['MYSQL_URL'];
 const DATABASE_URL = process.env['DATABASE_URL'];
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
 
         const broadcasterId = tokens.get('channelId')?.trim();
         if (!broadcasterId) {
-            throw new Error('legacy tokens table has no channelId; cannot identify the channel');
+            throw new Error('the dump tokens table has no channelId; cannot identify the channel');
         }
 
         // Count destinations without revealing anything about the values.
@@ -145,7 +146,7 @@ async function main(): Promise<void> {
         const idSeen = new Set<string>();
 
         for (const raw of viewerRows) {
-            const split = splitViewer(raw as unknown as LegacyViewer);
+            const split = splitViewer(raw as unknown as DumpViewer);
             if (!split) {
                 bump('viewers.skipped_non_numeric_id');
                 continue;
@@ -179,18 +180,18 @@ async function main(): Promise<void> {
             'SELECT stream_id, start_time, end_time, title, category, peak_viewers, total_messages, unique_chatters FROM streams'
         );
 
-        const legacyStreamToUuid = new Map<string, string>();
+        const dumpStreamToUuid = new Map<string, string>();
         for (const row of streamRows) {
-            const legacyId = String(row['stream_id']);
+            const dumpStreamId = String(row['stream_id']);
             const [inserted] = await sql<{ id: string }[]>`
                 insert into streams (channel_id, twitch_stream_id, started_at, ended_at, title, category,
                                      peak_viewers, total_messages, unique_chatters)
-                values (${channelId}, ${legacyId}, ${row['start_time']}, ${row['end_time']},
+                values (${channelId}, ${dumpStreamId}, ${row['start_time']}, ${row['end_time']},
                         ${row['title']}, ${row['category']}, ${row['peak_viewers'] ?? 0},
                         ${row['total_messages'] ?? 0}, ${row['unique_chatters'] ?? 0})
                 returning id
             `;
-            legacyStreamToUuid.set(legacyId, inserted!.id);
+            dumpStreamToUuid.set(dumpStreamId, inserted!.id);
             bump('streams');
         }
 
@@ -254,7 +255,7 @@ async function main(): Promise<void> {
             'SELECT user_id, stream_id, start_time, end_time FROM viewing_sessions'
         );
         for (const row of sessionRows) {
-            const streamUuid = legacyStreamToUuid.get(String(row['stream_id']));
+            const streamUuid = dumpStreamToUuid.get(String(row['stream_id']));
             const userId = String(row['user_id']);
             if (!streamUuid || !idSeen.has(userId)) {
                 bump('viewing_sessions.skipped_orphaned');
@@ -279,7 +280,7 @@ async function main(): Promise<void> {
             }
             await sql`
                 insert into chat_messages (channel_id, stream_id, twitch_user_id, message_type, content, message_time)
-                values (${channelId}, ${legacyStreamToUuid.get(String(row['stream_id'])) ?? null}, ${userId},
+                values (${channelId}, ${dumpStreamToUuid.get(String(row['stream_id'])) ?? null}, ${userId},
                         ${String(row['message_type'] ?? 'message')}, ${row['message_content']}, ${row['message_time']})
             `;
             bump('chat_messages');
@@ -315,7 +316,7 @@ async function main(): Promise<void> {
             }
             await sql`
                 insert into api_usage (channel_id, twitch_user_id, stream_id, api_type, usage_count)
-                values (${channelId}, ${userId}, ${legacyStreamToUuid.get(String(row['stream_id'])) ?? null},
+                values (${channelId}, ${userId}, ${dumpStreamToUuid.get(String(row['stream_id'])) ?? null},
                         ${String(row['api_type'])}, ${row['stream_count'] ?? 0})
                 on conflict do nothing
             `;

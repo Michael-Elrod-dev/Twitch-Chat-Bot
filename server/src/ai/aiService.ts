@@ -12,7 +12,7 @@ import { withUsageSuffix } from './usageCounter.js';
 /**
  * The real AI service, per channel.
  *
- * Every Phase-0 behaviour is preserved with channel scope added:
+ * Every Phase-0 behavior is preserved with channel scope added:
  *   - rate limits by role rank, per channel per stream,
  *   - the usage counter prefixed on the reply,
  *   - XML prompt building with escaping,

@@ -103,7 +103,7 @@ export class ChannelSession {
      * managers keep an in-memory map AND a populated Redis hash, and their
      * lookup treats "hash exists, field absent" as an authoritative miss so an
      * ordinary chat message never pays for a database round trip. That
-     * optimisation is correct and load-bearing — and it means a row inserted
+     * optimization is correct and load-bearing — and it means a row inserted
      * behind the managers' backs is invisible to them, not briefly but
      * permanently: once the hash expires the fallback consults the in-memory
      * map, which `loaded` marks as already good.

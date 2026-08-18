@@ -22,7 +22,7 @@ export function applyTheme(doc: Document = document): void {
 /**
  * Whether the user has asked for less motion.
  *
- * The handoff is specific about what "honouring" it means here: drop the
+ * The handoff is specific about what "honoring" it means here: drop the
  * animation, keep the static glow. A dot that stops glowing entirely would read
  * as "off" rather than "healthy and not busy", so reduced motion must not
  * become reduced information.

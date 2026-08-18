@@ -208,7 +208,7 @@ export interface Command {
     handlerName: string | null;
     /**
      * What a built-in *does*, in the streamer's language — the reply column has
-     * nothing else to show for a row whose behaviour is code.
+     * nothing else to show for a row whose behavior is code.
      *
      * Null for a static command, whose `responseText` already says everything
      * there is to say.
@@ -216,7 +216,7 @@ export interface Command {
      * It is served from the handler's own registration rather than assembled in
      * the client. The client-side map that shipped with the content screens had
      * a real cost: a built-in added on the server rendered a generic fallback
-     * until somebody remembered to edit a file in the app. Behaviour and the
+     * until somebody remembered to edit a file in the app. Behavior and the
      * sentence describing it now change in the same place.
      */
     description: string | null;
@@ -475,7 +475,7 @@ export interface AnalyticsSummary {
 export interface ApiKeySummary {
     id: string;
     name: string;
-    /** Identifiable prefix, so a key can be recognised without storing it. */
+    /** Identifiable prefix, so a key can be recognized without storing it. */
     prefix: string;
     createdAt: string;
     lastUsedAt: string | null;

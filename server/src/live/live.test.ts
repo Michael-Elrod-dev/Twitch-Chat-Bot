@@ -199,7 +199,7 @@ describeDb('realtime feed', () => {
      * End-to-end rather than a unit test on the mapping, because the value of
      * this field is that it survives the whole chain: badges are parsed into
      * role flags, the flags decide permissions, and the SAME flags produce the
-     * role the feed colours by. A test that called `chatRoleOf` directly would
+     * role the feed colors by. A test that called `chatRoleOf` directly would
      * prove the function and not the thing that was missing.
      */
     describe('the chatter role', () => {
@@ -222,7 +222,7 @@ describeDb('realtime feed', () => {
         };
 
         it('reports a badged moderator as a moderator', async () => {
-            // The case 9a could not colour at all: without this the feed had
+            // The case 9a could not color at all: without this the feed had
             // only the login to compare, so every mod rendered as a viewer.
             const client = await connect(alpha.token);
             await client.waitFor('hello');
@@ -259,7 +259,7 @@ describeDb('realtime feed', () => {
         it('reports the broadcaster from their id, badge or no badge', async () => {
             /*
              * A broadcaster's own messages do not reliably carry the badge, so
-             * the normaliser derives it from the id. This asserts the role
+             * the normalizer derives it from the id. This asserts the role
              * follows that derivation rather than the badge list — otherwise
              * the owner's own lines would render as ordinary viewers in their
              * own dashboard.
@@ -520,7 +520,7 @@ describeDb('realtime feed', () => {
         it('reaps a socket that stops responding to pings', async () => {
             // A laptop that closed its lid leaves a TCP connection that looks
             // open forever; every unreaped socket is a channel's events being
-            // serialised to nowhere.
+            // serialized to nowhere.
             //
             // Pausing the underlying stream is what makes this a *half-open*
             // connection rather than a closed one: the client never processes

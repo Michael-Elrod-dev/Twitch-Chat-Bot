@@ -4,7 +4,7 @@
  * Every value here is taken from the design handoff README's token tables. This
  * module is the only place any of them are written down: components reference
  * CSS custom properties, and `applyTheme` is what turns these constants into
- * those properties. A colour that appears literally in a stylesheet is a bug —
+ * those properties. A color that appears literally in a stylesheet is a bug —
  * it is a value that cannot be changed from one place.
  *
  * Scope is Windows desktop, dark theme only. Light theme and web layout were
@@ -46,7 +46,7 @@ export const colors = {
     disabledIcon: '#4f4a44',
 
     /**
-     * Clay. Also the warning and danger colour — there is deliberately no
+     * Clay. Also the warning and danger color — there is deliberately no
      * separate error red in this system.
      */
     accent: '#c8663f',

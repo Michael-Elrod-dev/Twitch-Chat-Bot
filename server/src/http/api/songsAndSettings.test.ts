@@ -388,7 +388,7 @@ describeDb('songs, analytics and settings', () => {
 
             const stored = await createChannelRepositories(handle.db, alpha.id).settings.get();
             // A reward that stays redeemable against a bot that can no longer
-            // fulfil it takes a viewer's points for nothing.
+            // fulfill it takes a viewer's points for nothing.
             expect(stored?.songRequestsEnabled).toBe(false);
             expect(stored?.requestsPlaylistId).toBeNull();
         });

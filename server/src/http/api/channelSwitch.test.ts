@@ -277,7 +277,7 @@ describeDb('channel master switch', () => {
         });
     });
 
-    describe('boot honours the switch', () => {
+    describe('boot honors the switch', () => {
         it('omits a switched-off channel from the channels the server starts', async () => {
             await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
                 .send({ enabled: false }).expect(200);

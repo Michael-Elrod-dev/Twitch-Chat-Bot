@@ -195,7 +195,7 @@ describe('EventSub webhook', () => {
     });
 
     describe('unhandled input', () => {
-        it('acknowledges a subscription type it does not normalise', async () => {
+        it('acknowledges a subscription type it does not normalize', async () => {
             const body = JSON.stringify({
                 subscription: { id: 'x', type: 'channel.follow', version: '1', status: 'enabled', condition: {} },
                 event: { broadcaster_user_id: '1001' }
@@ -216,7 +216,7 @@ describe('EventSub webhook', () => {
             expect(harness.events).toHaveLength(0);
         });
 
-        it('normalises stream.online through the same path', async () => {
+        it('normalizes stream.online through the same path', async () => {
             await post(streamOnlineDelivery(SECRET, '1001')).expect(204);
 
             expect(harness.events[0]).toMatchObject({ kind: 'stream_online', broadcasterTwitchId: '1001' });

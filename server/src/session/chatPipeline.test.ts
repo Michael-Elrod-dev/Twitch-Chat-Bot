@@ -14,7 +14,7 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
 import type { ChannelSettingsRepository } from '../db/repositories/channelSettingsRepository.js';
 
 /**
- * Ported behaviours from Phase 0 tests/messages/chatMessageHandler.test.js,
+ * Ported behaviors from Phase 0 tests/messages/chatMessageHandler.test.js,
  * tests/ai/aiManager.triggers.test.js and tests/messages/aiEnabledFlag.test.js.
  * The pipeline ordering findings (WP-6 tasks 5 and 6) are the load-bearing ones.
  */

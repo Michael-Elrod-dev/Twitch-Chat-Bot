@@ -1,7 +1,7 @@
 import type postgres from 'postgres';
 
 /**
- * Credential handling for the legacy import.
+ * Credential handling for the dump import.
  *
  * Extracted from the ETL body so the rule that matters can be tested directly:
  * **a live authorization always beats a value from the dump.** The dump is a
@@ -20,7 +20,7 @@ export interface TokenImportOutcome {
     action: 'preserved' | 'imported' | 'absent';
 }
 
-export interface LegacyTokenSource {
+export interface DumpTokenSource {
     accessToken: string | undefined;
     refreshToken: string | undefined;
 }
@@ -32,7 +32,7 @@ export interface LegacyTokenSource {
 export async function importChannelTokens(
     sql: postgres.Sql,
     channelId: string,
-    source: (provider: TokenProvider) => LegacyTokenSource
+    source: (provider: TokenProvider) => DumpTokenSource
 ): Promise<TokenImportOutcome[]> {
     const outcomes: TokenImportOutcome[] = [];
 
@@ -73,8 +73,8 @@ export interface BotIdentitySource {
 
 /**
  * Same rule, plus one of its own: the dump records no scopes at all, so the
- * list an import would write is inferred from what the Phase-0 bot did rather
- * than stated. A real consent record knows exactly what was granted.
+ * list an import would write is inferred rather than stated. A real consent
+ * record knows exactly what was granted.
  */
 export async function importBotIdentity(
     sql: postgres.Sql,

@@ -256,7 +256,7 @@ export class SubscriptionReconciler {
  * condition fields back as empty strings: we create the redemption subscription
  * with `{broadcaster_user_id}` and it is returned as
  * `{broadcaster_user_id, reward_id: ""}`. Comparing those key-for-key made the
- * reconciler fail to recognise its own subscription — it diffed as an orphan,
+ * reconciler fail to recognize its own subscription — it diffed as an orphan,
  * was deleted, and was immediately recreated, every single run.
  *
  * That was invisible while reconciliation only happened at boot and on

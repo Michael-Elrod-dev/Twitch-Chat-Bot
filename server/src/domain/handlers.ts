@@ -38,10 +38,10 @@ export interface HandlerRegistration {
      * What this command does, in the streamer's words, for the app's reply
      * column — a handler-backed row has no `responseText` to show there.
      *
-     * **Required, so behaviour and the sentence describing it cannot be edited
+     * **Required, so behavior and the sentence describing it cannot be edited
      * apart.** The content screens shipped this map on the client instead, and
      * the cost was exactly what a required field prevents: a built-in added
-     * here rendered "A built-in behaviour" until somebody remembered a file in
+     * here rendered "A built-in behavior" until somebody remembered a file in
      * another workspace. Optional would have re-offered that.
      *
      * One short phrase, no trailing full stop, present tense — it sits in a

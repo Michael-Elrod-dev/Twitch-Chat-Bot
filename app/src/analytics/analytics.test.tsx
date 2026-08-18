@@ -128,7 +128,7 @@ describe('Analytics (3d)', () => {
 
         const fills = document.querySelectorAll<HTMLElement>('.chatter__bar-fill');
         expect(fills).toHaveLength(2);
-        // The browser normalises a trailing-zero percentage, so this is '100%'.
+        // The browser normalizes a trailing-zero percentage, so this is '100%'.
         expect(fills[0]?.style.width).toBe('100%');
         // 2408 / 3121 — the second bar is a proportion of the first, not of 24,806.
         expect(Number.parseFloat(fills[1]?.style.width ?? '0')).toBeCloseTo(77.15, 1);

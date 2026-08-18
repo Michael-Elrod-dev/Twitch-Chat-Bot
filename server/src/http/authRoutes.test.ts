@@ -290,7 +290,7 @@ describe('OAuth callback', () => {
         });
 
         it('checks the state before spending the code', async () => {
-            // Spending first would defeat the whole defence: the code is consumed
+            // Spending first would defeat the whole defense: the code is consumed
             // and the attacker learns the exchange succeeded.
             await request(harness.app).get(`${AUTH_CALLBACK_PATH}?code=${AUTH_CODE}&state=bogus`).expect(403);
 

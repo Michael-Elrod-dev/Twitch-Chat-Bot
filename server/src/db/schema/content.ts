@@ -20,8 +20,8 @@ export const commands = pgTable(
          *
          * Null for a static command, whose reply already says it. Written from
          * the handler's own registration at session load, the same
-         * declaration-wins reconciliation `user_level` gets — so the table
-         * cannot drift from the code that decides the behaviour.
+         * declaration-wins reconciliation `user_level` gets, so the table
+         * cannot drift from the code that decides the behavior.
          */
         description: text('description'),
         userLevel: text('user_level', { enum: ['everyone', 'vip', 'mod', 'broadcaster'] })
@@ -32,11 +32,10 @@ export const commands = pgTable(
     },
     (table) => [
         // The channel-scoping constraint: !discord may exist once per channel,
-        // and differently in each. Phase 0's global UNIQUE(command_name) is what
-        // this replaces.
+        // and differently in each.
         uniqueIndex('commands_channel_name_key').on(table.channelId, table.name),
-        // Enforced in the database, not just in types: Phase 0 WP-7.1 showed that
-        // an unrecognised level silently resolves to unrestricted.
+        // Enforced in the database, not just in types, because an unrecognized
+        // level silently resolves to unrestricted and must never reach the data.
         check('commands_user_level_check', sql`${table.userLevel} in ('everyone', 'vip', 'mod', 'broadcaster')`)
     ]
 );
@@ -87,12 +86,11 @@ export const songQueue = pgTable(
         trackName: text('track_name'),
         artistName: text('artist_name'),
         /**
-         * Requester as a Twitch user id, not a username - the Phase-0 register
-         * item where song_queue stored a display name while everything else
-         * stored ids. SET NULL so a purged viewer does not delete a queued song.
+         * Requester as a Twitch user id, not a username, matching every other
+         * table. SET NULL so a purged viewer does not delete a queued song.
          */
         requestedByTwitchUserId: text('requested_by_twitch_user_id'),
-        /** Denormalised for display when the viewer row is gone. */
+        /** Denormalized for display when the viewer row is gone. */
         requestedByLogin: text('requested_by_login'),
         queuePosition: integer('queue_position').notNull(),
         addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow()
@@ -134,8 +132,8 @@ export const chatMessages = pgTable(
         messageTime: timestamp('message_time', { withTimezone: true }).notNull()
     },
     (table) => [
-        // Carries forward Phase 0's WP-7 index decision, now channel-led: every
-        // analytics read filters channel, then stream, then ranges over time.
+        // Every analytics read filters channel, then stream, then ranges over
+        // time, and the index leads with exactly that.
         index('chat_messages_channel_stream_time_idx').on(table.channelId, table.streamId, table.messageTime),
         index('chat_messages_channel_user_idx').on(table.channelId, table.twitchUserId),
         check('chat_messages_type_check', sql`${table.messageType} in ('message', 'command', 'redemption')`)
@@ -162,8 +160,8 @@ export const chatTotals = pgTable(
 );
 
 /**
- * AI usage counters. api_type is a plain varchar, closing the Phase-0 register
- * item where a single-value ENUM would have needed a migration to add a provider.
+ * AI usage counters. api_type is a plain varchar because an ENUM would need a
+ * migration to add a provider.
  */
 export const apiUsage = pgTable(
     'api_usage',
@@ -183,9 +181,9 @@ export const apiUsage = pgTable(
     (table) => [
         /*
          * NOTE: Postgres treats NULLs in a unique index as DISTINCT, so this
-         * does not constrain rows where `stream_id` is null — which is exactly
+         * does not constrain rows where `stream_id` is null, which is exactly
          * the offline bucket. `NULLS NOT DISTINCT` would fix it but this
-         * Drizzle version cannot express it, so the AI rate limiter serialises
+         * Drizzle version cannot express it, so the AI rate limiter serializes
          * its own read-then-write under a channel row lock instead. See
          * server/src/ai/rateLimiter.ts.
          */
@@ -201,13 +199,12 @@ export const apiUsage = pgTable(
 /**
  * Channel-point rewards this application manages.
  *
- * The P1-WP3 policy made concrete: redemptions route by **reward id**, never by
- * title. Phase 0 matched on the title string, which meant renaming a reward in
- * the Twitch dashboard silently broke it, and two rewards with similar names
- * were a coin flip.
+ * Redemptions route by **reward id**, never by title. Title matching would mean
+ * renaming a reward in the Twitch dashboard silently breaks it, and two rewards
+ * with similar names would be a coin flip.
  *
  * A reward only appears here if the app created it or adopted it, and adoption
- * requires `only_manageable_rewards` to have returned it — so a reward the
+ * requires `only_manageable_rewards` to have returned it, so a reward the
  * broadcaster made by hand is never in this table and is never touched. Those
  * are explicitly none of our business.
  */
@@ -243,9 +240,8 @@ export const channelRewards = pgTable(
 /**
  * What has already been appended to a channel's requests playlist.
  *
- * This table IS the dedup mechanism, and it exists to avoid the Phase-0 one:
- * `spotifyManager` paged the entire playlist on every request to check for a
- * duplicate, which is a flagged hot-path sin — an unbounded number of Spotify
+ * This table IS the dedup mechanism. The alternative, paging the playlist on
+ * every request to check for a duplicate, is an unbounded number of Spotify
  * calls on the redemption path, growing with the playlist, for a question a
  * unique index answers in one round trip.
  *

@@ -77,7 +77,7 @@ export class HelixApi implements HelixClient {
 
     /** Timestamp of the last subscription create, for spacing. */
     private lastCreateAt = 0;
-    /** Serialises creates so concurrent callers cannot both skip the spacing. */
+    /** Serializes creates so concurrent callers cannot both skip the spacing. */
     private createChain: Promise<unknown> = Promise.resolve();
 
     constructor(options: HelixApiOptions) {
@@ -392,7 +392,7 @@ export class HelixApi implements HelixClient {
 
 /**
  * Twitch sends `Ratelimit-Reset` as a unix timestamp in seconds, and sometimes a
- * conventional `Retry-After` in seconds. Both are honoured; a missing or absurd
+ * conventional `Retry-After` in seconds. Both are honored; a missing or absurd
  * value falls back rather than producing an instant retry or an hours-long wait.
  */
 export function rateLimitDelayMs(headers: Headers, now: number): number {

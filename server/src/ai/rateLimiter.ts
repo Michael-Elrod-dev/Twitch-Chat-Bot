@@ -12,7 +12,7 @@ import type { ChatterRoles } from '../domain/permissions.js';
  * that because it only ever served one channel.
  *
  * Limits are the **maximum** of every applicable tier rather than a lookup of
- * the highest role, which is Phase 0's behaviour and the right one: a
+ * the highest role, which is Phase 0's behavior and the right one: a
  * subscriber who is also a VIP should get the better of the two, not whichever
  * the code happens to check first.
  */
@@ -125,7 +125,7 @@ export class AiRateLimiter {
      * as distinct — which is precisely the offline bucket, so an upsert would
      * insert a fresh row every time and the limit would never apply off-stream.
      *
-     * Instead the read-then-write is serialised per channel by locking the
+     * Instead the read-then-write is serialized per channel by locking the
      * parent `channels` row, the same shape the quote numbering uses. Two
      * simultaneous requests would otherwise both read the same count and both
      * write it back plus one, letting a viewer spend the same slot twice.

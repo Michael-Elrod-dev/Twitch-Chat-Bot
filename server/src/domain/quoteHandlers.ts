@@ -15,7 +15,7 @@ import type { Logger } from '../logger.js';
  * either**. Legacy intercepted `!command` inside `CommandManager.handleCommand`
  * before the handler registry was consulted, so the row's `handler_name` was
  * decorative — it named a handler that never existed. Phase 1 has no such
- * interception (dispatch is uniform), so the behaviour has to live where the
+ * interception (dispatch is uniform), so the behavior has to live where the
  * row already says it does.
  */
 

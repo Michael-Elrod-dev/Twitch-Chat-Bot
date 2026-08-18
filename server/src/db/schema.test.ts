@@ -146,7 +146,7 @@ describeDb('schema v2 against a real Postgres', () => {
         });
     });
 
-    describe('ON DELETE behaviour', () => {
+    describe('ON DELETE behavior', () => {
         it('CASCADEs a channel deletion through its owned content', async () => {
             const channel = await makeChannel('cascade');
             await sql`insert into commands (channel_id, name) values (${channel}, '!gone')`;

@@ -57,7 +57,7 @@ describe('rolesFromBadges', () => {
 });
 
 describe('normalizeEvent', () => {
-    it('normalises a chat message', () => {
+    it('normalizes a chat message', () => {
         const event = normalizeEvent(SUBSCRIPTION_TYPES.chatMessage, chatPayload(), 'delivery-1');
 
         expect(event).toMatchObject({
@@ -110,7 +110,7 @@ describe('normalizeEvent', () => {
         expect(normalizeEvent(SUBSCRIPTION_TYPES.chatMessage, chatPayload({ chatter_user_id: '' }), 'd')).toBeNull();
     });
 
-    it('normalises stream.online and stream.offline', () => {
+    it('normalizes stream.online and stream.offline', () => {
         expect(normalizeEvent(SUBSCRIPTION_TYPES.streamOnline, {
             id: '48765430',
             broadcaster_user_id: '1001',

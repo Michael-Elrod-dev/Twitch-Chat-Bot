@@ -131,11 +131,11 @@ describe('encryptToken / decryptToken', () => {
 });
 
 describe('isEncrypted', () => {
-    it('recognises its own output', () => {
+    it('recognizes its own output', () => {
         expect(isEncrypted(encryptToken(SECRET_VALUE, KEY, PURPOSE))).toBe(true);
     });
 
-    it('recognises an ETL-imported plaintext token', () => {
+    it('recognizes an ETL-imported plaintext token', () => {
         // The upgrade script depends on this distinction being exact.
         expect(isEncrypted('oauth:abcdef1234567890')).toBe(false);
         expect(isEncrypted('')).toBe(false);

@@ -4,11 +4,11 @@ import type { Command, UserLevel } from '@almosthadai/shared';
  * What a built-in command does, as the server describes it.
  *
  * **The map that used to live here is gone.** It listed all seventeen handler
- * names against their behaviour, and its cost was exactly what it looks like: a
- * built-in added on the server rendered "A built-in behaviour" until somebody
+ * names against their behavior, and its cost was exactly what it looks like: a
+ * built-in added on the server rendered "A built-in behavior" until somebody
  * remembered to edit a file in a different workspace. `description` is now a
  * field on the handler's own registration, reconciled onto the command row and
- * served on the wire, so the sentence and the behaviour change together.
+ * served on the wire, so the sentence and the behavior change together.
  *
  * The fallback survives, and only as a fallback: a handler-backed row whose
  * description has not been written yet — a built-in whose channel session has
@@ -16,7 +16,7 @@ import type { Command, UserLevel } from '@almosthadai/shared';
  * honest where an empty cell would read as a broken row.
  */
 export function describeHandler(command: Pick<Command, 'description'>): string {
-    return command.description ?? 'A built-in behaviour';
+    return command.description ?? 'A built-in behavior';
 }
 
 /**

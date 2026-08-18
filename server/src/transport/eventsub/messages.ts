@@ -6,7 +6,7 @@
  * these shapes implement.
  */
 
-/** Header names, lowercase because Node normalises incoming headers. */
+/** Header names, lowercase because Node normalizes incoming headers. */
 export const EVENTSUB_HEADERS = {
     messageId: 'twitch-eventsub-message-id',
     messageType: 'twitch-eventsub-message-type',

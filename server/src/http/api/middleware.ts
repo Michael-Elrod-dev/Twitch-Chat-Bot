@@ -166,7 +166,7 @@ export function requireAnyCredential(req: ApiRequest, res: Response, next: NextF
  * Validates a request body against a schema.
  *
  * The parsed value replaces the body, so handlers receive coerced, trimmed,
- * normalised data and can never accidentally use the raw input.
+ * normalized data and can never accidentally use the raw input.
  */
 export function validateBody<T>(schema: ZodType<T>): RequestHandler {
     return function validate(req: Request, res: Response, next: NextFunction): void {

@@ -28,7 +28,7 @@ export interface ChatMessageOptions {
 }
 
 /**
- * Signs an already-serialised body.
+ * Signs an already-serialized body.
  *
  * Exposed because a test that hand-builds a payload must still be able to sign
  * it correctly — otherwise it would only ever prove that the signature check

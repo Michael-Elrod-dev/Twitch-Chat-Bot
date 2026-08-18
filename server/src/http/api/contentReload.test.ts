@@ -34,7 +34,7 @@ import { signJwt } from '../../auth/jwt.js';
  * its managers. The failure lived in the gap: `CommandManager` keeps an
  * in-memory map and a populated cache hash, and its lookup deliberately treats
  * "hash exists, field absent" as an authoritative miss so that an ordinary chat
- * message never costs a database round trip. That optimisation is correct and
+ * message never costs a database round trip. That optimization is correct and
  * load-bearing — and it makes a row inserted behind the manager's back invisible
  * **permanently**, not briefly: once the hash expires, the fallback consults the
  * in-memory map, which `loaded` already marks as good.

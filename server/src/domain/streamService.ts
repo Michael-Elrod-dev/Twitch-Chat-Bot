@@ -18,7 +18,7 @@ import type { StreamContext } from '../ai/promptBuilder.js';
  *
  * The state is deliberately resolved from the DATABASE on start rather than
  * held only in memory. A restart mid-stream must not lose the stream — that was
- * the Phase-0 behaviour (`currentStreamId` was an instance field seeded from
+ * the Phase-0 behavior (`currentStreamId` was an instance field seeded from
  * `Date.now()`), and it meant every deploy silently began a new "stream".
  */
 

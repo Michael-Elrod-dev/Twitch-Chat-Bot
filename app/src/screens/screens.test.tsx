@@ -62,7 +62,7 @@ describe('Waiting (5d)', () => {
         expect(onReopen).toHaveBeenCalledOnce();
     });
 
-    it('can be cancelled', async () => {
+    it('can be canceled', async () => {
         const onCancel = vi.fn();
         render(<Waiting onReopen={vi.fn()} onCancel={onCancel} />);
 

@@ -118,7 +118,7 @@ describe('Commands', () => {
         expect(filterCommands(all, 'all', '')).toHaveLength(2);
     });
 
-    it('searches the behaviour text of a built-in, not just its name', () => {
+    it('searches the behavior text of a built-in, not just its name', () => {
         // People look for "the one about uptime" as often as for `!uptime`.
         // The text is the server's now, not a map in this workspace — so the
         // fixture supplies it the way the API does.
@@ -129,7 +129,7 @@ describe('Commands', () => {
         expect(filterCommands(all, 'all', 'how long the stream')).toHaveLength(1);
     });
 
-    it('renders a built-in as locked, with its behaviour and no edit affordance', async () => {
+    it('renders a built-in as locked, with its behavior and no edit affordance', async () => {
         // A static command too, so the list renders rather than the empty state.
         stubApi({ commands: [
             command(),
@@ -188,7 +188,7 @@ describe('Commands', () => {
         expect(screen.queryByText('You have not written any yet')).not.toBeInTheDocument();
     });
 
-    it('creates a command, sending the schema normalised name', async () => {
+    it('creates a command, sending the schema normalized name', async () => {
         const api = stubApi({ commands: [command()] });
         render(<Commands storage={session()} />);
         await screen.findByText('!links');

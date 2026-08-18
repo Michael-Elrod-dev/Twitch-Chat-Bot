@@ -109,26 +109,26 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
 
     // Boot: probe reachability and try whatever session is on disk.
     useEffect(() => {
-        let cancelled = false;
+        let canceled = false;
 
         void (async () => {
             const reachable = await pingServer();
-            if (!cancelled) setServerReachable(reachable);
+            if (!canceled) setServerReachable(reachable);
 
             if (!storageRef.current.read()) {
-                if (!cancelled) setPhase('signed_out');
+                if (!canceled) setPhase('signed_out');
                 return;
             }
-            if (!cancelled) await loadMe();
+            if (!canceled) await loadMe();
         })();
 
-        return () => { cancelled = true; };
+        return () => { canceled = true; };
     }, [loadMe]);
 
     // The callback from the browser.
     useEffect(() => {
         let unsubscribe: (() => void) | null = null;
-        let cancelled = false;
+        let canceled = false;
 
         void (async () => {
             const off = await platform.onDeepLink((url) => {
@@ -159,12 +159,12 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
                 void loadMe();
             });
 
-            if (cancelled) { off(); return; }
+            if (canceled) { off(); return; }
             unsubscribe = off;
         })();
 
         return () => {
-            cancelled = true;
+            canceled = true;
             unsubscribe?.();
         };
     }, [platform, loadMe]);

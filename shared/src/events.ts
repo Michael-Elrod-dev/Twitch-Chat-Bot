@@ -1,5 +1,5 @@
 /**
- * Normalised event shapes the pipeline consumes.
+ * Normalized event shapes the pipeline consumes.
  *
  * Deliberately transport-agnostic: EventSub webhooks, the dev websocket, and the
  * test fake all produce these, so nothing downstream knows how an event arrived.
@@ -55,7 +55,7 @@ export interface RedemptionEvent {
     kind: 'redemption';
     messageId: string;
     broadcasterTwitchId: string;
-    /** Twitch's redemption id, needed to fulfil or refund it. */
+    /** Twitch's redemption id, needed to fulfill or refund it. */
     redemptionId: string;
     rewardId: string;
     rewardTitle: string;

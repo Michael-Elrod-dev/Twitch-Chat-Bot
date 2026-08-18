@@ -93,7 +93,7 @@ export const channelTokens = pgTable(
     ]
 );
 
-/** Per-channel behaviour knobs. Replaces the Phase-0 `tokens` key/value junk drawer. */
+/** Per-channel behavior knobs. Replaces the Phase-0 `tokens` key/value junk drawer. */
 export const channelSettings = pgTable('channel_settings', {
     channelId: uuid('channel_id')
         .primaryKey()

@@ -13,7 +13,7 @@ export interface AppOptions {
      *
      * They mount *before* the global JSON parser deliberately. Once
      * `express.json()` has consumed the stream, the raw bytes are gone, and a
-     * signature check against a re-serialised parse would fail on nothing worse
+     * signature check against a re-serialized parse would fail on nothing worse
      * than a difference in key order.
      */
     rawBodyRouters?: Router[];

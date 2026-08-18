@@ -299,7 +299,7 @@ async function handleCallback(req: Request, res: Response, options: AuthRoutesOp
     const state = typeof req.query['state'] === 'string' ? req.query['state'] : '';
 
     // State first, always. An unverified callback is an attacker's callback, and
-    // spending the code before checking would defeat the entire defence.
+    // spending the code before checking would defeat the entire defense.
     const record = await states.consume(state);
     if (!record) {
         logger.warn('OAuth callback with an unknown, expired or replayed state - refusing');

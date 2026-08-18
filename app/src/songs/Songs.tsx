@@ -24,7 +24,7 @@ import type { SettingsPatch } from '../settings/settingsPatch.js';
  * **There is no add button, and its absence is the screen's argument.** Songs
  * arrive by redeeming the reward and no other way, because a track with no points
  * behind it is not a request — so the policy card explains the rule rather than
- * the UI apologising for a missing control. Adding one would also be inventing a
+ * the UI apologizing for a missing control. Adding one would also be inventing a
  * capability: no endpoint accepts a track.
  *
  * **Two removals, and they are different songs.** Skip, beside the now-playing

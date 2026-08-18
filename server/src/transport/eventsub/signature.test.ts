@@ -24,7 +24,7 @@ describe('computeSignature', () => {
         const base = { secret: SECRET, messageId: 'm', timestamp: 't' };
 
         // Same JSON value, different bytes. This is precisely why the raw body is
-        // preserved instead of re-serialised.
+        // preserved instead of re-serialized.
         const a = computeSignature({ ...base, rawBody: Buffer.from('{"a":1,"b":2}') });
         const b = computeSignature({ ...base, rawBody: Buffer.from('{"b":2,"a":1}') });
 

@@ -20,7 +20,7 @@ import { formatShortDate } from '../songs/songsFormat.js';
  * than trusting the streamer to infer it from a missing column.
  *
  * The state holding it is deliberately the modal's own and is cleared on every
- * exit from it, so there is no path — closing, cancelling, creating a second key —
+ * exit from it, so there is no path — closing, canceling, creating a second key —
  * that leaves a secret in a variable something could later render. The pinning
  * test for this asserts the negative: after the modal closes, the key text is not
  * on the screen and cannot be brought back.
@@ -141,7 +141,7 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
                                     {/*
                                       * The prefix, which is all the server keeps.
                                       * The ellipsis is the point: it says this is
-                                      * a fragment for recognising a key, not a key.
+                                      * a fragment for recognizing a key, not a key.
                                       */}
                                     <span className="list-row__name">{key.prefix}…</span>
                                     <span className="list-row__cell">

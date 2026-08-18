@@ -14,7 +14,7 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
  *    for exactly this question.
  *  - **`!follow` was never a Helix call.** The legacy handler read
  *    `viewers.followed_at` straight from its own database, so it could only
- *    answer for people it had already recorded. This ports that behaviour
+ *    answer for people it had already recorded. This ports that behavior
  *    against `channel_roles.followed_at`, which is the same fact made
  *    channel-relative — you can follow one channel and not another.
  */

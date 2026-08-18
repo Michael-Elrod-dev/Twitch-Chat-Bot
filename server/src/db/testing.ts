@@ -5,7 +5,7 @@ import { runMigrations } from './migrate.js';
  * Test-suite bootstrap for the database-backed suites.
  *
  * A container that is *starting* is not a container that is *ready*: Postgres
- * accepts a TCP connection while it is still replaying WAL and initialising, so
+ * accepts a TCP connection while it is still replaying WAL and initializing, so
  * a cold `docker compose up` followed immediately by the suite produces a
  * connection error that looks exactly like a broken test. Bounded retry turns
  * that race into a few seconds of waiting.

@@ -58,8 +58,8 @@ import type { SongQueueRepository } from '../../db/repositories/songQueueReposit
  * The v1 resources.
  *
  * Every handler reads `req.channel`, which the credential resolved. No handler
- * takes a channel from the request, so none can be pointed at another tenant —
- * the isolation guarantee is structural rather than per-handler diligence.
+ * takes a channel from the request, so none can be pointed at another tenant.
+ * The isolation guarantee is structural rather than per-handler diligence.
  */
 
 export interface ResourceOptions {
@@ -70,8 +70,8 @@ export interface ResourceOptions {
      * The omission is the fix for Task 0 and is structural on purpose. Writing
      * settings straight through the repository leaves the running session's
      * `SettingsService` holding a cached copy for up to a minute, so the owner
-     * flips a toggle in the app and the bot carries on as before — the content
-     * hole again, wearing a shorter clock. Removing the repository from what a
+     * flips a toggle in the app and the bot carries on as before, the content
+     * hole again wearing a shorter clock. Removing the repository from what a
      * route can reach means no future settings route can make that mistake by
      * forgetting something; there is simply no uninvalidating write available
      * to it. `settings` below is the only way in.
@@ -84,7 +84,7 @@ export interface ResourceOptions {
      * drops the cache key as part of writing. That is what makes the change
      * take effect on the running session: one Redis, one key, and an
      * invalidation the session cannot miss because it never held a private
-     * copy — which is why this needs no session seam of its own, unlike
+     * copy. That is why this needs no session seam of its own, unlike
      * commands and emotes.
      */
     settings: (channelId: string) => SettingsService;
@@ -99,15 +99,14 @@ export interface ResourceOptions {
      *
      * Typed as the contract's own event minus the fields the bus stamps
      * (`channelId`, `at`), so a publisher cannot omit a payload field the
-     * client is typed to read — which is how `queueLength` was declared and
-     * never sent.
+     * client is typed to read.
      */
     publish?: (channelId: string, event: Omit<LiveSongQueueUpdated, 'channelId' | 'at'>) => void;
     /**
      * Whether a channel has Spotify linked.
      *
      * A seam rather than a repository, because the token repository needs the
-     * cipher and this router has no business holding one — the question is
+     * cipher and this router has no business holding one. The question is
      * "is there a row", and answering it should not put the key to every stored
      * credential within reach of a route handler. Optional, and absent means
      * "not connected": a build wired without it under-reports a tile rather
@@ -118,7 +117,7 @@ export interface ResourceOptions {
      * Starts or stops the channel's session to match the switch.
      *
      * A seam rather than a `SessionManager` dependency: the route's job is to
-     * record the owner's choice and then ask the running server to honour it,
+     * record the owner's choice and then ask the running server to honor it,
      * and the composition root is the only place that knows how a session is
      * built. Optional so route tests can observe the call without booting one.
      */
@@ -129,14 +128,14 @@ export interface ResourceOptions {
      * A seam for the same reason `applyChannelEnabled` is one: the route's job
      * is to record the change, and the composition root is the only place that
      * knows a session exists. Without it the write lands in the database and
-     * the bot never learns — the managers hold an in-memory map and a populated
+     * the bot never learns. The managers hold an in-memory map and a populated
      * cache, and a row inserted behind them stays invisible until restart.
      *
      * **Required, unlike the other seams here, and deliberately so.** This is
      * the shape of the defect that shipped: not a wiring somebody deleted, but
      * a connection nobody had made, which no type complained about. Optional
      * would mean a build that forgets it compiles cleanly and saves commands
-     * that never fire — the exact failure, silently available again. Required
+     * that never fire, the exact failure this seam exists to prevent. Required
      * makes forgetting it a compile error at the composition root, which is the
      * only place that can get it wrong.
      */
@@ -147,7 +146,7 @@ export interface ResourceOptions {
      * A seam for the same reason `spotifyConnected` is one: building a client
      * needs the token cipher, and a route handler must not be within reach of
      * the key to every stored credential. Optional, and absent means the whole
-     * surface reports "not connected" — a deployment without Spotify
+     * surface reports "not connected", so a deployment without Spotify
      * credentials under-reports rather than failing.
      */
     spotify?: (channelId: string) => SpotifySurface | null;
@@ -157,7 +156,7 @@ export interface ResourceOptions {
      * Separate from `spotify` because it is a *write* the settings screen
      * triggers, and because it must answer null rather than throw: a streamer
      * naming a playlist while Spotify is disconnected has made a reasonable
-     * request the server cannot honour yet, and the name is still worth
+     * request the server cannot honor yet, and the name is still worth
      * keeping.
      */
     resolvePlaylist?: (channelId: string, name: string) => Promise<string | null>;
@@ -168,7 +167,7 @@ export interface ResourceOptions {
      *
      * **Required, and for the same reason `reloadChannelContent` is.** A reward
      * left standing on a disconnected channel stays redeemable against a bot that
-     * has left — a viewer spends points and nothing happens, which is the exact
+     * has left. A viewer spends points and nothing happens, which is the exact
      * failure the Spotify disconnect was made to prevent one route down. If this
      * were optional, a build that forgot it would compile, disconnect cleanly, and
      * keep charging viewers for a service that no longer exists.
@@ -176,7 +175,7 @@ export interface ResourceOptions {
      * A seam rather than a Helix dependency because deleting a reward needs the
      * broadcaster's own token, and a route handler must not be within reach of the
      * key that decrypts every stored credential. The composition root decides what
-     * to do when Twitch is unreachable — and, importantly, *says so in a log* —
+     * to do when Twitch is unreachable (and, importantly, *says so in a log*)
      * rather than the route silently having no seam to call.
      *
      * Failures are the seam's own to report. Disconnecting must complete even when
@@ -189,7 +188,7 @@ export interface ResourceOptions {
 /**
  * What the API does with Spotify on the app's behalf.
  *
- * Still deliberately narrower than `SpotifyClient` — nothing here can *queue* a
+ * Still deliberately narrower than `SpotifyClient`. Nothing here can *queue* a
  * track, because a track reaching Spotify without a redemption behind it is the
  * one thing the whole songs design refuses.
  *
@@ -216,7 +215,7 @@ export interface SpotifySurface {
     /**
      * Advances Spotify's player to the next track.
      *
-     * Acts on what is PLAYING, never on the bot's waiting queue — see the note
+     * Acts on what is PLAYING, never on the bot's waiting queue. See the note
      * above. Answers false when Spotify refused or had nothing to advance, so
      * the route can say "nothing is playing" rather than reporting a fault.
      */
@@ -327,7 +326,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
              * the moment the streamer is looking at the screen: a name that
              * cannot be resolved should say so on the field they just typed
              * into, not fail silently three hours later when a viewer spends
-             * points. `null` clears the id along with the name — a name and the
+             * points. `null` clears the id along with the name. A name and the
              * playlist it points at must not drift apart.
              */
             const named = patch.requestsPlaylistName;
@@ -341,7 +340,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
              * Built key by key rather than spread.
              *
              * `exactOptionalPropertyTypes` is on, and a spread of a parsed body
-             * carries `key: undefined` for every field the client omitted — which
+             * carries `key: undefined` for every field the client omitted, which
              * a partial update must treat as "not mentioned", not as a value. The
              * repository already distinguishes the two; this keeps the distinction
              * intact on the way in.
@@ -378,7 +377,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      * would be a far worse thing to have taped inside a profile.
      *
      * The write lands before the session is touched, so the owner's choice
-     * survives a failure to act on it — a bot recorded off but still running is
+     * survives a failure to act on it. A bot recorded off but still running is
      * momentarily wrong and self-corrects at the next boot, whereas a bot
      * recorded on but stopped is silently dead until someone notices.
      */
@@ -400,7 +399,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
                 return;
             }
 
-            // Only ever this channel's id — the route never reads one from the
+            // Only ever this channel's id. The route never reads one from the
             // request, so it cannot reach another tenant's session.
             await options.applyChannelEnabled?.(channel.id, enabled);
 
@@ -418,7 +417,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      * The danger zone: disconnecting the channel.
      *
      * One of the two destructive actions in the product, and the one the handoff
-     * requires a confirmation for — the confirmation is the client's, but the
+     * requires a confirmation for. The confirmation is the client's, but the
      * ordering here is what makes it safe to have only one.
      *
      * **Status first, then the teardown.** The write lands before anything is torn
@@ -430,7 +429,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      *
      * **Rewards next, session last.** The reward removal needs the channel's
      * session-scoped credentials to still be reachable, and stopping the session
-     * first would take them away — the ordering is load-bearing, not stylistic.
+     * first would take them away. The ordering is load-bearing, not stylistic.
      *
      * **Nothing the streamer wrote is deleted.** Commands, emotes and quotes are
      * theirs and outlive the connection; the danger card promises exactly that, and
@@ -456,8 +455,8 @@ export function createResourceRouter(options: ResourceOptions): Router {
         /*
          * `false`, not the channel's own `enabled` flag.
          *
-         * The owner's pause preference is deliberately left untouched in the row —
-         * it is theirs and it means nothing right now — but the running session
+         * The owner's pause preference is deliberately left untouched in the row
+         * (it is theirs and it means nothing right now), but the running session
          * must go regardless of what it says. Passing `enabled` here would keep a
          * session alive for a channel that has just been torn down, and
          * `applyChannelEnabled` would happily rebuild it.
@@ -601,7 +600,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
          * `safeParse`, matching the command delete above it.
          *
          * `parse` throws, and a throw from inside a route handler lands in the
-         * `internal` catch — so a trigger the schema simply does not like came
+         * `internal` catch, so a trigger the schema simply does not like came
          * back as a 500 saying "Request failed", which tells the client the
          * server broke when the client sent something invalid. The envelope is
          * the whole contract for how the app places a message: `bad_request` goes
@@ -725,7 +724,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      * it exists.** That route drops the next *waiting* request; this one advances
      * the player. The playback monitor hands a track to Spotify and deletes it
      * from our queue at that instant, so by the time a song is audible it is not
-     * in the queue at all — which is why the app could draw a Skip button beside
+     * in the queue at all, which is why the app could draw a Skip button beside
      * the now-playing card and have nothing correct to call.
      *
      * Reachable by API key, like the rest of the songs group: "skip this song" is
@@ -815,7 +814,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
 
         const account = await surface.account();
         if (!account) {
-            // A stored credential Spotify no longer honours. Reported as
+            // A stored credential Spotify no longer honors. Reported as
             // disconnected, because that is what it is from the streamer's
             // side - and the screen's Connect button is the fix.
             res.status(200).json(apiSuccess(disconnected));
@@ -842,7 +841,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      * Unlinking Spotify.
      *
      * Song requests are switched off with it: the reward would otherwise stay
-     * redeemable against a bot that can no longer fulfil it, which takes a
+     * redeemable against a bot that can no longer fulfill it, which takes a
      * viewer's points for nothing.
      */
     router.delete('/api/v1/spotify', rejectApiKey, ok(async (req, res) => {
@@ -912,7 +911,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
      * start until the broadcaster went offline.
      *
      * Reports the CURRENT stream's numbers while live and the LAST stream's
-     * when offline — the same shape either way, with `live` saying which. A
+     * when offline. The same shape either way, with `live` saying which. A
      * channel that has never streamed answers `null` and zeroes, and the client
      * renders the empty state; it never renders zeroes for a server it could
      * not reach, which is the `4b` rule and is enforced client-side because
@@ -951,7 +950,7 @@ export function createResourceRouter(options: ResourceOptions): Router {
         ok(async (req, res) => {
             // Correct over an empty dataset: a channel with no history reports
             // zeroes rather than failing, which is the state every new tenant
-            // is in — and the screen renders those real small numbers rather
+            // is in, and the screen renders those real small numbers rather
             // than an apology.
             const { range } = getValidatedQuery<{ range: AnalyticsRange }>(req);
             const summary = await analytics(req.channel!.id).summary(range);

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Imports the Phase-0 MySQL dump into schema v2 as channel #1.
+# Imports the recovered MySQL dump into the current schema as channel #1.
 #
 # The dump is read via a throwaway mysql:8 container that exists only for the
 # duration of this script and is removed (with its volume) afterwards, so the
-# legacy credentials are never persisted anywhere new.
+# credentials inside the dump are never persisted anywhere new.
 #
 # Usage:  scripts/etl-import.sh [path-to-dump.sql]
 set -euo pipefail
@@ -30,18 +30,18 @@ echo "Starting throwaway MySQL..."
 docker run -d --rm \
     --name "$CONTAINER" \
     -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
-    -e MYSQL_DATABASE=legacy \
+    -e MYSQL_DATABASE=recovered \
     -p "127.0.0.1:${MYSQL_PORT}:3306" \
     mysql:8 \
     --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci >/dev/null
 
-# A real query, not mysqladmin ping: during initialisation MySQL runs a
+# A real query, not mysqladmin ping: during initialization MySQL runs a
 # temporary server that answers pings before the configured root password
 # exists, so ping alone reports ready too early.
 echo "Waiting for MySQL to accept authenticated queries..."
 ready=0
 for _ in $(seq 1 60); do
-    if docker exec "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1" legacy >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1" recovered >/dev/null 2>&1; then
         ready=1
         break
     fi
@@ -55,11 +55,11 @@ if [[ "$ready" -ne 1 ]]; then
 fi
 
 echo "Loading dump..."
-docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" legacy < "$DUMP"
+docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" recovered < "$DUMP"
 
 echo "Running ETL..."
-MYSQL_URL="mysql://root:${MYSQL_ROOT_PASSWORD}@127.0.0.1:${MYSQL_PORT}/legacy" \
+MYSQL_URL="mysql://root:${MYSQL_ROOT_PASSWORD}@127.0.0.1:${MYSQL_PORT}/recovered" \
 DATABASE_URL="$DATABASE_URL" \
-    npx tsx server/scripts/etl/import-legacy.ts
+    npx tsx server/scripts/etl/import-dump.ts
 
 echo "Done."

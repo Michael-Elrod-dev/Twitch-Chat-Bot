@@ -30,7 +30,7 @@ import {
 
 export interface ValidationResult {
     ok: boolean;
-    /** The normalised value — lowercased and trimmed — when `ok`. */
+    /** The normalized value — lowercased and trimmed — when `ok`. */
     value: string;
     /** The schema's own message when not. */
     message: string;
@@ -60,7 +60,7 @@ export function validateReply(raw: string): ValidationResult {
     return check(chatTextSchema, raw);
 }
 
-/** Exact-match triggers get the same normalisation as command names. */
+/** Exact-match triggers get the same normalization as command names. */
 export function validateEmoteTrigger(raw: string): ValidationResult {
     return check(emoteTriggerSchema, raw);
 }

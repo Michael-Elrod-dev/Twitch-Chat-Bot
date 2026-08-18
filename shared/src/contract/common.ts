@@ -21,7 +21,7 @@ export type UserLevel = z.infer<typeof userLevelSchema>;
 /**
  * Command names.
  *
- * Leading `!` required and normalised to lowercase, because the chat pipeline
+ * Leading `!` required and normalized to lowercase, because the chat pipeline
  * looks them up lowercased — accepting `!Foo` here and never matching it in
  * chat would be a silent failure the user cannot diagnose.
  */
@@ -36,7 +36,7 @@ export const commandNameSchema = z
 /** Chat-visible text. Twitch truncates beyond 500, so refuse rather than surprise. */
 export const chatTextSchema = z.string().trim().min(1).max(500);
 
-/** Emote triggers match on exact text, so the same normalisation applies. */
+/** Emote triggers match on exact text, so the same normalization applies. */
 export const emoteTriggerSchema = z
     .string()
     .trim()

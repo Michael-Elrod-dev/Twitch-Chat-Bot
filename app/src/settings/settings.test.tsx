@@ -505,7 +505,7 @@ describe('Settings · Stream Deck (3f)', () => {
         expect(document.body.textContent).not.toContain(secret);
     });
 
-    it('cancelling the naming modal reveals nothing and sends nothing', async () => {
+    it('canceling the naming modal reveals nothing and sends nothing', async () => {
         const api = stubApi({ keys: [] });
         renderSettings();
         await openPane('Stream Deck');

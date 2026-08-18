@@ -226,7 +226,7 @@ describe('the auth arc', () => {
         expect(h.storage.read()).toBeNull();
     });
 
-    it('can be cancelled back to sign-in', async () => {
+    it('can be canceled back to sign-in', async () => {
         stubFetch({ '/healthz': () => new Response('ok') });
         const h = harness();
         render(<App platform={h.platform} storage={h.storage} />);

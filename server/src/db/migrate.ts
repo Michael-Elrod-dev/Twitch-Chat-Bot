@@ -21,7 +21,7 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
     const migrationsFolder = join(here, '..', '..', 'drizzle');
 
     /*
-     * Serialised across processes, not merely within one.
+     * Serialized across processes, not merely within one.
      *
      * Drizzle's migrator reads the applied-migrations table and then runs the
      * DDL, which is a check-then-act with no lock of its own. Two processes

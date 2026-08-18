@@ -12,7 +12,7 @@
  */
 
 /**
- * What a chatter *is* in this channel, for the feed's name colouring.
+ * What a chatter *is* in this channel, for the feed's name coloring.
  *
  * Deliberately NOT `UserLevel`. That type answers "who is allowed to run this
  * command" and includes `everyone`, which is a threshold rather than anything a
@@ -28,7 +28,7 @@ export interface LiveChatMessage {
     channelId: string;
     at: string;
     /**
-     * `role` is the highest tier this chatter holds, so the feed can colour the
+     * `role` is the highest tier this chatter holds, so the feed can color the
      * broadcaster clay and moderators sage. It is exposure of a decision the
      * pipeline already makes per message, not a second derivation — the
      * permission check and this read the same role flags off the same event.

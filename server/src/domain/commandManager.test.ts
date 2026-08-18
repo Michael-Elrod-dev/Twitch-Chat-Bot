@@ -6,7 +6,7 @@ import type { CacheManager } from '../cache/cacheManager.js';
 import type { HandlerRegistry } from './handlers.js';
 
 /**
- * Ported behaviours from Phase 0 tests/commands/commandManager.test.js and
+ * Ported behaviors from Phase 0 tests/commands/commandManager.test.js and
  * tests/commands/permissions.test.js — specifically the WP-6 task 9 findings:
  * one enforcement point, declaration beats the database row, and the row gets
  * corrected at load.

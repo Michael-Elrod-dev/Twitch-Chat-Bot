@@ -259,8 +259,8 @@ function CommandRow({ command, onEdit, onDelete }: {
                     {command.name}
                     <span className="chip chip--builtin">BUILT IN</span>
                 </span>
-                {/* The behaviour, not a reply: there is no stored text to show. */}
-                <span className="list-row__behaviour">{describeHandler(command)}</span>
+                {/* The behavior, not a reply: there is no stored text to show. */}
+                <span className="list-row__behavior">{describeHandler(command)}</span>
                 <span className={`list-row__who${command.userLevel === 'mod' ? ' list-row__who--mod' : ''}`}>
                     {USER_LEVEL_LABELS[command.userLevel]}
                 </span>

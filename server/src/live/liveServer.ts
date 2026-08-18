@@ -52,7 +52,7 @@ export class LiveServer {
         this.options = options;
 
         // noServer: we own the upgrade so authentication can reject before any
-        // WebSocket machinery is started for an unauthorised caller.
+        // WebSocket machinery is started for an unauthorized caller.
         this.wss = new WebSocketServer({ noServer: true });
 
         options.server.on('upgrade', (req, socket, head) => {
@@ -178,7 +178,7 @@ export class LiveServer {
     /**
      * A TCP connection to a laptop whose lid closed stays "open" indefinitely.
      * Ping/pong is what makes a gone client actually go, and every unreaped
-     * socket is a channel's events being serialised to nowhere.
+     * socket is a channel's events being serialized to nowhere.
      */
     private startHeartbeat(): void {
         const interval = this.options.heartbeatMs ?? LIVE_HEARTBEAT_MS;

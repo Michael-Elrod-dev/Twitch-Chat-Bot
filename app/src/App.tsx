@@ -259,7 +259,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
      * flicker a name the server may have resolved to something else.
      *
      * An empty patch is a re-read and sends no body — see `SettingsPatch`. The
-     * schema refuses an empty object, so this is not merely an optimisation.
+     * schema refuses an empty object, so this is not merely an optimization.
      */
     const saveSettings = useCallback(async (patch: SettingsPatch): Promise<string | null> => {
         const current = auth.me;

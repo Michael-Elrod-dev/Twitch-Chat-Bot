@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hasPermission, rankOf, isUserLevel, rolesFromRecord, NO_ROLES } from './permissions.js';
 
 /**
- * Ported from Phase 0 WP-7.1 (tests/commands/permissions.test.js). The behaviours
+ * Ported from Phase 0 WP-7.1 (tests/commands/permissions.test.js). The behaviors
  * pinned there are pinned here; the roles now come from channel_roles rather than
  * a global flag, which is the whole point of the port.
  */

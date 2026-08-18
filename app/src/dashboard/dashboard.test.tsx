@@ -237,7 +237,7 @@ describe('the numbers row', () => {
     });
 
     it('renders skeletons rather than zeroes when the server is unreachable', () => {
-        // The rule this screen exists to honour. A zero is a statement about the
+        // The rule this screen exists to honor. A zero is a statement about the
         // bot; the bot is almost certainly fine and we simply cannot see it.
         renderDashboard({ connection: 'down', summary: null });
 
@@ -349,7 +349,7 @@ describe('the chat feed', () => {
         expect(rows[0]?.className).not.toContain('chat-row--bot');
     });
 
-    it('colours each role from the event, including the moderator green 9a could not do', () => {
+    it('colors each role from the event, including the moderator green 9a could not do', () => {
         renderDashboard({
             messages: [
                 chat({ chatter: { login: 'streamer', displayName: 'Streamer', role: 'broadcaster' } }),
@@ -408,7 +408,7 @@ describe('the chat feed', () => {
         expect(feed.scrollTop).toBe(900);
     });
 
-    it('renders a moderator green - the colouring 9a shipped unable to do', () => {
+    it('renders a moderator green - the coloring 9a shipped unable to do', () => {
         /*
          * The rider's whole purpose. Until `role` rode on the event the feed
          * could only compare a login against the channel's, which identifies the
@@ -424,7 +424,7 @@ describe('the chat feed', () => {
         });
 
         expect(screen.getByText('ModPerson').className).toContain('chat-row__name--moderator');
-        // VIPs share the body colour with ordinary viewers, per the handoff.
+        // VIPs share the body color with ordinary viewers, per the handoff.
         expect(screen.getByText('VipPerson').className).toContain('chat-row__name--vip');
         expect(screen.getByText('VipPerson').className).not.toContain('--moderator');
     });

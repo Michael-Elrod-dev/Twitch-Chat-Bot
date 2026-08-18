@@ -26,7 +26,7 @@ Point it at a server with `VITE_API_BASE_URL`; see [.env.example](.env.example).
 
 | Path | What lives there |
 |---|---|
-| `src/theme/` | Every design value, as constants. `applyTheme` turns them into CSS custom properties; the stylesheet contains no literal colours. |
+| `src/theme/` | Every design value, as constants. `applyTheme` turns them into CSS custom properties; the stylesheet contains no literal colors. |
 | `src/api/` | One fetch wrapper over the `{ ok, data \| error }` envelope. Transport failure is an `unavailable` code, not a different species of problem. |
 | `src/auth/` | The sign-in arc, the token store, and the deep-link parser. |
 | `src/live/` | The WebSocket connection state machine. Knows nothing about channel status. |

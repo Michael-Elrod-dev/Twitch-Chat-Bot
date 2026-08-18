@@ -6,7 +6,7 @@ import { APP_NAME } from '../theme/tokens.js';
  *
  * Real Tauri window controls, not decorations: the Tauri window is built with
  * `decorations: false` so this strip is the only title bar, and the buttons
- * have to actually minimise, maximise and close.
+ * have to actually minimize, maximise and close.
  */
 
 export interface WindowControls {

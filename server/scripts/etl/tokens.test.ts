@@ -14,7 +14,7 @@ import { createTokenCipher } from '../../src/crypto/tokenCipher.js';
  *
  * The ETL originally deleted `channel_tokens` and re-inserted from the dump,
  * which would have replaced a working encrypted credential with a dead plaintext
- * one — silently disconnecting the channel it was supposed to be restoring.
+ * one, silently disconnecting the channel it was supposed to be restoring.
  */
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
@@ -151,8 +151,8 @@ describeDb('ETL credential handling', () => {
         });
 
         it('does not replace real granted scopes with the ETL guess', async () => {
-            // The dump records no scopes at all; the ETL's list is inferred from
-            // what the Phase-0 bot did. A consent record knows.
+            // The dump records no scopes at all, so the import's list is a
+            // guess. A consent record knows what was granted.
             await handle.sql`delete from bot_identity`;
             await new BotIdentityRepository(handle.db, cipher).replaceWith({
                 twitchUserId: 'live-bot', twitchLogin: 'almosthadai',

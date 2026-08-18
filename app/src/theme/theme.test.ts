@@ -21,7 +21,7 @@ describe('design tokens', () => {
         expect(vars['--motion-ok-glow-duration']).toBe(motion.okGlowDuration);
     });
 
-    it('names every colour it defines', () => {
+    it('names every color it defines', () => {
         // Guards the kebab-casing: a token added in camelCase but emitted under
         // a mangled name would be invisible to the stylesheet and silently
         // fall back to nothing.

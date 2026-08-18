@@ -38,10 +38,10 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
     }
 
     /**
-     * @param tolerateLegacyPlaintext accepts ETL-imported rows that predate
+     * @param toleratePlaintext accepts ETL-imported rows that predate
      * encryption. The upgrade script sets it; the running server does not.
      */
-    async get(provider: TokenProvider, tolerateLegacyPlaintext = false): Promise<StoredTokens | null> {
+    async get(provider: TokenProvider, toleratePlaintext = false): Promise<StoredTokens | null> {
         const [row] = await this.db
             .select({
                 accessToken: channelTokens.accessToken,
@@ -55,8 +55,8 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
         if (!row) return null;
 
         return {
-            accessToken: this.cipher.decrypt(row.accessToken, TOKEN_PURPOSES.channelAccess, tolerateLegacyPlaintext),
-            refreshToken: this.cipher.decrypt(row.refreshToken, TOKEN_PURPOSES.channelRefresh, tolerateLegacyPlaintext),
+            accessToken: this.cipher.decrypt(row.accessToken, TOKEN_PURPOSES.channelAccess, toleratePlaintext),
+            refreshToken: this.cipher.decrypt(row.refreshToken, TOKEN_PURPOSES.channelRefresh, toleratePlaintext),
             expiresAt: row.expiresAt,
             scopes: row.scopes
         };

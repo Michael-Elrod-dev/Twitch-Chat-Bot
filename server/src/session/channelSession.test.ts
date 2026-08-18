@@ -30,7 +30,7 @@ const chatEvent = (id: string, broadcasterTwitchId = '1'): TransportEvent => ({
 
 // `streamId` is Twitch's own stream id, which every real stream.online payload
 // carries — the fixture supplies one rather than a synthetic shape the
-// normaliser could never produce.
+// normalizer could never produce.
 const streamOnlineEvent = (id: string, streamId = '48765430'): TransportEvent => ({
     kind: 'stream_online',
     messageId: id,

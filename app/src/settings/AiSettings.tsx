@@ -109,7 +109,7 @@ export function AiSettings({ settings, onSettingsChange }: AiSettingsProps): Rea
 
                 {/*
                   * The broadcaster's row, and the only one with no control. In
-                  * sage rather than the body colour because it is a reassurance
+                  * sage rather than the body color because it is a reassurance
                   * rather than a setting: whatever the numbers above say, the
                   * streamer is never rationed in their own channel.
                   */}

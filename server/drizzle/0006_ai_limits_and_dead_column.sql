@@ -12,7 +12,7 @@
 -- a new notification path to forget to call.
 --
 -- Defaults are exactly the constant's values, so this migration changes no
--- channel's behaviour: every existing channel keeps the budget it has been
+-- channel's behavior: every existing channel keeps the budget it has been
 -- running with, and the screen opens on the truth rather than on a proposal.
 --
 -- The broadcaster's tier is absent on purpose. It is unlimited, the screen

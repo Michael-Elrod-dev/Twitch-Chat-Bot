@@ -81,7 +81,7 @@ export class QuoteRepository extends ChannelScopedRepository {
             }
 
             // Postgres refuses FOR UPDATE alongside an aggregate, so the lock goes
-            // on the parent channel row instead. That serialises quote allocation
+            // on the parent channel row instead. That serializes quote allocation
             // per channel - which is exactly the scope that needs it - and leaves
             // other channels free to insert concurrently.
             await tx

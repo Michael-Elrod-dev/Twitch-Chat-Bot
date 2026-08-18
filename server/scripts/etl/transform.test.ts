@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { routeTokenKey, splitViewer, resolveRequester, assignQuoteNumbers } from './transform.js';
-import type { LegacyViewer } from './transform.js';
+import type { DumpViewer } from './transform.js';
 
 /**
  * Synthetic fixtures only. The real dump carries live credentials and never
  * appears in a test, a snapshot, or CI.
  */
 
-const viewer = (overrides: Partial<LegacyViewer> = {}): LegacyViewer => ({
+const viewer = (overrides: Partial<DumpViewer> = {}): DumpViewer => ({
     user_id: '123456',
     username: 'someviewer',
     is_moderator: 0,
@@ -48,7 +48,7 @@ describe('routeTokenKey - the key/value drawer gets dissolved', () => {
         }
     });
 
-    it('does not silently swallow an unrecognised key', () => {
+    it('does not silently swallow an unrecognized key', () => {
         expect(routeTokenKey('somethingNew')).toEqual({ kind: 'ignored' });
     });
 

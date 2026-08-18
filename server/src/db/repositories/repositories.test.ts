@@ -9,7 +9,7 @@ import { ChannelSettingsRepository } from './channelSettingsRepository.js';
 import { ChannelRoleRepository } from './channelRoleRepository.js';
 
 /**
- * Repository behaviour against a real Postgres, with the emphasis on the thing
+ * Repository behavior against a real Postgres, with the emphasis on the thing
  * that matters most: a repository bound to one channel must be structurally
  * incapable of seeing another channel's rows.
  *
@@ -87,7 +87,7 @@ describeDb('repositories', () => {
             expect((await repoA.listAll()).map((c) => c.name)).toContain('!undeletable');
         });
 
-        it('normalises names to lowercase', async () => {
+        it('normalizes names to lowercase', async () => {
             const repoA = new CommandRepository(handle.db, channelA);
             await repoA.create({ name: '!MiXeD', responseText: 'x', handlerName: null, description: null, userLevel: 'everyone' });
 

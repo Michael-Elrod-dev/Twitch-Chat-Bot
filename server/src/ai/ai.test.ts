@@ -13,7 +13,7 @@ import type { SettingsService } from '../domain/settings.js';
 import type { ChatterRoles } from '../domain/permissions.js';
 
 /**
- * The Phase-0 AI behaviours, ported with channel scope.
+ * The Phase-0 AI behaviors, ported with channel scope.
  *
  * No test here reaches the network: the Claude client is an interface and the
  * fake records what it was asked, which is how prompt construction and rate
@@ -107,7 +107,7 @@ describe('limitFor', () => {
         expect(limitFor(roles({ isBroadcaster: true }))).toBe(DEFAULT_STREAM_LIMITS.broadcaster);
     });
 
-    it('honours a channel overriding its limits', () => {
+    it('honors a channel overriding its limits', () => {
         expect(limitFor(roles(), { ...DEFAULT_STREAM_LIMITS, everyone: 99 })).toBe(99);
     });
 });
@@ -293,7 +293,7 @@ describeDb('AI service', () => {
             // stream_id is null off-stream, and Postgres treats NULLs in a
             // unique index as distinct - so an upsert would insert a new row
             // every time and the limit would never apply. The limiter
-            // serialises its own read-then-write instead.
+            // serializes its own read-then-write instead.
             const user = await makeViewer(`ai-offline-${Date.now()}`);
             const { service } = buildService(alphaId);
 
@@ -517,7 +517,7 @@ describeDb('AI service', () => {
             expect(texts.indexOf('first')).toBeLessThan(texts.indexOf('second'));
         });
 
-        it('honours the limit', async () => {
+        it('honors the limit', async () => {
             const user = await makeViewer(`ai-limit-hist-${Date.now()}`);
             const repo = new ChatHistoryRepository(handle.db, alphaId);
 

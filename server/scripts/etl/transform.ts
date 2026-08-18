@@ -1,11 +1,11 @@
 /**
- * Pure transforms from the Phase-0 MySQL shape into schema v2.
+ * Pure transforms from the recovered dump's MySQL shape into the current schema.
  *
  * Kept free of any I/O so it can be unit-tested on synthetic fixtures. The real
  * dump is never used in tests - it contains live credentials.
  */
 
-/** The Phase-0 `tokens` table was a key/value junk drawer. This is where each key goes. */
+/** The dump's `tokens` table was a key/value junk drawer. This is where each key goes. */
 export type TokenDestination =
     | { kind: 'channel_token'; provider: 'twitch' | 'spotify'; field: 'access' | 'refresh' }
     | { kind: 'bot_identity'; field: 'userId' | 'refresh' | 'access' }
@@ -15,11 +15,11 @@ export type TokenDestination =
     | { kind: 'ignored' };
 
 /**
- * Routing table for every key the Phase-0 schema could hold.
+ * Routing table for every key the dump's schema could hold.
  *
- * `server_secret` entries deliberately do NOT land in the database: design §2.3
- * moves the Claude key and the app's client credentials to the environment. The
- * ETL drops them rather than migrating them, and the report says so by count.
+ * `server_secret` entries deliberately do NOT land in the database. The Claude
+ * key and the app's client credentials belong to the environment, so the import
+ * drops them rather than migrating them, and the report says so by count.
  */
 export function routeTokenKey(key: string): TokenDestination {
     switch (key) {
@@ -63,8 +63,8 @@ export function routeTokenKey(key: string): TokenDestination {
     }
 }
 
-/** Phase-0 stored role flags on the viewer itself; v2 makes them channel-relative. */
-export interface LegacyViewer {
+/** The dump stored role flags on the viewer itself. The current schema makes them channel-relative. */
+export interface DumpViewer {
     user_id: string;
     username: string;
     is_moderator: number | boolean | null;
@@ -99,17 +99,18 @@ const toDate = (v: Date | string | null): Date | null => {
 };
 
 /**
- * Splits one legacy viewer row into global identity + channel-relative role.
+ * Splits one dump viewer row into global identity plus channel-relative role.
  *
- * @returns null identity when the row has no usable Twitch id. Phase 0's P1-4
- * allowed `user_id` to be a username; such rows cannot be trusted as identity
- * and are reported as skipped rather than imported under a fabricated id.
+ * @returns null identity when the row has no usable Twitch id. The source data
+ * sometimes carries a username in the numeric id column. Such rows cannot be
+ * trusted as identity and are reported as skipped rather than imported under a
+ * fabricated id.
  */
-export function splitViewer(row: LegacyViewer): { identity: ViewerIdentity; role: ChannelRole } | null {
+export function splitViewer(row: DumpViewer): { identity: ViewerIdentity; role: ChannelRole } | null {
     const id = String(row.user_id ?? '').trim();
 
-    // The legacy fallback wrote the username into the id column. A numeric id is
-    // the only thing that can be trusted to be a real Twitch user id.
+    // The source sometimes wrote the username into the id column. A numeric id
+    // is the only thing that can be trusted to be a real Twitch user id.
     if (id === '' || !/^\d+$/.test(id)) {
         return null;
     }
@@ -131,7 +132,7 @@ export function splitViewer(row: LegacyViewer): { identity: ViewerIdentity; role
     };
 }
 
-/** Phase-0 song_queue stored a username; v2 stores an id plus a display fallback. */
+/** The dump's song_queue stored a username. The current schema stores an id plus a display fallback. */
 export function resolveRequester(
     requestedBy: string | null,
     loginToId: Map<string, string>

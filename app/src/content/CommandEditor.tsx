@@ -55,7 +55,7 @@ export function CommandEditor({
         setTouched(true);
         if (!nameCheck.ok || !replyCheck.ok) return;
 
-        // The schema's normalised output, not the raw input: `!Foo` is stored
+        // The schema's normalized output, not the raw input: `!Foo` is stored
         // and matched as `!foo`, and submitting the raw text would save a name
         // chat could never trigger.
         onSave({ name: nameCheck.value, responseText: replyCheck.value, userLevel: level });

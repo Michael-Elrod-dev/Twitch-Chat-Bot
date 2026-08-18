@@ -44,7 +44,7 @@ export function Emotes({ storage }: EmotesProps): React.JSX.Element {
         if (!triggerCheck.ok) { setFieldError(triggerCheck.message); return; }
         if (!replyCheck.ok) { setFieldError(replyCheck.message); return; }
 
-        // The schema's normalised trigger — lowercased and trimmed — because
+        // The schema's normalized trigger — lowercased and trimmed — because
         // matching is exact and on the lowercased text. Submitting the raw
         // input would store a trigger chat could never hit.
         const body = { triggerText: triggerCheck.value, responseText: replyCheck.value };

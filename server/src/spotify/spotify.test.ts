@@ -763,7 +763,7 @@ describe('February 2026 platform changes', () => {
      *
      * `POST /me/player/queue` answers 2xx with no JSON body. The client demanded
      * parseable JSON of every response, so each real success was thrown as
-     * `failed with 200: response was not valid JSON`. The monitor honoured its
+     * `failed with 200: response was not valid JSON`. The monitor honored its
      * own contract and refused to remove a track it believed had not been
      * queued — so it re-queued it every tick. Four ticks in the end window put
      * one track into Spotify's queue four times.
@@ -817,7 +817,7 @@ describe('February 2026 platform changes', () => {
         });
 
         await expect(client.queueTrack('spotify:track:abc')).rejects.toThrow(/404/);
-        // Reads keep the old, correct behaviour.
+        // Reads keep the old, correct behavior.
         await expect(client.getPlaybackState()).resolves.toBeNull();
     });
 

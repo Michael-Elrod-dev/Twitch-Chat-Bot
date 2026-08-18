@@ -36,7 +36,7 @@ const offlineSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSub
  * **The `reward_id: ''` is not decoration — it is what Twitch actually returns.**
  * We create this subscription with `{broadcaster_user_id}` alone and Twitch
  * echoes the optional field back as an empty string. This fixture used to omit
- * it, which is precisely why the reconciler shipped unable to recognise its own
+ * it, which is precisely why the reconciler shipped unable to recognize its own
  * redemption subscription: every test agreed with the code and neither agreed
  * with Twitch. A fixture that does not match the wire proves nothing.
  */
@@ -80,7 +80,7 @@ describe('SubscriptionReconciler', () => {
             expect(plan.keep).toHaveLength(DESIRED_SUBSCRIPTIONS.length);
         });
 
-        it('recognises its own subscription when Twitch echoes an empty optional field', () => {
+        it('recognizes its own subscription when Twitch echoes an empty optional field', () => {
             /*
              * The production defect, as a test.
              *

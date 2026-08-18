@@ -87,7 +87,7 @@ export class RedemptionPipeline {
         const managed = await o.rewards.findByRewardId(event.rewardId);
         if (!managed) {
             // Explicitly none of our business. The broadcaster's own rewards -
-            // "Pick the game", "MS paint" - are theirs to fulfil by hand, and
+            // "Pick the game", "MS paint" - are theirs to fulfill by hand, and
             // touching their status would be taking over something we were
             // never asked to run.
             o.logger.debug(
@@ -131,7 +131,7 @@ export class RedemptionPipeline {
             return { action: 'refunded', kind: managed.kind, reason: failureReason };
         }
 
-        await this.fulfil(event, managed.kind);
+        await this.fulfill(event, managed.kind);
         return { action: 'fulfilled', kind: managed.kind };
     }
 
@@ -182,7 +182,7 @@ export class RedemptionPipeline {
         }
     }
 
-    private async fulfil(event: RedemptionEvent, kind: RewardKind): Promise<void> {
+    private async fulfill(event: RedemptionEvent, kind: RewardKind): Promise<void> {
         const o = this.options;
 
         await this.recordAnalytics(event);

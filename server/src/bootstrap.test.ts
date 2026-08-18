@@ -102,7 +102,7 @@ describe('buildChannelSession', () => {
      * to start it, then — in the fix itself — the monitor was built and never
      * handed over. Both compiled, both passed the suite, both shipped.
      *
-     * Wiring is only observable through behaviour, so this asserts the lifecycle
+     * Wiring is only observable through behavior, so this asserts the lifecycle
      * the session is supposed to drive rather than reaching for a private field.
      */
     it('hands the playback monitor to the session when Spotify is configured', async () => {
@@ -232,7 +232,7 @@ describe('resolveBotIdentity', () => {
 
     it('does not fail the boot when neither is configured', async () => {
         // A missing bot identity is a warning, not a crash: the server still
-        // serves, it simply cannot recognise its own messages.
+        // serves, it simply cannot recognize its own messages.
         const identity = await resolveBotIdentity(dbReturning([]), env(), logger);
 
         expect(identity.twitchUserId).toBe('');
@@ -266,7 +266,7 @@ const describeDb = TEST_DATABASE_URL ? describe : describe.skip;
  * One branch of that half (the monitor) is now covered. These close the other
  * two — the redemption pipeline and the song toggle.
  *
- * Both assert through behaviour reaching a real collaborator, because "was it
+ * Both assert through behavior reaching a real collaborator, because "was it
  * constructed" is not the failure mode. The failure mode is "constructed and
  * never connected to anything", which only an observable effect can catch.
  */

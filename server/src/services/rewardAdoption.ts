@@ -48,7 +48,7 @@ export interface AdoptionResult {
     adopted: { kind: RewardKind; title: string }[];
     created: { kind: RewardKind; title: string }[];
     unchanged: RewardKind[];
-    /** Rewards the app can manage but does not recognise - left alone. */
+    /** Rewards the app can manage but does not recognize - left alone. */
     ignored: string[];
     failures: { kind: RewardKind; reason: string }[];
 }
@@ -147,7 +147,7 @@ export class RewardAdoptionService {
             }
         }
 
-        // Manageable but unrecognised. Named in the log so the operator can see
+        // Manageable but unrecognized. Named in the log so the operator can see
         // what was left alone, but never touched.
         result.ignored = manageable.filter((r) => !boundIds.has(r.id)).map((r) => r.title);
         if (result.ignored.length > 0) {

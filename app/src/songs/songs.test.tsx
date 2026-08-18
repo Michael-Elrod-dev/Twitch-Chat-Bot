@@ -141,7 +141,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
  * A tiny harness for `useAdvancingProgress`.
  *
  * The hook is rendered inside a real component rather than called directly,
- * because its whole behaviour is timers and effects — a plain call would test
+ * because its whole behavior is timers and effects — a plain call would test
  * arithmetic that nothing runs. Written here rather than pulling in a
  * render-hook helper the project does not otherwise use.
  */
@@ -218,7 +218,7 @@ describe('the songs formatters', () => {
 describe('Songs (3c)', () => {
     it('has no add button anywhere, and says why instead', async () => {
         // The screen's central argument. A track with no points behind it is not
-        // a request, so the absence is explained rather than apologised for.
+        // a request, so the absence is explained rather than apologized for.
         renderSongs({ spotify: connected(), queue: [song()] });
 
         expect(await screen.findByText('HOW SONGS GET HERE')).toBeInTheDocument();

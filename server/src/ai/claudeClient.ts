@@ -98,7 +98,7 @@ export class AnthropicClaudeClient implements ClaudeClient {
  * Deterministic stand-in for tests and for a server with no key configured.
  *
  * Records what it was asked so a test can assert on the built prompt, which is
- * how the prompt-building and rate-limiting behaviour is verified without ever
+ * how the prompt-building and rate-limiting behavior is verified without ever
  * reaching the network.
  */
 export class FakeClaudeClient implements ClaudeClient {

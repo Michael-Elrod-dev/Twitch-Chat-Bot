@@ -1,7 +1,7 @@
 /*
  * The app's stylesheet.
  *
- * Every colour, radius and spacing value here is a `var(--…)` written by
+ * Every color, radius and spacing value here is a `var(--…)` written by
  * applyTheme() from src/theme/tokens.ts. A literal hex in this file would be a
  * design value that cannot be changed from one place, which is exactly what the
  * token module exists to prevent.
@@ -1057,11 +1057,11 @@ button {
 }
 
 /*
- * Name colour by role, straight from the event.
+ * Name color by role, straight from the event.
  *
  * Derived server-side from the same flags the permission check reads, rather
  * than by matching the login against the channel's — which was all 9a could do
- * without a role on the wire, and which could never have coloured a moderator.
+ * without a role on the wire, and which could never have colored a moderator.
  */
 .chat-row__name--broadcaster {
     color: var(--color-accent-hover);
@@ -1071,7 +1071,7 @@ button {
     color: var(--color-success-text);
 }
 
-/* VIPs and ordinary viewers share the body colour, per the handoff. */
+/* VIPs and ordinary viewers share the body color, per the handoff. */
 .chat-row__name--vip,
 .chat-row__name--viewer {
     color: var(--color-text-body);
@@ -1400,7 +1400,7 @@ button {
 }
 
 .list-row__reply,
-.list-row__behaviour {
+.list-row__behavior {
     min-width: 0;
     font-size: 13px;
     /* Truncated rather than wrapped: the row is a scannable index, and the full
@@ -1414,8 +1414,8 @@ button {
     color: var(--color-text-body);
 }
 
-/* Describes behaviour rather than quoting text, so it reads as meta. */
-.list-row__behaviour {
+/* Describes behavior rather than quoting text, so it reads as meta. */
+.list-row__behavior {
     color: var(--color-text-tertiary);
 }
 
@@ -1627,7 +1627,7 @@ button {
     color: var(--color-text-tertiary);
 }
 
-/* Clay doubles as the warning colour — there is no separate error red. */
+/* Clay doubles as the warning color — there is no separate error red. */
 .field__error {
     font-size: 12px;
     color: var(--color-accent-hover);
@@ -1637,7 +1637,7 @@ button {
  * Rate limiting is not an error state.
  *
  * Being asked to wait a few seconds is the system working; dressing it in the
- * warning colour would teach the owner their bot is broken when it is busy.
+ * warning color would teach the owner their bot is broken when it is busy.
  */
 .inline-notice {
     margin: 0;
@@ -2312,7 +2312,7 @@ button {
     color: var(--color-success-text);
 }
 
-/* Clay doubles as the warning colour - there is no separate error red. */
+/* Clay doubles as the warning color - there is no separate error red. */
 .setting-row__warn {
     margin: 0;
     max-width: 430px;

@@ -15,7 +15,7 @@ import { RateLimitedError, ManualReauthRequiredError } from '../twitch/errors.js
  * The P1-WP7 flag lands here. A rate limit on the refund path gets **one
  * bounded retry after the reset hint, never a drop** — an unrefunded failed
  * redemption is stolen channel points, and "we were rate limited" is not
- * something the viewer can see or act on. Fulfilment is not retried: the viewer
+ * something the viewer can see or act on. Fulfillment is not retried: the viewer
  * already got what they paid for and the status is cosmetic by comparison.
  */
 

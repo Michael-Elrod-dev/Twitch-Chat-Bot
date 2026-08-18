@@ -39,7 +39,7 @@ export class CommandManager {
     private readonly logger: Logger;
     private readonly handlers: HandlerRegistry;
 
-    /** Authoritative in-memory copy; the cache is an optimisation over this. */
+    /** Authoritative in-memory copy; the cache is an optimization over this. */
     private commands = new Map<string, CommandLookup>();
     private loaded = false;
 

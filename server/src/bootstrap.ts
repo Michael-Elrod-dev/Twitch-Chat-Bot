@@ -476,7 +476,7 @@ export async function bootstrapChannels(
  *
  * The database is the source of truth; env is the escape hatch for a deployment
  * that has not been through onboarding yet. Neither present is not fatal — the
- * bot simply cannot recognise its own messages — but it is worth a warning,
+ * bot simply cannot recognize its own messages — but it is worth a warning,
  * because the symptom (a bot answering itself) reads as a logic bug.
  */
 export async function resolveBotIdentity(db: Database, env: Env, logger: Logger): Promise<BotIdentity> {
@@ -491,7 +491,7 @@ export async function resolveBotIdentity(db: Database, env: Env, logger: Logger)
     if (twitchUserId === '') {
         logger.warn(
             'No bot identity configured (bot_identity is empty and BOT_TWITCH_USER_ID is unset) - ' +
-            'the bot cannot recognise its own messages'
+            'the bot cannot recognize its own messages'
         );
     }
 

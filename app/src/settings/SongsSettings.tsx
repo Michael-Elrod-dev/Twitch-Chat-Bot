@@ -123,7 +123,7 @@ export function SongsSettings({
                         label="Let viewers request songs"
                         // Same reasoning as the songs header: with no account
                         // linked, switching the reward on would sell viewers a
-                        // request the bot cannot fulfil.
+                        // request the bot cannot fulfill.
                         disabled={!connected}
                         onChange={(next) => { toggle({ songRequestsEnabled: next }); }}
                     />

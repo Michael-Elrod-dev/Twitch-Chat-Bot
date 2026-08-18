@@ -127,7 +127,7 @@ describe('RedemptionSettlement', () => {
             expect(update).toHaveBeenCalledTimes(2);
         });
 
-        it('does NOT retry a rate-limited fulfilment', async () => {
+        it('does NOT retry a rate-limited fulfillment', async () => {
             // The viewer already got what they paid for; the status is cosmetic
             // by comparison, and retrying spends budget the refund path needs.
             const update = vi.fn().mockRejectedValue(new RateLimitedError('/redemptions', 1_000));
@@ -260,8 +260,8 @@ describeDb('RedemptionPipeline', () => {
         });
     });
 
-    describe('the fulfil-or-refund invariant', () => {
-        it('fulfils a valid quote and stores it', async () => {
+    describe('the fulfill-or-refund invariant', () => {
+        it('fulfills a valid quote and stores it', async () => {
             const outcome = await buildPipeline(alphaId).handle(redemption({
                 rewardId: 'alpha-quote-reward',
                 userInput: '"A real quote" - A Real Person'

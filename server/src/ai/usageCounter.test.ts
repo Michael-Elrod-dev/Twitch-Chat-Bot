@@ -71,7 +71,7 @@ describe('the usage counter', () => {
     });
 
     describe('the threshold knob', () => {
-        it('honours an override', () => {
+        it('honors an override', () => {
             expect(usageSuffix({ used: 5, limit: 15, threshold: 10 })).toBe('(10 left this stream)');
             expect(usageSuffix({ used: 12, limit: 15, threshold: 0 })).toBeNull();
         });

@@ -22,7 +22,7 @@ export interface EventSubWebhookOptions {
     logger: Logger;
     maxSkewMs: number;
     /**
-     * Hands a normalised event to the ingest queue.
+     * Hands a normalized event to the ingest queue.
      * @returns false when the queue refused it, which becomes a 503 so Twitch retries.
      */
     onEvent: (event: TransportEvent) => boolean;

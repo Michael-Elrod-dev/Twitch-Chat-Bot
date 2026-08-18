@@ -17,12 +17,12 @@ export type TokenPurpose = (typeof TOKEN_PURPOSES)[keyof typeof TOKEN_PURPOSES];
 export interface TokenCipher {
     encrypt: (plaintext: string, purpose: TokenPurpose) => string;
     /**
-     * @param tolerateLegacyPlaintext accepts an unencrypted value and returns it
+     * @param toleratePlaintext accepts an unencrypted value and returns it
      * as-is. Set only where a not-yet-upgraded ETL row is genuinely expected —
      * the upgrade script and the read path during migration — so that everywhere
      * else, a plaintext value is an error rather than a silent downgrade.
      */
-    decrypt: (stored: string, purpose: TokenPurpose, tolerateLegacyPlaintext?: boolean) => string;
+    decrypt: (stored: string, purpose: TokenPurpose, toleratePlaintext?: boolean) => string;
 }
 
 export function createTokenCipher(configuredKey: string): TokenCipher {
@@ -30,9 +30,9 @@ export function createTokenCipher(configuredKey: string): TokenCipher {
 
     return {
         encrypt: (plaintext, purpose) => encryptToken(plaintext, key, purpose),
-        decrypt: (stored, purpose, tolerateLegacyPlaintext = false) => {
+        decrypt: (stored, purpose, toleratePlaintext = false) => {
             if (!isEncrypted(stored)) {
-                if (tolerateLegacyPlaintext) return stored;
+                if (toleratePlaintext) return stored;
                 throw new TokenCryptoError(
                     `stored value for ${purpose} is not encrypted (run the token upgrade script)`
                 );

@@ -8,7 +8,7 @@ import { setDefaultFetch } from '../api/client.js';
  * no Tauri runtime exists, and `npm run dev` in a plain browser should still
  * render the shell rather than crash on a missing global. Both fall back to
  * the no-op implementation below, which is honest about doing nothing rather
- * than pretending to minimise a window that is a browser tab.
+ * than pretending to minimize a window that is a browser tab.
  */
 
 export interface Platform {
