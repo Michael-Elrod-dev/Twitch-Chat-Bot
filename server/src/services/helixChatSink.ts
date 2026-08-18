@@ -48,7 +48,7 @@ export class HelixChatSink implements ChatSink {
         }
 
         const message = text.length > MAX_MESSAGE_LENGTH
-            ? `${text.slice(0, MAX_MESSAGE_LENGTH - 1)}…`
+            ? `${text.slice(0, MAX_MESSAGE_LENGTH - 3)}...`
             : text;
 
         try {

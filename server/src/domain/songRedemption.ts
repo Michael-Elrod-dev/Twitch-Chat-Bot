@@ -52,7 +52,7 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
                     { channelId: context.channelId },
                     'Spotify is disconnected - the broadcaster must reconnect at /auth/spotify/connect'
                 );
-                return 'The music service is not connected right now. Your points have been refunded.';
+                return 'Spotify is not connected right now. Your points have been refunded.';
             }
 
             options.logger.warn(
@@ -105,8 +105,8 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
         await context.reply(
             `@${context.event.redeemer.displayName} "${track.name}" by ${track.artist} is #${position} in the request list`
             + (ahead > 0
-                ? ` — ${ahead} song${ahead === 1 ? '' : 's'} ahead of it.`
-                : ' — it plays when the current song ends.')
+                ? ` - ${ahead} song${ahead === 1 ? '' : 's'} ahead of it.`
+                : ' - it plays when the current song ends.')
         );
 
         return null;

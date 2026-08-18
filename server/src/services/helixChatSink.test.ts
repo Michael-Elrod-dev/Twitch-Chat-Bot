@@ -34,7 +34,7 @@ describe('HelixChatSink', () => {
 
         const sent = send.mock.calls[0]?.[2] as string;
         expect(sent.length).toBe(500);
-        expect(sent.endsWith('…')).toBe(true);
+        expect(sent.endsWith('...')).toBe(true);
     });
 
     it('leaves a message at the limit alone', async () => {

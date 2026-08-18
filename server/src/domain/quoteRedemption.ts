@@ -22,7 +22,7 @@ import type { Logger } from '../logger.js';
 const QUOTE_PATTERN = /^\s*["“”'](.+?)["“”']\s*[-–—]\s*(.+?)\s*$/;
 
 export const QUOTE_FORMAT_HELP =
-    'Please use the format: "Your quote here" - Person who said it. Your points have been refunded.';
+    'Please use the format "Your quote here" - Person who said it. Your points have been refunded.';
 
 export interface ParsedQuote {
     text: string;
@@ -77,7 +77,7 @@ export function createQuoteRedemptionHandler(options: QuoteRedemptionOptions): R
         );
 
         await context.reply(
-            `@${context.event.redeemer.displayName} Quote #${number} added: "${parsed.text}" - ${parsed.author}`
+            `@${context.event.redeemer.displayName} Quote #${number} added - "${parsed.text}" - ${parsed.author}`
         );
 
         return null;
