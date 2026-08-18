@@ -7,17 +7,17 @@ export type InteractionType = 'message' | 'command' | 'redemption';
  * The two things an interaction has to carry to be counted.
  *
  * Narrower than `ChatMessageEvent`, which it is structurally satisfied by, for
- * two reasons. Redemptions are interactions too and are not chat messages —
- * they have a redeemer, not a chatter, and no text the sink has any use for.
- * And a bookkeeping sink that took the whole event could read the message body;
- * asking only for what it counts means it cannot.
+ * two reasons. Redemptions are interactions too and are not chat messages,
+ * because they have a redeemer rather than a chatter and no text the sink has
+ * any use for. And a bookkeeping sink that took the whole event could read the
+ * message body, whereas asking only for what it counts means it cannot.
  */
 export interface InteractionSubject {
     messageId: string;
     chatter: { twitchUserId: string };
 }
 
-/** The seam the analytics pipeline drops into (P1-WP4.3). */
+/** The seam the analytics pipeline drops into. */
 export interface AnalyticsSink {
     recordInteraction: (
         channelId: string,
@@ -31,7 +31,7 @@ export interface AnalyticsSink {
  *
  * Deliberately not transactional across the two writes. They are independent
  * aggregates, and a failure between them costs one message of drift in a
- * counter — whereas a transaction here would put chat-path latency behind two
+ * counter, whereas a transaction here would put chat-path latency behind two
  * table locks for bookkeeping nobody reads in real time.
  */
 export class DatabaseAnalyticsSink implements AnalyticsSink {

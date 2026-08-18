@@ -4,25 +4,17 @@ import type { AiService, GamePromptType } from '../services/aiService.js';
 import type { Logger } from '../logger.js';
 
 /**
- * `!advice` and `!roast` — the AI game commands.
+ * `!advice` and `!roast`, the AI game commands.
  *
- * ## Where the profile comes from: nowhere, and that is the correct answer
+ * Neither passes a profile for the target, and there is no profile to pass. The
+ * prompts have a "profile context" slot, but nothing has ever written a viewer
+ * profile and the recovered dump carries none, so every answer takes the
+ * prompts' own "if no profile context exists" branch.
  *
- * Phase 0's prompts accept a "profile context" for the target, read from
- * `viewers.context`. Resolving that column for P1-WP4.3 turned up three facts:
- *
- *  1. **Nothing in the Phase-0 codebase ever wrote it.** The column appears in
- *     `contextBuilder.getUserProfile`'s SELECT and in `promptBuilder`, and in no
- *     INSERT or UPDATE anywhere.
- *  2. **The recovered dump carries zero values.** All 1509 viewer rows — the
- *     owner's real data, matching the verified import count — have it NULL.
- *  3. So the feature was vestigial: every `!advice` and `!roast` Phase 0 ever
- *     answered took the prompts' own "if no profile context exists" branch.
- *
- * These therefore port profile-less, which is not a regression but an accurate
- * description of what the commands always did. Nothing is lost, and no dead
- * column is carried into v2 to look like data that does not exist. A curated
- * profile is a real feature the app can add later — with a writer.
+ * Running profile-less is therefore an accurate description of the commands
+ * rather than a reduction of them, and no dead column is carried forward to look
+ * like data that does not exist. A curated profile is a real feature the app can
+ * add later, together with something that writes one.
  */
 
 export interface GameHandlerDeps {

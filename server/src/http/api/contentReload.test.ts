@@ -35,9 +35,9 @@ import { signJwt } from '../../auth/jwt.js';
  * in-memory map and a populated cache hash, and its lookup deliberately treats
  * "hash exists, field absent" as an authoritative miss so that an ordinary chat
  * message never costs a database round trip. That optimization is correct and
- * load-bearing — and it makes a row inserted behind the manager's back invisible
- * **permanently**, not briefly: once the hash expires, the fallback consults the
- * in-memory map, which `loaded` already marks as good.
+ * load-bearing, and it makes a row inserted behind the manager's back invisible
+ * permanently rather than briefly. Once the hash expires, the fallback consults
+ * the in-memory map, which `loaded` already marks as good.
  *
  * So these tests deliberately span both layers. A route test would have passed
  * (the row is written) and a pipeline test would have passed (it answers what it
@@ -130,7 +130,7 @@ describeDb('content reaches the running bot', () => {
             broadcasterTwitchId: channel.broadcasterId,
             logger, pipeline, commands, emotes
         });
-        // Loads the (empty) content, exactly as a real session does at start —
+        // Loads the (empty) content, exactly as a real session does at start,
         // which is the state that makes a later insert invisible.
         await session.start();
 
@@ -247,8 +247,8 @@ describeDb('content reaches the running bot', () => {
     it('does not fail the write when there is no session to tell', async () => {
         /*
          * A channel whose bot is switched off has no session. The owner must
-         * still be able to edit their commands — the next start reads from the
-         * database anyway — so an absent session is a no-op, not an error.
+         * still be able to edit their commands, and the next start reads from
+         * the database anyway, so an absent session is a no-op and not an error.
          */
         const channels = new ChannelRepository(handle.db);
         const stamp = `nosession-${Date.now()}`;

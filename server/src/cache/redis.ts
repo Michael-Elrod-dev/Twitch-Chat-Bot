@@ -15,9 +15,9 @@ export interface RedisOptions {
 }
 
 /**
- * Redis is a cache and a queue, never a source of truth. Phase 0's house rule
- * carries over unchanged: every Redis-backed path has a database fallback, so a
- * Redis outage degrades performance and nothing else.
+ * Redis is a cache and a queue, never a source of truth. Every Redis-backed
+ * path has a database fallback, so a Redis outage degrades performance and
+ * nothing else.
  */
 export function createRedis({ url, logger }: RedisOptions): RedisHandle {
     const client = new Redis(url, {

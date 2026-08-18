@@ -6,15 +6,12 @@ import type { ChatterRoles } from '../domain/permissions.js';
 /**
  * Per-channel, per-stream AI budgets.
  *
- * Ported from Phase 0's rateLimiter with the scope corrected: the counter is
- * keyed by channel as well as by user and stream, so a viewer who follows the
- * bot across channels gets a fresh budget in each. Phase 0 could not express
- * that because it only ever served one channel.
+ * The counter is keyed by channel as well as by user and stream, so a viewer
+ * who follows the bot across channels gets a fresh budget in each.
  *
- * Limits are the **maximum** of every applicable tier rather than a lookup of
- * the highest role, which is Phase 0's behavior and the right one: a
- * subscriber who is also a VIP should get the better of the two, not whichever
- * the code happens to check first.
+ * Limits are the maximum of every applicable tier rather than a lookup of the
+ * highest role. A subscriber who is also a VIP gets the better of the two, not
+ * whichever the code happens to check first.
  */
 
 export interface StreamLimits {
@@ -47,7 +44,7 @@ export function streamLimitsFrom(
     stored: { everyone: number; vip: number; subscriber: number; moderator: number }
 ): StreamLimits {
     return {
-        // Never stored, never editable — see the schema and the contract.
+        // Never stored, never editable, as the schema and the contract say.
         broadcaster: DEFAULT_STREAM_LIMITS.broadcaster,
         mod: stored.moderator,
         subscriber: stored.subscriber,
@@ -107,8 +104,8 @@ export class AiRateLimiter {
 
     /**
      * @param streamId null when the channel is offline, which is a legitimate
-     * bucket of its own rather than an error — Phase 0 treated offline usage as
-     * one long stream, and the same applies here.
+     * bucket of its own rather than an error. Offline usage counts as one long
+     * stream.
      */
     async check(twitchUserId: string, roles: ChatterRoles, streamId: string | null): Promise<RateLimitDecision> {
         const limit = limitFor(roles, await this.limits());
@@ -120,10 +117,11 @@ export class AiRateLimiter {
     /**
      * Records one use and returns the new total.
      *
-     * Deliberately NOT an ON CONFLICT upsert. The unique index cannot match
-     * rows where `stream_id` is null — Postgres treats NULLs in a unique index
-     * as distinct — which is precisely the offline bucket, so an upsert would
-     * insert a fresh row every time and the limit would never apply off-stream.
+     * Deliberately not an ON CONFLICT upsert. The unique index cannot match
+     * rows where `stream_id` is null, because Postgres treats NULLs in a unique
+     * index as distinct, and that is precisely the offline bucket. An upsert
+     * would insert a fresh row every time and the limit would never apply
+     * off-stream.
      *
      * Instead the read-then-write is serialized per channel by locking the
      * parent `channels` row, the same shape the quote numbering uses. Two

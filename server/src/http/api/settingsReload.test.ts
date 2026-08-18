@@ -25,7 +25,7 @@ import { signJwt } from '../../auth/jwt.js';
 import { MapCache, asCacheManager } from '../../cache/testing.js';
 
 /**
- * TASK 0 — the same class as the content-reload bug, hunted rather than reported.
+ * The same class as the content-reload bug, on the settings path.
  *
  * `PATCH /me/settings` writes through `ChannelSettingsRepository`. The running
  * session reads through `SettingsService`, which caches the whole settings row
@@ -36,15 +36,14 @@ import { MapCache, asCacheManager } from '../../cache/testing.js';
  * was permanent (an in-memory map behind a populated hash), this one heals
  * itself within a minute. It is still the owner flipping "Let the bot answer"
  * off, watching the bot answer anyway, and having no way to tell whether the
- * app saved anything — which is the bug they reported last package, wearing a
- * shorter clock.
+ * app saved anything, which is the same defect on a shorter clock.
  *
- * **The cache here is a real one.** A null cache cannot reproduce this at all
+ * The cache here is a real one. A null cache cannot reproduce this at all
  * (every read would fall through to the database and pass), so these tests use
  * a Map-backed `CacheManager` that stores and returns what it was given, the
  * way Redis does. If that cache were a stub that always missed, the tests would
- * be green against the broken code — a harness that cannot fail is not
- * evidence, and this file is the place that rule bites hardest.
+ * be green against the broken code. A harness that cannot fail is not evidence,
+ * and this file is the place that rule bites hardest.
  */
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
@@ -104,7 +103,7 @@ describeDb('settings reach the running bot', () => {
             aiTriggers: ['botname'],
             commands,
             emotes,
-            // The session's own service, with its own cache reads — exactly as
+            // The session's own service, with its own cache reads, exactly as
             // `buildChannelSession` constructs it.
             settings: new SettingsService({
                 channelId: channel.id, repository: repositories.settings, cache: asCacheManager(cache), logger
@@ -133,7 +132,7 @@ describeDb('settings reach the running bot', () => {
             logger,
             repositories: (channelId) => createChannelRepositories(handle.db, channelId),
             // The settings writer, built with the SAME cache the session reads
-            // through — which is the whole point: one Redis in production, one
+            // through, which is the whole point. One Redis in production, one
             // Map here, and an invalidation on one side has to be visible on
             // the other.
             settings: (channelId) => new SettingsService({
@@ -210,10 +209,9 @@ describeDb('settings reach the running bot', () => {
         await patch({ songRequestsEnabled: true }).expect(200);
         expect((await settings.get()).songRequestsEnabled).toBe(true);
 
-        // Not the same route as the app's settings screen — the Stream Deck's
-        // one-press toggle — and it writes the same row, so it needs the same
-        // invalidation. A second write path is exactly how the first one
-        // regresses.
+        // The Stream Deck's one-press toggle, not the app's settings screen. It
+        // writes the same row, so it needs the same invalidation. A second write
+        // path is exactly how the first one regresses.
         await auth(request(app).post('/api/v1/songs/toggle').send({ enabled: false })).expect(200);
 
         expect((await settings.get()).songRequestsEnabled).toBe(false);

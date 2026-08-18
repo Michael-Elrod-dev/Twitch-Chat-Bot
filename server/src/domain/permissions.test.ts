@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { hasPermission, rankOf, isUserLevel, rolesFromRecord, NO_ROLES } from './permissions.js';
 
 /**
- * Ported from Phase 0 WP-7.1 (tests/commands/permissions.test.js). The behaviors
- * pinned there are pinned here; the roles now come from channel_roles rather than
- * a global flag, which is the whole point of the port.
+ * The permission rules, with roles coming from channel_roles rather than from a
+ * global flag.
  */
 
 const viewer = { isModerator: false, isVip: false, isSubscriber: false, isBroadcaster: false };
@@ -47,9 +46,9 @@ describe('hasPermission', () => {
     });
 
     it('treats an unknown level as everyone - fail OPEN, deliberately', () => {
-        // The database CHECK constraint keeps bad values out of the data path;
-        // failing closed here would disable a command on a code typo, which is
-        // the worse outcome. (Lead decision, Phase 0 WP-7.1.)
+        // The database CHECK constraint keeps bad values out of the data path.
+        // Failing closed here would disable a command on a code typo, which is
+        // the worse outcome.
         expect(hasPermission('wizard', viewer)).toBe(true);
         expect(hasPermission('', viewer)).toBe(true);
     });

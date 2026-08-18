@@ -1,32 +1,26 @@
 /**
  * Where sign-in is allowed to hand the session back to.
  *
- * ## The vulnerability this closes
- *
- * `return_to` was taken from the query string unvalidated, stored in the OAuth
- * state, and then used verbatim in `res.redirect()` **with a live access token
- * and refresh token in the fragment**. So:
+ * The completed sign-in redirects with a live access token and refresh token in
+ * the URL fragment. An unvalidated `return_to` therefore hands a working session
+ * to whatever host the query string names, for example
  *
  *   /auth/app/login?return_to=https://evil.example/steal
  *
- * sent any user who completed sign-in to the attacker's page with a working
- * session in `location.hash`. A fragment is invisible to servers and absent
- * from logs, which is exactly why it was chosen for the handoff — and exactly
- * what makes it a clean exfiltration channel when the destination is not
- * checked. Found during P1-WP8 while finalising the desktop handoff; it was
- * live in production.
+ * A fragment is invisible to servers and absent from logs, which is why it
+ * carries the handoff and also why an unchecked destination is a clean
+ * exfiltration channel. The destination must be validated here, always.
  *
- * ## The rule
+ * The rule is an allow-list, because a deny-list of "bad" hosts is unwinnable.
+ * Two shapes are permitted and nothing else:
  *
- * An allow-list, because a deny-list of "bad" hosts is unwinnable. Two shapes
- * are permitted and nothing else:
- *
- *  - **The app's own scheme** — `almosthadai://…`. This is how the desktop
- *    client receives its session: the OS hands the whole URL, fragment
+ *  - The app's own scheme, `almosthadai://`. This is how the desktop client
+ *    receives its session, because the OS hands the whole URL, fragment
  *    included, to the registered application. RFC 8252 sanctions a private-use
  *    scheme for native apps, and unlike a loopback HTTP listener it preserves
- *    the fragment (a loopback server never sees one — the browser keeps it).
- *  - **Loopback origins** — `http://127.0.0.1:*` / `http://localhost:*`, for
+ *    the fragment, which a loopback server never sees because the browser keeps
+ *    it.
+ *  - Loopback origins, `http://127.0.0.1:*` and `http://localhost:*`, for
  *    development only, and only when `ALLOW_LOOPBACK_RETURN_TO` is set. Off in
  *    production, where nothing should be redirecting a session to a laptop.
  *

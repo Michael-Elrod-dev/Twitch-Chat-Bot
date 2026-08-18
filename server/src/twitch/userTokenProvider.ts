@@ -5,19 +5,19 @@ import { ManualReauthRequiredError, TwitchError } from './errors.js';
 /**
  * A broadcaster's user access token.
  *
- * Phase 0's tokenManager semantics, ported deliberately rather than rewritten:
+ * The refresh semantics, each chosen deliberately:
  *
- *  - **Expiry-based**, not interval-based. A five-minute check interval used to
- *    mean a five-minute rotation; refreshing only inside the safety margin fixed
- *    that and the fix is worth keeping.
- *  - **A floor on the reported lifetime.** An implausibly short `expires_in`
- *    would park the token permanently inside the margin and restore
+ *  - Expiry-based, not interval-based. A five-minute check interval would mean
+ *    a five-minute rotation, so the refresh happens only inside the safety
+ *    margin.
+ *  - A floor on the reported lifetime. An implausibly short `expires_in` would
+ *    park the token permanently inside the margin and restore
  *    rotate-on-every-call.
- *  - **Atomic persist.** Twitch issues a new refresh token on every refresh, so
- *    both halves are written together — a crash between two writes could strand
- *    the channel with a refresh token Twitch has already retired.
- *  - **A loud, distinct error for a dead refresh token.** Retrying that forever
- *    is how Phase 0 stayed quietly disconnected.
+ *  - Atomic persist. Twitch issues a new refresh token on every refresh, so
+ *    both halves are written together, because a crash between two writes could
+ *    strand the channel with a refresh token Twitch has already retired.
+ *  - A loud, distinct error for a dead refresh token. Retrying that forever is
+ *    how a bot stays quietly disconnected.
  */
 
 const TOKEN_URL = 'https://id.twitch.tv/oauth2/token';

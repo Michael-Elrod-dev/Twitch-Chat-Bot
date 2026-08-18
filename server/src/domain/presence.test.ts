@@ -128,10 +128,10 @@ describeDb('presence tracking', () => {
 
     it('writes presence without touching a single role column', async () => {
         /*
-         * The Phase-0 P1-1 defect, and the reason touchPresence exists at all:
-         * the poll wrote role columns with defaults, so once a minute it erased
-         * every moderator and VIP the chat path had learned. The chatters
-         * endpoint carries no role information, so inventing one is a lie.
+         * This is why touchPresence exists at all. A poll that wrote role
+         * columns with defaults would erase every moderator and VIP the chat
+         * path had learned, once a minute. The chatters endpoint carries no role
+         * information, so inventing one is a lie.
          */
         const roles = new ChannelRoleRepository(handle.db, alphaId);
         await roles.upsertRoles('p6', 'themod', {
@@ -154,8 +154,8 @@ describeDb('presence tracking', () => {
          * Asserted on the Helix call rather than on the absence of rows: with
          * the offline gate removed, the insert fails on its own (stream_id is
          * NOT NULL) and a row-count assertion still passes. That version of
-         * this test proved nothing — it could not tell "the gate held" from
-         * "the gate was gone and the database refused the write".
+         * this test would prove nothing, because it could not tell "the gate
+         * held" from "the gate was gone and the database refused the write".
          *
          * The real intent is that an offline channel costs no Helix quota.
          */

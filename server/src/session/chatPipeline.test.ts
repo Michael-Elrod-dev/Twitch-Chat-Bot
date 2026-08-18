@@ -14,9 +14,7 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
 import type { ChannelSettingsRepository } from '../db/repositories/channelSettingsRepository.js';
 
 /**
- * Ported behaviors from Phase 0 tests/messages/chatMessageHandler.test.js,
- * tests/ai/aiManager.triggers.test.js and tests/messages/aiEnabledFlag.test.js.
- * The pipeline ordering findings (WP-6 tasks 5 and 6) are the load-bearing ones.
+ * The pipeline's behavior, with its ordering as the load-bearing part.
  */
 
 const logger = pino({ level: 'silent' });
@@ -117,8 +115,8 @@ describe('ChatPipeline', () => {
         ];
 
         it('runs a command that happens to name the bot', async () => {
-            // Phase 0 WP-6 task 5: this was swallowed by the AI path and burned
-            // the sender's rate limit.
+            // Without the command check first, this is swallowed by the AI path
+            // and burns the sender's rate limit.
             const pipeline = build(commands);
             const outcome = await pipeline.handle(event('!stats almosthadai'));
 

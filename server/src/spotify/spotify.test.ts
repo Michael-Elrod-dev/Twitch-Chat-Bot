@@ -218,13 +218,12 @@ describeDb('Spotify integration', () => {
 
         it('announces the queue it leaves behind when it hands a track off', async () => {
             /*
-             * The second half of the invisible-row defect.
+             * The removal half of the queue announcement.
              *
-             * The monitor removes the row a viewer is waiting on, and it told
-             * nobody — so even a client that had somehow learned about the song
-             * would have gone on rendering it after it was gone. The add half is
-             * covered in the API suite; this is the removal half, at the only
-             * place that performs it.
+             * The monitor removes the row a viewer is waiting on. Without an
+             * announcement a client goes on rendering the song after it is gone.
+             * The add half is covered in the API suite, and this is the removal
+             * half, at the only place that performs it.
              */
             const announced: number[] = [];
             const watched = new SongQueueRepository(handle.db, alphaId, (n) => { announced.push(n); });
@@ -249,7 +248,7 @@ describeDb('Spotify integration', () => {
                 channelId: alphaId, client: spotify, queue: watched, logger
             }).tick();
 
-            // One announcement, carrying the ONE song still waiting — not the two
+            // One announcement, carrying the one song still waiting, not the two
             // there were before the handoff.
             expect(announced).toEqual([1]);
         });
@@ -335,7 +334,7 @@ describeDb('Spotify integration', () => {
         });
     });
 
-    describe('monitor lifecycle (the P1-WP4 discipline)', () => {
+    describe('monitor lifecycle', () => {
         const build = (channelId: string): PlaybackMonitor => new PlaybackMonitor({
             channelId, client: new FakeSpotify(), queue: queueFor(channelId), logger,
             setIntervalImpl: (() => ({ unref: () => undefined }) as unknown as NodeJS.Timeout) as typeof setInterval,
@@ -614,11 +613,11 @@ describe('February 2026 platform changes', () => {
     /*
      * The songs-screen reads, at the fetch layer.
      *
-     * These share the failure mode that already cost this file a production
-     * incident: a call can be spelled almost right, answer 2xx, and be read
-     * wrong. The seam double the route tests use cannot catch that — it is the
-     * thing standing in for these — so the paths, the query strings and the
-     * field names get asserted here against Spotify's real response shapes.
+     * These share one failure mode. A call can be spelled almost right, answer
+     * 2xx, and be read wrong. The seam double the route tests use cannot catch
+     * that, because it is the thing standing in for these, so the paths, the
+     * query strings and the field names get asserted here against Spotify's real
+     * response shapes.
      */
     const recordingClient = (
         respond: (url: string) => Response
@@ -661,7 +660,7 @@ describe('February 2026 platform changes', () => {
             id: 'p1', name: 'Chat Requests', trackCount: 312
         });
         // Without `fields`, the default response embeds the first hundred
-        // tracks — a payload that grows all season for a name and a count.
+        // tracks, which is a payload that grows all season for a name and a count.
         expect(calls[0]).toContain('fields=id,name,tracks(total)');
     });
 
@@ -683,7 +682,7 @@ describe('February 2026 platform changes', () => {
         }));
 
         // "chat requests" and "Chat Requests" are the same playlist to the
-        // person who named it — and creating a second one is the failure this
+        // person who named it, and creating a second one is the failure this
         // lookup exists to prevent.
         expect(await client.findPlaylistByName('chat requests')).toEqual({
             id: 'p1', name: 'Chat Requests', trackCount: 12
@@ -759,16 +758,16 @@ describe('February 2026 platform changes', () => {
     });
 
     /**
-     * The production bug, modelled on Spotify's actual reply.
+     * Modelled on Spotify's actual reply.
      *
-     * `POST /me/player/queue` answers 2xx with no JSON body. The client demanded
-     * parseable JSON of every response, so each real success was thrown as
-     * `failed with 200: response was not valid JSON`. The monitor honored its
-     * own contract and refused to remove a track it believed had not been
-     * queued — so it re-queued it every tick. Four ticks in the end window put
-     * one track into Spotify's queue four times.
+     * `POST /me/player/queue` answers 2xx with no JSON body. A client that
+     * demanded parseable JSON of every response would throw each real success as
+     * `failed with 200: response was not valid JSON`. The monitor would then
+     * refuse to remove a track it believed had not been queued, and re-queue it
+     * every tick, putting one track into Spotify's queue once per tick in the
+     * end window.
      *
-     * The body varies (empty, whitespace, a bare status line); none of it is
+     * The body varies (empty, whitespace, a bare status line). None of it is
      * JSON and none of it is read. Any 2xx is success.
      */
     for (const [label, body] of [
@@ -899,12 +898,12 @@ describe('February 2026 platform changes', () => {
 
 describeDb('the monitor lifecycle belongs to the session', () => {
     /**
-     * The live bug: the monitor was constructed but never started — not on
-     * connect, and not even at boot. A channel with Spotify connected polled
-     * nothing, and a queued track sat untouched through every track end.
+     * A monitor that is constructed but never started leaves a channel with
+     * Spotify connected polling nothing, and a queued track untouched through
+     * every track end.
      *
-     * The fix puts the monitor's lifetime inside the session's, so "the session
-     * is running" and "the monitor is polling" cannot disagree.
+     * The monitor's lifetime sits inside the session's, so "the session is
+     * running" and "the monitor is polling" cannot disagree.
      */
     let handle: DbHandle;
     let channelId: string;

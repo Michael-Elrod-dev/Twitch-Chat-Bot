@@ -31,14 +31,14 @@ const offlineSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSub
 });
 
 /**
- * Joined DESIRED_SUBSCRIPTIONS in P1-WP4.2, alongside its handler.
+ * The redemption subscription, as Twitch returns it.
  *
- * **The `reward_id: ''` is not decoration — it is what Twitch actually returns.**
- * We create this subscription with `{broadcaster_user_id}` alone and Twitch
- * echoes the optional field back as an empty string. This fixture used to omit
- * it, which is precisely why the reconciler shipped unable to recognize its own
- * redemption subscription: every test agreed with the code and neither agreed
- * with Twitch. A fixture that does not match the wire proves nothing.
+ * The `reward_id: ''` is not decoration. The subscription is created with
+ * `{broadcaster_user_id}` alone and Twitch echoes the optional field back as an
+ * empty string. A fixture that omits it lets every test agree with the code
+ * while neither agrees with Twitch, which is how the reconciler ends up unable
+ * to recognize its own redemption subscription. A fixture that does not match
+ * the wire proves nothing.
  */
 const redemptionSub = (broadcasterId: string, status = 'enabled'): Omit<EventSubSubscription, 'id'> => ({
     type: SUBSCRIPTION_TYPES.redemptionAdd,
@@ -275,7 +275,7 @@ describe('SubscriptionReconciler', () => {
             expect(result.dryRun).toBe(true);
             expect(result.create).toHaveLength(DESIRED_SUBSCRIPTIONS.length);
             expect(result.remove).toHaveLength(1);
-            // Nothing was actually done - this is how it runs until P1-WP6.
+            // Nothing was actually done, which is what dry-run means.
             expect(client.created).toHaveLength(0);
             expect(client.deleted).toHaveLength(0);
         });

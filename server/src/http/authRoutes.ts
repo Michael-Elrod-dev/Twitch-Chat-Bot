@@ -19,14 +19,14 @@ import {
 /**
  * The OAuth surface.
  *
- * One registered redirect URI serves all three flows — the flow is carried in
+ * One registered redirect URI serves all three flows. The flow is carried in
  * the `state` the server itself issued, so a caller cannot select one. That also
  * means the owner registers a single callback URL in the Twitch console instead
  * of three.
  *
  * Nothing in this file logs a code, a token, or a secret. The `code` query
- * parameter is a bearer credential until it is spent, so it is never echoed —
- * not into a log line, not into an error response, not into a redirect.
+ * parameter is a bearer credential until it is spent, so it is never echoed into
+ * a log line, an error response, or a redirect.
  */
 
 export const AUTH_CALLBACK_PATH = '/auth/twitch/callback';
@@ -228,9 +228,9 @@ export function createAuthRouter(options: AuthRoutesOptions): Router {
     /**
      * Trades a refresh token for a new access token.
      *
-     * The old handle is destroyed and a new one issued on every use — rotation,
-     * so a stolen refresh token is usable at most once, and its use is visible
-     * because the legitimate holder's next attempt fails.
+     * The old handle is destroyed and a new one issued on every use. Rotation
+     * makes a stolen refresh token usable at most once, and makes its use
+     * visible, because the legitimate holder's next attempt fails.
      */
     router.post('/auth/app/refresh', (req: Request, res: Response) => {
         void (async () => {

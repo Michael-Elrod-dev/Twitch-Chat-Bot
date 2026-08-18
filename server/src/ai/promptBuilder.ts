@@ -1,11 +1,11 @@
 /**
  * Builds the XML-tagged user message.
  *
- * Ported from Phase 0's promptBuilder, including its escaping. That escaping is
- * load-bearing rather than cosmetic: chat is attacker-controlled text, and a
- * viewer who types `</chat_history>` would otherwise be able to close a section
- * early and have the rest of their message read as instructions. Escaping the
- * three XML metacharacters makes that structurally impossible.
+ * The escaping is load-bearing rather than cosmetic. Chat is
+ * attacker-controlled text, and a viewer who types `</chat_history>` would
+ * otherwise be able to close a section early and have the rest of their message
+ * read as instructions. Escaping the three XML metacharacters makes that
+ * structurally impossible.
  */
 
 export interface StreamContext {

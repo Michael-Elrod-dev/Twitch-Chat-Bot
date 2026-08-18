@@ -27,7 +27,7 @@ describe('rolesFromBadges', () => {
     });
 
     it('treats a founder badge as a subscriber', () => {
-        // `founder` is the legacy subscriber badge. Missing it would silently
+        // `founder` is an older subscriber badge. Missing it would silently
         // demote a channel's longest-standing supporters.
         expect(rolesFromBadges([badge('founder')], '1001', '55555').isSubscriber).toBe(true);
     });

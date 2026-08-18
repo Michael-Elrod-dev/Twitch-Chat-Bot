@@ -24,7 +24,7 @@ export interface TokenUpsert {
  * Encrypted credential storage for one channel.
  *
  * Encryption happens here and nowhere else, so there is exactly one place that
- * could ever write a plaintext token — and it cannot, because the cipher refuses
+ * could ever write a plaintext token, and it cannot, because the cipher refuses
  * when no key is configured.
  *
  * No method returns, logs, or embeds a token value in an error.
@@ -65,10 +65,10 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
     /**
      * Writes a token pair.
      *
-     * Both halves move in one statement. Twitch issues a *new* refresh token on
+     * Both halves move in one statement. Twitch issues a new refresh token on
      * every refresh, so a crash between two separate writes could strand the
-     * channel holding a refresh token Twitch has already retired — the Phase-0
-     * failure that motivated the transactional rotation being ported here.
+     * channel holding a refresh token Twitch has already retired. The rotation
+     * is transactional for that reason.
      */
     async upsert(provider: TokenProvider, tokens: TokenUpsert): Promise<void> {
         const values = {
@@ -100,7 +100,7 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
      *
      * Deliberately never touches the cipher. The dashboard only needs to know
      * that Spotify is linked, and answering that by decrypting a token would
-     * put a plaintext credential in memory to compute a boolean — and would
+     * put a plaintext credential in memory to compute a boolean, and would
      * make the tile report "not connected" for a row this build cannot decrypt,
      * which is a different and more alarming fact than the one being asked.
      */
@@ -115,11 +115,11 @@ export class ChannelTokenRepository extends ChannelScopedRepository {
     }
 
     /**
-     * When the link was made — the Spotify card's "since 4 Aug".
+     * When the link was made, which is the Spotify card's "since 4 Aug".
      *
-     * `created_at` and deliberately not `updated_at`: the row is rewritten on
-     * every token refresh, so the card would otherwise report the connection as
-     * an hour old for an account linked in July.
+     * `created_at` and deliberately not `updated_at`, because the row is
+     * rewritten on every token refresh, so the card would otherwise report the
+     * connection as an hour old for an account linked in July.
      *
      * Like `has`, this never touches the cipher: a date is not a credential.
      */

@@ -84,8 +84,8 @@ describeDb('streams', () => {
             await service.onOnline('48765430', new Date('2026-08-16T10:00:00Z'));
 
             const open = await repoFor(alphaId).findOpen();
-            // Phase 0 wrote Date.now() here, which is why its rows can never be
-            // matched against Twitch's own records.
+            // Twitch's own id, so the row can be matched against Twitch's
+            // records. A locally minted id never can.
             expect(open?.twitchStreamId).toBe('48765430');
             expect(open?.title).toBe('ranked climb');
             expect(open?.category).toBe('Chess');
@@ -112,7 +112,7 @@ describeDb('streams', () => {
              * flaky connection delivers offline then online for the same stream.
              *
              * The upsert originally left `ended_at` set, so the row stayed
-             * invisible to findOpen — the channel is live, the service believes
+             * invisible to findOpen. The channel is live, the service believes
              * it is offline, and the AI bucket and !uptime stay wrong for the
              * rest of the stream.
              */
@@ -164,8 +164,8 @@ describeDb('streams', () => {
 
             const sessions = await handle.sql<{ ended_at: Date | null }[]>`
                 select ended_at from viewing_sessions where stream_id = ${streamId}`;
-            // A viewer still "watching" a stream that ended is the orphan the
-            // legacy tracker had to sweep for on every boot.
+            // A viewer still "watching" a stream that ended is an orphan
+            // something else then has to sweep for on every boot.
             expect(sessions.every((s) => s.ended_at !== null)).toBe(true);
             expect(service.isLive).toBe(false);
         });
@@ -185,9 +185,9 @@ describeDb('streams', () => {
     describe('surviving a restart', () => {
         it('resumes the open stream instead of starting a new one', async () => {
             /*
-             * Phase 0 held the stream id in an instance field seeded from
-             * Date.now(), so every deploy silently began a new "stream": the
-             * AI allowance reset mid-stream and !uptime restarted from zero.
+             * Holding the stream id only in memory would make every deploy
+             * silently begin a new "stream", resetting the AI allowance
+             * mid-stream and restarting !uptime from zero.
              */
             const before = serviceFor(alphaId, { helix: new FakeHelix() });
             await before.onOnline('48765430', new Date('2026-08-16T10:00:00Z'));

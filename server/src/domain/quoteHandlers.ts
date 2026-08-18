@@ -4,19 +4,14 @@ import type { CommandManager } from './commandManager.js';
 import type { Logger } from '../logger.js';
 
 /**
- * `!quote` and `!command` — the two handlers P1-WP4.3's gate audit missed.
+ * `!quote` and `!command`, both handler-backed.
  *
- * Both have `handler_name` rows in the owner's production `commands` table and
- * neither had an implementation in Phase 1, so both answered nothing. They were
- * not in the "last five" because my WP4.3 comparison enumerated only inline
- * handler literals and never checked these two.
+ * Both have `handler_name` rows in the owner's production `commands` table, so
+ * both need a registered handler or they answer nothing.
  *
- * `modCommands` is the odder of the pair: it has **no implementation in Phase 0
- * either**. Legacy intercepted `!command` inside `CommandManager.handleCommand`
- * before the handler registry was consulted, so the row's `handler_name` was
- * decorative — it named a handler that never existed. Phase 1 has no such
- * interception (dispatch is uniform), so the behavior has to live where the
- * row already says it does.
+ * `modCommands` is the odder of the pair. Dispatch here is uniform, with no
+ * special interception of `!command` ahead of the handler registry, so the
+ * behavior has to live exactly where the row says it does.
  */
 
 export interface QuoteHandlerDeps {
@@ -69,9 +64,9 @@ export function createQuoteHandlers(deps: QuoteHandlerDeps): HandlerRegistry {
         /**
          * `!command add|edit|delete !name [message]`.
          *
-         * Declares `mod` here rather than trusting the row, which is the WP-6
-         * lesson: a handler enforcing a permission the table disagrees with
-         * means the table is lying to whoever reads it.
+         * Declares `mod` here rather than trusting the row. A handler enforcing
+         * a permission the table disagrees with means the table is lying to
+         * whoever reads it.
          */
         modCommands: {
             level: 'mod',

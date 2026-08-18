@@ -17,7 +17,7 @@ export interface ShutdownOptions {
 }
 
 /**
- * Graceful shutdown, carrying Phase 0's discipline forward:
+ * Graceful shutdown:
  *  - idempotent (a second signal is ignored, not a second teardown),
  *  - every step isolated so one failure cannot abandon the rest,
  *  - a timeout so a wedged connection cannot hang the process forever.

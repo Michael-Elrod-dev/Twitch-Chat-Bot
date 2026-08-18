@@ -9,10 +9,10 @@ import type { ApiKeyRepository } from '../../db/repositories/apiKeyRepository.js
 /**
  * The API's shared middleware.
  *
- * The tenant rule is enforced here and nowhere else: **the credential selects
- * the channel.** No route accepts a channel id, so no route can be pointed at
- * someone else's data — isolation is a property of the routing table rather
- * than of every handler remembering a `WHERE`.
+ * The tenant rule is enforced here and nowhere else. The credential selects the
+ * channel. No route accepts a channel id, so no route can be pointed at someone
+ * else's data, and isolation is a property of the routing table rather than of
+ * every handler remembering a `WHERE`.
  */
 
 export interface ApiRequest extends Request {
@@ -21,7 +21,7 @@ export interface ApiRequest extends Request {
     channel?: ChannelRecord;
     /** What is being rate-limited: a user, or a Stream Deck key. */
     principal?: string;
-    /** True when authenticated by API key rather than JWT — key routes are narrower. */
+    /** True when authenticated by API key rather than JWT. Key routes are narrower. */
     viaApiKey?: boolean;
 }
 
@@ -106,10 +106,10 @@ export function createRequireChannel(channels: ChannelRepository): RequestHandle
 /**
  * Accepts `X-Api-Key` as an alternative credential.
  *
- * Scoped to the songs routes only, matching what the Phase-0 loopback API
- * existed for. A Stream Deck button needs to skip a track; it has no business
- * being able to rewrite commands or read analytics, and a key that could would
- * be a far worse thing to have taped inside a stream deck profile.
+ * Scoped to the songs routes only. A Stream Deck button needs to skip a track.
+ * It has no business being able to rewrite commands or read analytics, and a key
+ * that could would be a far worse thing to have taped inside a Stream Deck
+ * profile.
  */
 export function createApiKeyAuth(keys: ApiKeyRepository, channels: ChannelRepository): RequestHandler {
     return function apiKeyAuth(req: ApiRequest, res: Response, next: NextFunction): void {
@@ -215,8 +215,8 @@ export function getValidatedQuery<T>(req: Request): T {
 /**
  * Requires a channel on every route except `/me`.
  *
- * `/me` has to answer for a signed-in user who has not connected a channel yet —
- * that is the state the desktop app shows its onboarding screen from. Every
+ * `/me` has to answer for a signed-in user who has not connected a channel yet,
+ * which is the state the desktop app shows its onboarding screen from. Every
  * other resource is meaningless without a tenant, so they get the 404 here
  * rather than each handler re-checking.
  */

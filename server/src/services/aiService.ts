@@ -1,7 +1,7 @@
 /**
- * The seam the Claude client drops into (P1-WP4.1). This package implements
- * trigger *detection* only - deciding that a message was addressed to the bot -
- * and never calls a model.
+ * The seam the Claude client drops into. This module implements trigger
+ * detection only, meaning it decides that a message was addressed to the bot,
+ * and it never calls a model.
  */
 export interface AiRequest {
     channelId: string;
@@ -25,7 +25,7 @@ export interface AiResult {
     message?: string;
 }
 
-/** `!advice` / `!roast`. Mirrors the Phase-0 prompt set. */
+/** `!advice` and `!roast`. */
 export type GamePromptType = 'advice' | 'roast';
 
 export interface GameRequestTarget {
@@ -36,11 +36,10 @@ export interface GameRequestTarget {
 /**
  * Who pays for the request.
  *
- * Separate from the target on a lead ruling (P1-WP4.4), and a deliberate
- * departure from Phase 0: Phase 0 charged the *target*, so `!roast @victim`
- * repeated a few times exhausted the victim's allowance and locked them out of
- * the bot. That is griefable by anyone who can type. The person who spends the
- * request is the person who pays for it.
+ * Deliberately separate from the target. Charging the target would let
+ * `!roast @victim`, repeated a few times, exhaust the victim's allowance and
+ * lock them out of the bot, which is griefable by anyone who can type. The
+ * person who spends the request is the person who pays for it.
  */
 export interface GameRequestRequester {
     twitchUserId: string;

@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
- * The app's own session tokens — deliberately unrelated to Twitch's.
+ * The app's own session tokens, deliberately unrelated to Twitch's.
  *
  * A Twitch access token is Twitch's credential and has no business being handed
  * to a desktop client. The client gets a token *this* server issued, carrying
@@ -39,7 +39,7 @@ export function signJwt(claims: Omit<JwtClaims, 'iat' | 'exp'>, secret: string, 
 }
 
 /**
- * @throws {JwtError} for a malformed token, a bad signature, or an expired one —
+ * @throws {JwtError} for a malformed token, a bad signature, or an expired one,
  * never revealing which claim failed beyond that.
  */
 export function verifyJwt(token: string, secret: string, now = Date.now()): JwtClaims {

@@ -5,14 +5,13 @@ import { channels } from './channels.js';
  * Global viewer identity. A Twitch account is one person across every channel,
  * so this table holds only what is genuinely global: who they are.
  *
- * Phase 0's `viewers` table carried is_moderator/is_vip/is_subscriber as if they
- * were properties of the person. They are properties of the person *in a
- * channel*, which is why they now live in channel_roles.
+ * Moderator, VIP and subscriber are not properties of a person. They are
+ * properties of a person in a channel, which is why they live in channel_roles.
  */
 export const viewers = pgTable(
     'viewers',
     {
-        /** Twitch's numeric user id. Never a username - Phase 0's P1-4 lesson. */
+        /** Twitch's numeric user id. Never a username, which Twitch permits changing. */
         twitchUserId: text('twitch_user_id').primaryKey(),
         /** Current login. Twitch permits renames, so this is NOT unique. */
         login: text('login').notNull(),
@@ -29,8 +28,8 @@ export const viewers = pgTable(
 );
 
 /**
- * Channel-relative roles - the correction to Phase 0's global flags. Someone can
- * be a mod in one channel and a plain viewer in the next.
+ * Channel-relative roles. Someone can be a mod in one channel and a plain
+ * viewer in the next.
  */
 export const channelRoles = pgTable(
     'channel_roles',
@@ -66,7 +65,7 @@ export const streams = pgTable(
         channelId: uuid('channel_id')
             .notNull()
             .references(() => channels.id, { onDelete: 'cascade' }),
-        /** Twitch's own stream id where known; the Phase-0 import has synthetic ids. */
+        /** Twitch's own stream id where known. Imported rows carry synthetic ids. */
         twitchStreamId: text('twitch_stream_id'),
         startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
         endedAt: timestamp('ended_at', { withTimezone: true }),
@@ -76,7 +75,7 @@ export const streams = pgTable(
         totalMessages: integer('total_messages').notNull().default(0),
         /*
          * There is no `unique_chatters` here any more, and its absence is the
-         * decision. Nothing ever wrote it, so it read 0 for every stream — a
+         * decision. Nothing ever wrote it, so it read 0 for every stream, a
          * figure two separate readers would have had no way to tell from a
          * genuine zero. Distinct chatters are counted from `chat_messages`,
          * which is the only place that actually knows. See migration 0006.

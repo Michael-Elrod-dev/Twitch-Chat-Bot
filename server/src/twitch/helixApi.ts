@@ -11,16 +11,16 @@ import type {
  * The real Helix client.
  *
  * Everything the bot does to Twitch goes through one request method, so the
- * cross-cutting rules — bearer token, 401-retry-once, 429 respect, never logging
- * a credential — are implemented once rather than per endpoint.
+ * cross-cutting rules (bearer token, 401-retry-once, 429 respect, never logging
+ * a credential) are implemented once rather than per endpoint.
  */
 
 const HELIX_BASE = 'https://api.twitch.tv/helix';
 
 /**
- * Twitch's documented subscription-creation limit is 100/minute. Spacing creates
- * is the WP5 flag closed: at two channels it is irrelevant, at fifty a bulk
- * re-subscribe would otherwise burst straight through the budget.
+ * Twitch's documented subscription-creation limit is 100 per minute. Creates are
+ * spaced because at two channels it is irrelevant but at fifty a bulk
+ * re-subscribe would burst straight through the budget.
  */
 const DEFAULT_CREATE_SPACING_MS = 750;
 
@@ -62,7 +62,7 @@ interface RequestOptions {
     method?: string;
     query?: Record<string, string | string[] | undefined>;
     body?: unknown;
-    /** Overrides the app token — used for the endpoints that demand a user token. */
+    /** Overrides the app token, for the endpoints that demand a user token. */
     userAccessToken?: string;
     /** Suppresses the 401 retry, so the retry itself cannot recurse. */
     isRetry?: boolean;
@@ -88,7 +88,7 @@ export class HelixApi implements HelixClient {
         this.createSpacingMs = options.createSpacingMs ?? DEFAULT_CREATE_SPACING_MS;
     }
 
-    // ---- EventSub subscriptions (the WP5 HelixClient contract) ---------------
+    // ---- EventSub subscriptions (the HelixClient contract) ------------------
 
     async listEventSubSubscriptions(): Promise<EventSubSubscription[]> {
         const collected: EventSubSubscription[] = [];
@@ -231,9 +231,9 @@ export class HelixApi implements HelixClient {
     // ---- Channel point rewards ---------------------------------------------
 
     /**
-     * Custom rewards are the P1-WP3 refund finding made concrete: only rewards
-     * **this application created** can have their redemption status updated, so
-     * the app creates them at onboarding rather than adopting dashboard-made ones.
+     * Only rewards this application created can have their redemption status
+     * updated, so the app creates them at onboarding rather than adopting
+     * dashboard-made ones.
      */
     async createCustomReward(
         broadcasterId: string,

@@ -13,9 +13,9 @@ import type { SettingsService } from '../domain/settings.js';
 import type { ChatterRoles } from '../domain/permissions.js';
 
 /**
- * The Phase-0 AI behaviors, ported with channel scope.
+ * The AI behaviors, per channel.
  *
- * No test here reaches the network: the Claude client is an interface and the
+ * No test here reaches the network. The Claude client is an interface and the
  * fake records what it was asked, which is how prompt construction and rate
  * limiting are verified without an API key existing at all.
  */
@@ -113,7 +113,7 @@ describe('limitFor', () => {
 });
 
 describe('prompt assets', () => {
-    it('ports the Phase-0 text unchanged', () => {
+    it('pins the prompt text so an accidental edit is visible', () => {
         // Rewording a system prompt changes the bot's voice, which is a content
         // decision. These assertions make an accidental edit visible.
         expect(CHAT_SYSTEM_PROMPT).toContain('a chill Twitch chat bot');
@@ -184,9 +184,9 @@ describeDb('AI service', () => {
     describe('the happy path', () => {
         it('answers with no counter while the viewer has plenty left', async () => {
             /*
-             * P1-WP4.5 replaced Phase 0's unconditional "(1/5)" prefix. A raw
-             * count on every message answers a question nobody asked until the
-             * answer starts to matter, so it appears only near the cap.
+             * A raw count on every message answers a question nobody asked
+             * until the answer starts to matter, so the counter appears only
+             * near the cap.
              */
             const user = await makeViewer(`ai-usage-${Date.now()}`);
             const { service, client } = buildService(alphaId);
@@ -399,11 +399,11 @@ describeDb('AI service', () => {
 
         it('spends the requester budget and leaves the target untouched', async () => {
             /*
-             * The lead's P1-WP4.4 ruling, asserted where it actually matters —
-             * on the row that gets written. Phase 0 charged the target, so
-             * `!roast @victim` repeated a few times locked the victim out of
-             * the bot. Asserting the argument alone would not catch a service
-             * that accepted the requester and then charged the target anyway.
+             * Asserted where it actually matters, on the row that gets written.
+             * Charging the target would let `!roast @victim`, repeated a few
+             * times, lock the victim out of the bot. Asserting the argument
+             * alone would not catch a service that accepted the requester and
+             * then charged the target anyway.
              */
             const target = await makeViewer(`ai-target-${Date.now()}`);
             const requester = await makeViewer(`ai-payer-${Date.now()}`);
@@ -426,7 +426,7 @@ describeDb('AI service', () => {
     describe('THE CENTREPIECE: two channels, isolated AI', () => {
         it('gives each channel its own budget for the same viewer', async () => {
             // A viewer who follows the bot across channels gets a fresh
-            // allowance in each. Phase 0 could not express this at all.
+            // allowance in each.
             const user = await makeViewer(`ai-shared-${Date.now()}`);
             const alpha = buildService(alphaId);
             const beta = buildService(betaId);

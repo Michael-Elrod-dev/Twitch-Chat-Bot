@@ -19,7 +19,7 @@ const MAX_MESSAGE_LENGTH = 500;
 export interface HelixChatSinkOptions {
     helix: HelixApi;
     /**
-     * The shared bot's Twitch user id — the `sender_id` on every send.
+     * The shared bot's Twitch user id, the `sender_id` on every send.
      *
      * Accepts a getter so a re-granted consent takes effect immediately. Holding
      * the value would mean the bot kept speaking as the previous account until

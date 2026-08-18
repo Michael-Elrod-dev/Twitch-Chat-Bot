@@ -8,21 +8,21 @@ import { ManualReauthRequiredError } from '../twitch/errors.js';
 /**
  * Who is watching, polled from the chatters endpoint.
  *
- * This is the promised caller for `touchPresence` — the method P1-WP4 wrote and
- * deliberately left uncalled until something legitimately knew about presence
- * without knowing about roles.
+ * This is the only caller of `touchPresence`, which is the method that knows
+ * about presence without knowing about roles.
  *
- * **The P1-1 lesson is the whole design.** Phase 0's poll wrote role columns
- * with defaults, so once a minute it erased every moderator and VIP flag the
- * chat path had learned. The chatters endpoint returns ids and logins and
- * nothing else, so this path writes presence and *never* a role. Role truth
- * stays with the chat events that actually observe it.
+ * That split is the whole design. A poll that wrote role columns with defaults
+ * would erase every moderator and VIP flag the chat path had learned, once a
+ * minute. The chatters endpoint returns ids and logins and nothing else, so this
+ * path writes presence and never a role. Role truth stays with the chat events
+ * that actually observe it.
  *
- * Lifecycle follows the playback monitor: start/stop idempotent, unref'd timer,
- * owned by the session so it cannot outlive the channel it polls.
+ * Lifecycle follows the playback monitor. Start and stop are idempotent, the
+ * timer is unref'd, and the session owns it so it cannot outlive the channel it
+ * polls.
  */
 
-/** Phase 0 polled every 60s. Same trade of freshness against Helix calls. */
+/** Once a minute, trading freshness against Helix calls. */
 const DEFAULT_POLL_MS = 60_000;
 
 export interface PresenceTrackerOptions {

@@ -14,8 +14,8 @@ export interface ChannelRewardRecord {
  * The rewards this application manages, per channel.
  *
  * Membership here is what makes a redemption ours to act on. A reward the
- * broadcaster created by hand is absent, and therefore never touched — the
- * P1-WP3 policy, enforced by a lookup rather than by a title comparison.
+ * broadcaster created by hand is absent, and therefore never touched. The
+ * policy is enforced by a lookup rather than by a title comparison.
  */
 export class ChannelRewardRepository extends ChannelScopedRepository {
     async listAll(): Promise<ChannelRewardRecord[]> {

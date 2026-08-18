@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { usageSuffix, withUsageSuffix } from './usageCounter.js';
 
 /**
- * The regression and the redesign.
+ * When the counter is shown, and when it is not.
  *
- * Phase 0 suppressed the counter for broadcasters and unlimited caps
- * (`aiManager.js:91`). The P1-WP4.1 port dropped that condition, so the owner
- * saw `(2/999999)` in their own chat. These pin both the restored intent and
- * the shape the owner asked for in its place.
+ * A cap in the unlimited range suppresses the counter for whoever holds one, so
+ * nobody ever sees a count like `(2/999999)`. These pin that rule and the
+ * near-the-cap shape the owner asked for.
  */
 describe('the usage counter', () => {
     describe('the show/hide boundary', () => {
@@ -45,8 +44,8 @@ describe('the usage counter', () => {
     describe('unlimited caps', () => {
         it('never shows a counter, which is the regression itself', () => {
             /*
-             * Phase 0 wrote the broadcaster's allowance as 999,999 to mean "no
-             * limit". This is the exact value the owner saw counted against.
+             * An allowance of 999,999 is a number chosen to mean "no limit",
+             * and counting down from it is meaningless.
              */
             expect(usageSuffix({ used: 2, limit: 999_999 })).toBeNull();
             expect(usageSuffix({ used: 999_998, limit: 999_999 })).toBeNull();

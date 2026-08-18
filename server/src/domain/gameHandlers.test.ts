@@ -84,10 +84,10 @@ describeDb('!advice and !roast', () => {
 
     it('charges the requester, not the target', async () => {
         /*
-         * Lead ruling, P1-WP4.4 — a deliberate departure from Phase 0, which
-         * charged the target. `!roast @victim` a few times exhausted the
-         * victim's allowance and locked them out of the bot entirely: griefable
-         * by anyone who can type. The person who spends the request pays.
+         * Charging the target would let `!roast @victim`, a few times over,
+         * exhaust the victim's allowance and lock them out of the bot entirely,
+         * which is griefable by anyone who can type. The person who spends the
+         * request pays.
          */
         const ai = new StubAiService();
         const replies: string[] = [];
@@ -128,9 +128,9 @@ describeDb('!advice and !roast', () => {
 
     it('cannot name a viewer belonging to another channel', async () => {
         /*
-         * Phase 0 searched the whole `viewers` table, so `!roast @someone` in
-         * one channel could name a person who had only ever appeared in another
-         * — one tenant's audience leaking into another's chat.
+         * Searching the whole `viewers` table would let `!roast @someone` in
+         * one channel name a person who had only ever appeared in another,
+         * leaking one tenant's audience into another's chat.
          */
         const ai = new StubAiService();
         const replies: string[] = [];
@@ -144,8 +144,8 @@ describeDb('!advice and !roast', () => {
     });
 
     it('addresses the answer to the target and the failure to the caller', async () => {
-        // The Phase-0 shape: a successful roast is aimed at its subject; an
-        // error goes back to whoever typed the command.
+        // A successful roast is aimed at its subject, and an error goes back to
+        // whoever typed the command.
         const ai = new StubAiService();
         const replies: string[] = [];
 

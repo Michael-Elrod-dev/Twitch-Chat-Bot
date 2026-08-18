@@ -9,17 +9,16 @@ import type { StreamContext } from '../ai/promptBuilder.js';
  * Three consumers depend on this being right, and each fails differently when
  * it is not:
  *
- *  - **AI context.** Phase 0 put the title and category in every prompt. Without
- *    it the bot answers "what game is this" with nothing useful.
- *  - **The AI rate-limit bucket.** Limits are per viewer *per stream*. With no
+ *  - AI context. The title and category go in every prompt, and without them
+ *    the bot answers "what game is this" with nothing useful.
+ *  - The AI rate-limit bucket. Limits are per viewer per stream, and with no
  *    stream id everything shares the offline bucket, so a viewer's allowance
  *    never resets between streams.
- *  - **`!uptime`.** Needs the real start time, not the process start time.
+ *  - `!uptime`. It needs the real start time, not the process start time.
  *
- * The state is deliberately resolved from the DATABASE on start rather than
- * held only in memory. A restart mid-stream must not lose the stream — that was
- * the Phase-0 behavior (`currentStreamId` was an instance field seeded from
- * `Date.now()`), and it meant every deploy silently began a new "stream".
+ * The state is deliberately resolved from the database on start rather than
+ * held only in memory. A restart mid-stream must not lose the stream, or every
+ * deploy silently begins a new one.
  */
 
 export interface StreamServiceOptions {
@@ -70,7 +69,7 @@ export class StreamService {
      * @returns when the current stream began, or null offline.
      *
      * Twitch's own start time from the `stream.online` payload, not the moment
-     * we noticed — a bot that restarts mid-stream would otherwise tell the
+     * the bot noticed. Otherwise a bot that restarts mid-stream tells the
      * broadcaster their four-hour stream is two minutes old.
      */
     startedAt(): Date | null {

@@ -294,9 +294,9 @@ describe('HelixApi', () => {
         });
 
         it('lists only rewards this application can manage', async () => {
-            // The P1-WP3 finding made concrete: a dashboard-created reward cannot
-            // have its redemption status updated by us, so it must not be listed
-            // as if it could.
+            // A dashboard-created reward cannot have its redemption status
+            // updated by this application, so it must not be listed as if it
+            // could.
             const api = build(() => jsonResponse(200, { data: [] }));
             await api.listCustomRewards('1001', 'user-token');
 

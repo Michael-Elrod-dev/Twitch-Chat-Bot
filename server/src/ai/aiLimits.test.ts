@@ -92,7 +92,7 @@ describeDb('AI limits reach the running bot', () => {
 
         // The migration's column defaults, read back through the whole stack.
         // If the SQL literals and `DEFAULT_STREAM_LIMITS` ever drift, this is
-        // where it shows — the two are restated in different languages and
+        // where it shows. The two are restated in different languages and
         // nothing but a test can hold them together.
         expect(decision.limit).toBe(DEFAULT_STREAM_LIMITS.everyone);
     });

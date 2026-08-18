@@ -255,8 +255,7 @@ describeDb('OnboardingService', () => {
         it('notifies the running process so consent takes effect without a restart', async () => {
             // Bot identity is read once at boot. Without this hook a fresh
             // consent sits in the database while the process keeps answering as
-            // the previous account - which is exactly what happened during
-            // P1-WP6 activation.
+            // the previous account.
             const applied: string[] = [];
             const notifying = new OnboardingService({
                 db: handle.db, cipher, logger, sessionManager: manager, reconcile,
@@ -319,13 +318,12 @@ describeDb('OnboardingService', () => {
 
 describeDb('runtime onboarding binds rewards', () => {
     /**
-     * The third instance of the boot-only-capability class, found by sweeping
-     * after the playback monitor: reward adoption ran only at boot, so a channel
-     * that connected at runtime had no bound rewards — and every redemption in
-     * it was treated as unmanaged and silently ignored until the next restart.
+     * Reward adoption must not be boot-only. A channel that connects at runtime
+     * would otherwise have no bound rewards, and every redemption in it would be
+     * treated as unmanaged and silently ignored until the next restart.
      *
-     * That is the friend's onboarding path, so it would have failed on their
-     * first redemption.
+     * That is the path a new streamer onboards through, so it would fail on
+     * their first redemption.
      */
     let handle: DbHandle;
     let manager: SessionManager;

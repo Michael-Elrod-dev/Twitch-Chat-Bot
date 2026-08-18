@@ -5,8 +5,8 @@ export type EventHandler = (event: TransportEvent) => Promise<void>;
 /**
  * How events reach the server.
  *
- * P1-WP5 supplies the EventSub webhook implementation; FakeTransport drives
- * tests. Nothing downstream of this interface knows which is in play.
+ * The EventSub webhook is the production implementation and FakeTransport
+ * drives tests. Nothing downstream of this interface knows which is in play.
  */
 export interface Transport {
     readonly name: string;

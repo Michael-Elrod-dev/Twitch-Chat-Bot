@@ -5,7 +5,7 @@ import { TwitchError } from './errors.js';
  * Twitch's authorization-code flow.
  *
  * PKCE is not available at Twitch (docs/TWITCH_PLATFORM_FACTS.md section 5.2), so the
- * secret-holding server mediates every flow — including the desktop app's, which
+ * secret-holding server mediates every flow, including the desktop app's, which
  * is never an OAuth client itself.
  */
 
@@ -13,14 +13,14 @@ const AUTHORIZE_URL = 'https://id.twitch.tv/oauth2/authorize';
 const TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 
 /**
- * What a broadcaster grants when connecting their channel (P1-WP3's five).
+ * What a broadcaster grants when connecting their channel.
  *
  * `channel:read:redemptions` and `channel:manage:redemptions` are both requested
  * because neither is documented as a superset of the other, and losing the read
  * scope would silently stop redemption events. Collapse to one only with
  * evidence.
  *
- * Nothing here is speculative — Twitch warns that over-requesting can get an
+ * Nothing here is speculative. Twitch warns that over-requesting can get an
  * application suspended, so every scope below maps to a specific call.
  */
 export const CHANNEL_SCOPES = [
@@ -173,7 +173,7 @@ export class TwitchOAuthClient {
      * Identifies the token's owner.
      *
      * `/oauth2/validate` returns the user id, login and granted scopes for any
-     * user token, with no scope of its own — which is what makes a zero-scope
+     * user token, with no scope of its own, which is what makes a zero-scope
      * sign-in flow possible.
      */
     async validate(accessToken: string): Promise<ValidatedIdentity> {

@@ -8,11 +8,11 @@ import type { Logger } from '../logger.js';
 import { ManualReauthRequiredError } from '../twitch/errors.js';
 
 /**
- * `Song Request` and `Skip song queue`, ported from Phase 0.
+ * `Song Request` and `Skip song queue`.
  *
  * Every failure returns a reason rather than throwing, because the pipeline
  * turns a reason into a refund. A song request that cannot be fulfilled must
- * give the points back — the viewer paid for a song and did not get one.
+ * give the points back, because the viewer paid for a song and did not get one.
  */
 
 /** Longer than this and it is a podcast episode, not a song request. */
@@ -42,8 +42,8 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
 
         let track: SpotifyTrack | null;
         try {
-            // A pasted link is exact; a bare string is a search. Phase 0
-            // accepted both and viewers use both.
+            // A pasted link is exact and a bare string is a search. Viewers
+            // use both.
             const id = parseTrackId(input);
             track = id ? await options.spotify.getTrack(id) : await options.spotify.searchTrack(input);
         } catch (err) {
@@ -91,13 +91,13 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
         await saveToPlaylist(options, settings, context.channelId, track);
 
         /*
-         * Deliberately NOT "added to the queue".
+         * Deliberately not "added to the queue".
          *
-         * The owner themselves read that as *Spotify's* queue and went looking
-         * for the track there — viewers will make the same reading. This is the
-         * request list; the track reaches Spotify only when the current song
-         * ends. Saying where it sits is the difference between "nothing
-         * happened" and "it is coming".
+         * That phrasing reads as Spotify's own queue, and a viewer who goes
+         * looking for the track there will not find it. This is the request
+         * list, and the track reaches Spotify only when the current song ends.
+         * Saying where it sits is the difference between "nothing happened" and
+         * "it is coming".
          */
         const position = (await options.queue.list()).length;
         const ahead = position - 1;
@@ -116,12 +116,12 @@ export function createSongRequestHandler(options: SongRedemptionOptions): Redemp
 /**
  * Appends the track to the channel's requests playlist.
  *
- * Best-effort by design and never a refund: the viewer's song is queued and
- * will play. Failing their redemption because a *bookkeeping* playlist could
+ * Best-effort by design and never a refund. The viewer's song is queued and
+ * will play, and failing their redemption because a bookkeeping playlist could
  * not be written would take their points for a problem they cannot see.
  *
- * Dedup is the DB claim, never a playlist read. Phase 0 paged the whole
- * playlist on every request — an unbounded number of Spotify calls on the
+ * Dedup is the database claim, never a playlist read. Paging the whole playlist
+ * on every request would be an unbounded number of Spotify calls on the
  * redemption path, growing with the playlist.
  */
 async function saveToPlaylist(

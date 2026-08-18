@@ -13,7 +13,7 @@ import type {
  * "Create a subscription when a channel onboards" is a script that drifts the
  * moment anything is created out of band, a delivery fails permanently, or a
  * channel leaves while the process is down. Computing the desired set and
- * diffing it against the actual set converges from *any* starting state,
+ * diffing it against the actual set converges from any starting state,
  * including one nobody planned for.
  */
 
@@ -30,24 +30,20 @@ export interface DesiredSubscriptionType {
 /**
  * What the server needs to hear.
  *
- * `channel.chat.message` names the reading user as well as the broadcaster —
- * that second field is the bot's own id, which is what makes one shared bot
- * account work across every channel (facts §2).
+ * `channel.chat.message` names the reading user as well as the broadcaster.
+ * That second field is the bot's own id, which is what makes one shared bot
+ * account work across every channel (docs/TWITCH_PLATFORM_FACTS.md section 2).
  *
- * **Subscribe when a consumer exists, never before.** The worst shape of
- * failure available here is a viewer spending channel points, Twitch recording
- * a successful delivery, and nothing happening with no trace anywhere — which
- * is exactly what subscribing ahead of a handler produces.
+ * Subscribe when a consumer exists, never before. The worst shape of failure
+ * available here is a viewer spending channel points, Twitch recording a
+ * successful delivery, and nothing happening with no trace anywhere, which is
+ * exactly what subscribing ahead of a handler produces. An acknowledged event
+ * is a delivered event as far as Twitch is concerned, so revocation never
+ * catches this. Only the silent drop does.
  *
- * (An earlier version of this comment claimed the risk was revocation for
- * repeated non-delivery. That was wrong: an acknowledged event is a delivered
- * event as far as Twitch is concerned, and revocation follows failures. The
- * silent-drop argument above is the real and sufficient one.)
- *
- * Redemptions joined the set in P1-WP4.2, alongside the handlers that consume
- * them — the reconciler converges on the next boot with no migration and no
- * manual step, which is the whole point of the design. `channel.follow` is
- * still absent and arrives in P1-WP4.3 with its consumer.
+ * A subscription is added here alongside the handler that consumes it, and the
+ * reconciler then converges on the next boot with no migration and no manual
+ * step. `channel.follow` has no consumer yet, so it is absent.
  */
 export const DESIRED_SUBSCRIPTIONS: DesiredSubscriptionType[] = [
     {
@@ -84,8 +80,8 @@ export interface ReconcilerOptions {
     secret: string;
     /**
      * A getter, not a value, because the bot account can change at runtime when
-     * consent is re-granted — and the chat subscription's condition names it, so
-     * a stale id here would diff every subscription as an orphan.
+     * consent is re-granted. The chat subscription's condition names it, so a
+     * stale id here would diff every subscription as an orphan.
      */
     botUserId: string | (() => string);
     desired?: DesiredSubscriptionType[];
@@ -144,7 +140,7 @@ export class SubscriptionReconciler {
                 continue;
             }
 
-            // A failed or revoked subscription is worse than a missing one: it
+            // A failed or revoked subscription is worse than a missing one. It
             // occupies the slot while delivering nothing, so it is replaced.
             if (!HEALTHY_STATUSES.has(subscription.status)) {
                 remove.push({ subscription, reason: 'unhealthy' });
@@ -172,16 +168,15 @@ export class SubscriptionReconciler {
      * Applies the plan.
      *
      * @param dryRun when true, the plan is computed and logged but nothing is
-     * sent to Twitch. This is how the reconciler runs until P1-WP6 supplies an
-     * app access token: the diff is visible in the logs from day one, and the
-     * day it goes live it is executing a plan that has already been observed.
+     * sent to Twitch. The diff stays visible in the logs, so the day it goes
+     * live it executes a plan that has already been observed.
      */
     async reconcile(
         broadcasterIds: string[],
         dryRun = false,
         // The background pass runs on a timer whether or not anything has
-        // drifted. Logging a summary every tick would write ~96 identical lines
-        // a day and train anyone reading the logs to skip them — which is
+        // drifted. Logging a summary every tick would write about 96 identical
+        // lines a day and train anyone reading the logs to skip them, which is
         // exactly the wrong reflex for the line that reports drift.
         options: { quietWhenUnchanged?: boolean } = {}
     ): Promise<ReconcileResult> {
@@ -218,16 +213,16 @@ export class SubscriptionReconciler {
         let removed = 0;
         let failures = 0;
 
-        // Removals first: a slot occupied by a dead subscription is freed before
-        // its replacement is requested.
+        // Removals first, so a slot occupied by a dead subscription is freed
+        // before its replacement is requested.
         for (const { subscription, reason } of plan.remove) {
             try {
                 await client.deleteEventSubSubscription(subscription.id);
                 removed++;
                 logger.info({ id: subscription.id, type: subscription.type, reason }, 'Removed subscription');
             } catch (err) {
-                // One failure must not abandon the rest of the reconciliation;
-                // the next run sees the same diff and tries again.
+                // One failure must not abandon the rest of the reconciliation.
+                // The next run sees the same diff and tries again.
                 failures++;
                 logger.error({ id: subscription.id, err: (err as Error).message }, 'Failed to remove subscription');
             }
@@ -249,22 +244,17 @@ export class SubscriptionReconciler {
 }
 
 /**
- * Type + version + condition is what makes two subscriptions the same
+ * Type, version and condition together are what make two subscriptions the same
  * subscription.
  *
- * **Empty condition values are dropped, not compared.** Twitch echoes optional
- * condition fields back as empty strings: we create the redemption subscription
- * with `{broadcaster_user_id}` and it is returned as
- * `{broadcaster_user_id, reward_id: ""}`. Comparing those key-for-key made the
- * reconciler fail to recognize its own subscription — it diffed as an orphan,
- * was deleted, and was immediately recreated, every single run.
- *
- * That was invisible while reconciliation only happened at boot and on
- * membership changes. The moment it ran on a timer it became a delete-and-
- * recreate cycle every fifteen minutes, and the window between the two calls is
- * a window in which a viewer's redemption is never delivered — points spent,
- * nothing given back, which is the exact failure the redemption pipeline exists
- * to prevent. Found in production logs within an hour of the timer going live.
+ * Empty condition values are dropped, not compared. Twitch echoes optional
+ * condition fields back as empty strings, so the redemption subscription is
+ * created with `{broadcaster_user_id}` and returned as
+ * `{broadcaster_user_id, reward_id: ""}`. Comparing those key for key makes the
+ * reconciler fail to recognize its own subscription, which then diffs as an
+ * orphan, is deleted, and is recreated on every run. On a timer that is a
+ * delete-and-recreate cycle every fifteen minutes, and the window between the
+ * two calls is a window in which a viewer's redemption is never delivered.
  *
  * An unset condition field and an absent one are the same fact, so they must
  * produce the same identity.

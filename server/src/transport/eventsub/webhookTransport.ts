@@ -11,17 +11,17 @@ export interface WebhookTransportOptions {
     secret: string;
     logger: Logger;
     maxSkewMs: number;
-    /** Absent until P1-WP6 supplies tokens; without it, subscriptions are never touched. */
+    /** Absent without Helix credentials. Then subscriptions are never touched. */
     reconciler?: SubscriptionReconciler;
-    /** True until a real Helix client exists: compute and log the diff, change nothing. */
+    /** True without a real Helix client. Compute and log the diff, change nothing. */
     dryRunSubscriptions?: boolean;
     onRevocation?: (subscription: EventSubSubscriptionInfo) => void;
     maxQueueDepth?: number;
     /**
      * How often to reconcile subscriptions in the background. 0 disables it.
      *
-     * Reconciliation is otherwise event-driven — it runs when a channel is
-     * registered or removed — which leaves a real hole: if the creates fail
+     * Reconciliation is otherwise event-driven, running when a channel is
+     * registered or removed, which leaves a real hole. If the creates fail
      * (Twitch rate limit, a transient 5xx), `reconcile()` isolates the failure
      * per subscription and carries on, so the channel ends up enabled, with a
      * running session, and no subscriptions. The bot looks on and answers
@@ -36,11 +36,11 @@ export interface WebhookTransportOptions {
 }
 
 /**
- * The production transport: an HTTP endpoint plus the queue that drains it.
+ * The production transport, an HTTP endpoint plus the queue that drains it.
  *
- * `subscribe`/`unsubscribe` record intent rather than calling Twitch inline.
- * The desired set is then reconciled as a whole — one diff instead of N
- * imperative calls, which is what makes a restart, a crash mid-onboarding, and a
+ * `subscribe` and `unsubscribe` record intent rather than calling Twitch inline.
+ * The desired set is then reconciled as a whole, which is one diff instead of N
+ * imperative calls, and is what makes a restart, a crash mid-onboarding, and a
  * manual change in the Twitch console all converge to the same place.
  */
 export class EventSubWebhookTransport implements Transport {

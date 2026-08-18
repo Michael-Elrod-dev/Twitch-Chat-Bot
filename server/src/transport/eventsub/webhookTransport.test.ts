@@ -182,10 +182,10 @@ describe('EventSubWebhookTransport', () => {
  * The hole this closes, stated once: reconciliation is otherwise event-driven,
  * and `reconcile()` isolates per-subscription failures rather than throwing. So
  * a channel registered while Twitch is refusing creates ends up with a running
- * session and no subscriptions — on, and silent — with nothing to retry it
- * until the next membership change or a restart. The desktop master switch made
- * that reachable by the broadcaster at will, which is what turned it from a
- * theoretical gap into a scheduled task.
+ * session and no subscriptions, on and silent, with nothing to retry it until
+ * the next membership change or a restart. The desktop master switch makes that
+ * reachable by the broadcaster at will, which is why the retry is a scheduled
+ * task rather than an event-driven one.
  */
 describe('periodic subscription reconciliation', () => {
     const INTERVAL = 60_000;

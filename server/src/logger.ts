@@ -2,9 +2,8 @@ import { pino, type Logger } from 'pino';
 import type { Env } from './config/env.js';
 
 /**
- * Structured JSON logs in production (machine-parseable, ships to whatever we
- * point at it); human-readable in development. Replaced Phase 0's winston, which
- * was deleted with the rest of the legacy tree in P1-LR.
+ * Structured JSON logs in production, so they are machine-parseable wherever
+ * they are shipped, and human-readable logs in development.
  */
 export function createLogger(env: Env): Logger {
     const isDev = env.NODE_ENV === 'development';

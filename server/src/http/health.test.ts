@@ -35,7 +35,7 @@ describe('GET /healthz - liveness', () => {
 
 describe('GET /readyz - readiness', () => {
     it('is ready with no probes registered', async () => {
-        // Correct today: the chassis has no dependencies until P1-WP3 adds them.
+        // With nothing registered there is nothing that can be unready.
         const res = await request(buildApp()).get('/readyz');
 
         expect(res.status).toBe(200);

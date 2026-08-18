@@ -11,10 +11,10 @@ export interface BotIdentityRecord {
 
 export interface BotIdentityUpsert extends BotIdentityRecord {
     /**
-     * Kept so consent can be re-established without a manual re-auth. It is NOT
-     * on any request path — every Helix call the bot makes runs on an *app*
-     * token (the P1-WP3 enumeration), which is why this table is a consent
-     * record rather than a rotating token pair.
+     * Kept so consent can be re-established without a manual re-auth. It is not
+     * on any request path, because every Helix call the bot makes runs on an app
+     * token, which is why this table is a consent record rather than a rotating
+     * token pair.
      */
     refreshToken: string | null;
 }
@@ -22,8 +22,8 @@ export interface BotIdentityUpsert extends BotIdentityRecord {
 /**
  * The shared bot account.
  *
- * One row by design (owner decision §8.5): a single identity reads and writes in
- * every channel, which is Twitch's own documented pattern for this architecture.
+ * One row by design. A single identity reads and writes in every channel, which
+ * is Twitch's own documented pattern for this architecture.
  * Not channel-scoped, because it is not per-channel data.
  */
 export class BotIdentityRepository {

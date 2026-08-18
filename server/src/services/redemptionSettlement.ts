@@ -7,16 +7,15 @@ import { RateLimitedError, ManualReauthRequiredError } from '../twitch/errors.js
 /**
  * Marks a redemption fulfilled or refunded.
  *
- * The **first production caller of `UserTokenProvider`**: Update Redemption
- * Status accepts only a broadcaster user token with
+ * Update Redemption Status accepts only a broadcaster user token with
  * `channel:manage:redemptions`, which is the entire reason `channel_tokens`
- * exists (see the P1-WP3 report).
+ * exists and why this calls `UserTokenProvider`.
  *
- * The P1-WP7 flag lands here. A rate limit on the refund path gets **one
- * bounded retry after the reset hint, never a drop** — an unrefunded failed
- * redemption is stolen channel points, and "we were rate limited" is not
- * something the viewer can see or act on. Fulfillment is not retried: the viewer
- * already got what they paid for and the status is cosmetic by comparison.
+ * A rate limit on the refund path gets one bounded retry after the reset hint
+ * and never a drop. An unrefunded failed redemption is stolen channel points,
+ * and "the server was rate limited" is not something the viewer can see or act
+ * on. Fulfillment is not retried, because the viewer already got what they paid
+ * for and the status is cosmetic by comparison.
  */
 
 export type RedemptionStatus = 'FULFILLED' | 'CANCELED';

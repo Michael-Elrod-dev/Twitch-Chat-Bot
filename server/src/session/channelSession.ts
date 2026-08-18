@@ -31,8 +31,8 @@ export interface ChannelSessionOptions {
      */
     monitor?: PlaybackMonitor;
     /**
-     * Stream lifecycle. Absent means online/offline are logged and forgotten,
-     * which is what every channel did before P1-WP4.3.
+     * Stream lifecycle. Absent means online and offline are logged and
+     * forgotten.
      */
     streams?: StreamService;
     /**
@@ -58,9 +58,9 @@ export type SessionState = 'stopped' | 'starting' | 'running' | 'stopping';
  * static state, no module-level caches, no cross-channel lookups. That is the
  * mechanical basis of tenant isolation.
  *
- * Lifecycle discipline is inherited wholesale from Phase 0: start and stop are
- * idempotent, and teardown completes even when a step throws, because a session
- * left half-stopped is worse than one that never stopped at all.
+ * Start and stop are idempotent, and teardown completes even when a step
+ * throws, because a session left half-stopped is worse than one that never
+ * stopped at all.
  */
 export class ChannelSession {
     readonly channelId: string;
@@ -103,9 +103,9 @@ export class ChannelSession {
      * managers keep an in-memory map AND a populated Redis hash, and their
      * lookup treats "hash exists, field absent" as an authoritative miss so an
      * ordinary chat message never pays for a database round trip. That
-     * optimization is correct and load-bearing — and it means a row inserted
+     * optimization is correct and load-bearing, and it means a row inserted
      * behind the managers' backs is invisible to them, not briefly but
-     * permanently: once the hash expires the fallback consults the in-memory
+     * permanently. Once the hash expires the fallback consults the in-memory
      * map, which `loaded` marks as already good.
      *
      * So a command created in the app saved fine and never fired in chat. The
@@ -137,10 +137,10 @@ export class ChannelSession {
     /**
      * Tells every watcher where this channel stands.
      *
-     * Published on each transition the dashboard renders — the session coming
-     * up or going down, and the stream starting or ending — because those are
-     * precisely the moments the status strip, the header pill and the uptime
-     * clock are wrong until told otherwise.
+     * Published on each transition the dashboard renders, meaning the session
+     * coming up or going down and the stream starting or ending, because those
+     * are precisely the moments the status strip, the header pill and the
+     * uptime clock are wrong until told otherwise.
      *
      * `startedAt` is read from the stream service rather than tracked here, so
      * there is one answer to "when did this stream begin" and not two that can
@@ -188,10 +188,10 @@ export class ChannelSession {
              * Adopt the recovered stream's liveness.
              *
              * `load()` resumes the stream that was open before the restart, but
-             * the live flag started false — so without this a restart mid-stream
-             * left the session reporting offline until the broadcaster ended the
-             * stream, and the dashboard would show OFFLINE with no uptime over a
-             * channel that was very much live. The stream service is the one
+             * the live flag starts false. Without this, a restart mid-stream
+             * leaves the session reporting offline until the broadcaster ends
+             * the stream, and the dashboard shows OFFLINE with no uptime over a
+             * channel that is very much live. The stream service is the one
              * that knows; this just stops the session disagreeing with it.
              */
             this.live = this.streams?.isLive ?? false;

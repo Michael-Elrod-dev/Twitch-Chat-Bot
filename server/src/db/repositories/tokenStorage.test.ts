@@ -13,8 +13,8 @@ import { generateRefreshToken } from '../../auth/jwt.js';
 
 /**
  * Encryption verified against a real Postgres, because the property that matters
- * is what is actually *on disk* — a unit test against a mock could pass while
- * the column held plaintext.
+ * is what is actually on disk. A unit test against a mock could pass while the
+ * column held plaintext.
  */
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
@@ -127,15 +127,15 @@ describeDb('encrypted token storage', () => {
         });
 
         it('reads an ETL-imported plaintext row only when explicitly tolerated', async () => {
-            const legacy = await new ChannelRepository(handle.db).upsert({
-                twitchBroadcasterId: `tok-legacy-${Date.now()}`, twitchLogin: 'legacy', displayName: null
+            const imported = await new ChannelRepository(handle.db).upsert({
+                twitchBroadcasterId: `tok-imported-${Date.now()}`, twitchLogin: 'imported', displayName: null
             });
             await sql`
                 insert into channel_tokens (channel_id, provider, access_token, refresh_token)
-                values (${legacy.id}, 'twitch', 'plain-access', 'plain-refresh')
+                values (${imported.id}, 'twitch', 'plain-access', 'plain-refresh')
             `;
 
-            const repo = new ChannelTokenRepository(handle.db, legacy.id, cipher);
+            const repo = new ChannelTokenRepository(handle.db, imported.id, cipher);
 
             await expect(repo.get('twitch')).rejects.toThrow(TokenCryptoError);
             expect(await repo.get('twitch', true)).toMatchObject({ accessToken: 'plain-access' });

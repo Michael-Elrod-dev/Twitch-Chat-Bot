@@ -30,9 +30,9 @@ const TOP_CHATTERS = 10;
  *
  * A cap, not a page. The screen's footer says how young the data is ("Four
  * streams in. Trends show up around ten."), and a channel that reaches the cap
- * has enough history to want a real paged view — which is a different screen,
- * not a bigger array. Logged as a limit rather than silently truncating: see
- * `recentStreams` returning fewer than `streams` counts.
+ * has enough history to want a real paged view, which is a different screen and
+ * not a bigger array. The cap is applied visibly, so `recentStreams` returning
+ * fewer rows than `streams` is the signal that it was reached.
  */
 const RECENT_STREAMS = 20;
 
@@ -48,15 +48,14 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /**
      * Rolls one interaction into the channel's per-viewer totals.
      *
-     * **Written synchronously, on purpose.** Phase 0 pushed every interaction
-     * through a Redis queue and a consumer process, which bought batching at
-     * the price of a second moving part that could fall behind or lose the
-     * queue's contents. At two channels the write is one upsert on a two-column
-     * primary key; the queue would cost more than it saves.
+     * Written synchronously, on purpose. At this scale the write is one upsert
+     * on a two-column primary key, and a queue plus a consumer process would
+     * cost more than it saves while adding a part that can fall behind or lose
+     * its contents.
      *
-     * The batching architecture is the recorded scale path, not a rejected
-     * idea: when a channel's message rate makes one upsert per message
-     * measurable, the seam to change is this method, and nothing above it.
+     * Batching is the recorded scale path. When a channel's message rate makes
+     * one upsert per message measurable, the seam to change is this method and
+     * nothing above it.
      */
     async recordInteraction(twitchUserId: string, type: InteractionType): Promise<void> {
         const isMessage = type === 'message' ? 1 : 0;
@@ -75,8 +74,8 @@ export class AnalyticsRepository extends ChannelScopedRepository {
             })
             .onConflictDoUpdate({
                 target: [chatTotals.channelId, chatTotals.twitchUserId],
-                // Incremented in SQL rather than read-modify-write: two messages
-                // landing together must both count.
+                // Incremented in SQL rather than read-modify-write, so two
+                // messages landing together both count.
                 set: {
                     messageCount: raw`${chatTotals.messageCount} + ${isMessage}`,
                     commandCount: raw`${chatTotals.commandCount} + ${isCommand}`,
@@ -117,10 +116,9 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /**
      * @returns the most active viewers in this channel.
      *
-     * Reads `chat_totals`, where Phase 0 read `chat_messages` — it grouped and
-     * counted the entire per-message table on every `!topchats`, which grows
-     * without bound and which the owner has now deferred pruning on. The
-     * aggregate exists precisely so this question costs one indexed read.
+     * Reads `chat_totals` rather than grouping the per-message table, which
+     * grows without bound and is not pruned. The aggregate exists precisely so
+     * this question costs one indexed read.
      */
     async topChatters(limit: number): Promise<{ login: string; totalCount: number }[]> {
         return this.db
@@ -135,16 +133,16 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /**
      * The analytics screen, for one range.
      *
-     * `all_time` reads the lifetime counters the bot maintains per message —
-     * two indexed aggregates and no scan of the message table. The other two
+     * `all_time` reads the lifetime counters the bot maintains per message,
+     * which is two indexed aggregates and no scan of the message table. The other
      * ranges cannot use those counters at all, because a counter has no time
      * dimension, so they range over `chat_messages` under
      * `chat_messages_channel_stream_time_idx`. That difference in cost is why
      * `all_time` is the default the screen opens on.
      *
-     * `this_stream` with no stream — a channel that has never gone live with
-     * the bot connected — reports zeroes rather than failing. It is the state
-     * every new tenant is in, and the screen renders the real small numbers.
+     * `this_stream` with no stream (a channel that has never gone live with the
+     * bot connected) reports zeroes rather than failing. It is the state every
+     * new tenant is in, and the screen renders the real small numbers.
      */
     async summary(range: AnalyticsRange = 'all_time'): Promise<AnalyticsSummaryRecord> {
         const [viewerCount] = await this.db
@@ -208,10 +206,10 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /**
      * A bounded window, from the messages themselves.
      *
-     * `this_stream` resolves through `resolveCurrentStream` — the same function
+     * `this_stream` resolves through `resolveCurrentStream`, the same function
      * the dashboard calls, not merely the same intent written twice. The two
      * cannot disagree about which stream "this" is because there is only one
-     * definition of it left to read.
+     * definition of it to read.
      */
     private async windowedTotals(range: Exclude<AnalyticsRange, 'all_time'>): Promise<{
         messages: number;
@@ -219,7 +217,7 @@ export class AnalyticsRepository extends ChannelScopedRepository {
         topChatters: { login: string; messageCount: number }[];
     }> {
         const scope = await this.windowScope(range);
-        // A channel with no stream yet: real zeroes, not an error.
+        // A channel with no stream yet reports real zeroes, not an error.
         if (!scope) return { messages: 0, commandsUsed: 0, topChatters: [] };
 
         const [totals] = await this.db
@@ -240,8 +238,8 @@ export class AnalyticsRepository extends ChannelScopedRepository {
             .where(and(
                 eq(chatMessages.channelId, this.channelId),
                 // Redemptions are not something anyone "said", so they do not
-                // belong in a chatter ranking — the same split the dashboard's
-                // numbers make.
+                // belong in a chatter ranking. The dashboard's numbers make the
+                // same split.
                 raw`${chatMessages.messageType} <> 'redemption'`,
                 scope
             ))
@@ -259,17 +257,16 @@ export class AnalyticsRepository extends ChannelScopedRepository {
     /** The SQL predicate for a range, or null when there is nothing to scope to. */
     private async windowScope(range: Exclude<AnalyticsRange, 'all_time'>): Promise<SQL | null> {
         if (range === 'last_7_days') {
-            // Server-side `now()`, never a timestamp from the client: the range
+            // Server-side `now()`, never a timestamp from the client. The range
             // a chip means must not depend on the clock of the machine that
             // clicked it.
             return raw`${chatMessages.messageTime} >= now() - interval '7 days'`;
         }
 
-        // The dashboard's own resolver, called rather than reimplemented. This
-        // used to be a local `order by started_at desc`, which disagreed with
-        // the dashboard whenever a crash had left an older stream row open — the
-        // two screens then reported different message counts for the same
-        // "this stream" in the same second.
+        // The dashboard's own resolver, called rather than reimplemented. A
+        // local `order by started_at desc` disagrees with the dashboard whenever
+        // a crash has left an older stream row open, and the two screens then
+        // report different message counts for the same "this stream".
         const current = await resolveCurrentStream(this.db, this.channelId);
         return current ? eq(chatMessages.streamId, current.id) : null;
     }
@@ -278,9 +275,9 @@ export class AnalyticsRepository extends ChannelScopedRepository {
      * The streams table, newest first.
      *
      * Chatters are counted from `chat_messages` rather than read off a column,
-     * because the column that used to be there was never written — see
-     * migration 0006. One grouped scan per load, under the channel/stream/time
-     * index, for a table that shows at most twenty rows.
+     * because no such column exists. One grouped scan per load, under the
+     * channel, stream and time index, for a table that shows at most twenty
+     * rows.
      */
     private async recentStreams(): Promise<StreamSummaryRecord[]> {
         const rows = await this.db
@@ -288,9 +285,9 @@ export class AnalyticsRepository extends ChannelScopedRepository {
                 startedAt: streams.startedAt,
                 endedAt: streams.endedAt,
                 /*
-                 * `count(id)`, never `count(*)`: this is a LEFT JOIN, so a
+                 * `count(id)`, never `count(*)`. This is a LEFT JOIN, so a
                  * stream nobody spoke in still produces one row with the
-                 * message side all NULL — and `count(*)` would report that
+                 * message side all NULL, and `count(*)` would report that
                  * stream as having one message.
                  */
                 messages: raw<number>`count(${chatMessages.id}) filter (

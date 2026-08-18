@@ -140,10 +140,10 @@ describeDb('the requests playlist', () => {
 
     it('dedups against the database, never by reading the playlist', async () => {
         /*
-         * Phase 0 paged the entire playlist on every request to find duplicates
-         * — an unbounded number of Spotify calls on the redemption path, growing
-         * with the playlist. The call count is the assertion that the sin did
-         * not come back with the feature.
+         * Paging the entire playlist on every request to find duplicates would
+         * be an unbounded number of Spotify calls on the redemption path,
+         * growing with the playlist. The call count is what pins that it does
+         * not happen.
          */
         const playlist = new PlaylistRepository(handle.db, channelId);
         expect(await playlist.claim('playlist-abc', TRACK.uri)).toBe(true);

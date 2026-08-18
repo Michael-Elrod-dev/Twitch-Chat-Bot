@@ -6,16 +6,15 @@ import type { SubscriptionReconciler } from './subscriptionReconciler.js';
 /**
  * What to do when Twitch revokes a subscription.
  *
- * The P1-WP5 flag closed properly: revocation is **per subscription**, not per
- * channel. Losing `stream.online` while chat still works is a degraded channel,
- * not a disconnected one, and marking the whole tenant dead for it would take a
- * working bot offline.
+ * Revocation is per subscription, not per channel. Losing `stream.online` while
+ * chat still works is a degraded channel, not a disconnected one, and marking
+ * the whole tenant dead for it would take a working bot offline.
  *
  * Recovery is one delayed attempt, never a loop. Twitch's revocation reasons are
- * mostly terminal — `authorization_revoked` and `user_removed` cannot be fixed
- * by asking again — so retrying hard would be noise that hides the one case
- * (`notification_failures_exceeded`, after our own outage) that genuinely
- * recovers.
+ * mostly terminal, since `authorization_revoked` and `user_removed` cannot be
+ * fixed by asking again, so retrying hard would be noise that hides the one case
+ * (`notification_failures_exceeded`, after an outage on this side) that
+ * genuinely recovers.
  */
 
 /** Long enough that a transient outage has passed, short enough to matter. */

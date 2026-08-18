@@ -6,15 +6,15 @@ import type { Logger } from '../logger.js';
 import { ManualReauthRequiredError } from '../twitch/errors.js';
 
 /**
- * The song chat commands, ported from Phase 0's spotify handler.
+ * The song chat commands.
  *
- * Levels are declared here and the declaration wins — `CommandManager`
- * corrects a database row that disagrees, so the table can never quietly claim
- * `!skip` is available to everyone.
+ * Levels are declared here and the declaration wins. `CommandManager` corrects
+ * a database row that disagrees, so the table can never quietly claim `!skip`
+ * is available to everyone.
  *
- * Every handler answers something. Phase 0 learned that a command which
- * silently does nothing is indistinguishable from a broken bot, so "the queue
- * is empty" and "Spotify is not connected" are replies rather than silences.
+ * Every handler answers something. A command that silently does nothing is
+ * indistinguishable from a broken bot, so "the queue is empty" and "Spotify is
+ * not connected" are replies rather than silences.
  */
 
 export interface SongHandlerDeps {
@@ -33,7 +33,7 @@ export interface SongHandlerDeps {
 
 const NOT_CONNECTED = 'Spotify is not connected for this channel.';
 
-/** Formats a track for chat, the Phase-0 shape. */
+/** Formats a track for chat. */
 const describe = (name: string, artist: string): string => `${name} by ${artist}`;
 
 export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
@@ -69,9 +69,9 @@ export function createSongHandlers(deps: SongHandlerDeps): HandlerRegistry {
     };
 
     /*
-     * Names match the handler_name values the Phase-0 data already carries
+     * Names match the handler_name values the imported data already carries
      * (currentSong, lastSong, nextSong, queueInfo, skipSong, toggleSongs). The
-     * imported rows are the owner's; the handler names are ours to bend.
+     * rows belong to the owner, so the handler names are what bend.
      */
     return {
         currentSong: { level: 'everyone', description: 'Names the song playing now', handler: currentlyPlaying },

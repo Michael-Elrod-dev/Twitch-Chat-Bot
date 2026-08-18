@@ -17,9 +17,9 @@ export interface ChannelRecord {
 /**
  * The columns every read of this table returns.
  *
- * Written once so a new column cannot reach some callers and not others — the
- * kind of drift that makes `enabled` look absent on exactly the code path that
- * decides whether to start a session.
+ * Written once so a new column cannot reach some callers and not others. That
+ * kind of drift is what makes `enabled` look absent on exactly the code path
+ * that decides whether to start a session.
  */
 const CHANNEL_COLUMNS = {
     id: channels.id,
@@ -66,7 +66,7 @@ export class ChannelRepository {
         return rows;
     }
 
-    /** By our own primary key — used when a credential already names the channel. */
+    /** By this table's own primary key, for when a credential already names the channel. */
     async findById(id: string): Promise<ChannelRecord | null> {
         const rows = await this.db
             .select(CHANNEL_COLUMNS)
@@ -91,7 +91,7 @@ export class ChannelRepository {
      * Onboarding, idempotently.
      *
      * The unique index on `twitch_broadcaster_id` is what makes re-authorizing an
-     * existing channel an update rather than a duplicate tenant — and it resets
+     * existing channel an update rather than a duplicate tenant. It also resets
      * the status, so reconnecting is how a `needs_reauth` channel recovers.
      *
      * It deliberately does NOT touch `enabled`. Re-authorizing with Twitch says
@@ -137,7 +137,7 @@ export class ChannelRepository {
     /**
      * Flips the owner's master switch.
      *
-     * Writes `enabled` and nothing else — in particular not `status`, which
+     * Writes `enabled` and nothing else, in particular not `status`, which
      * belongs to Twitch and to administration. Returns the row as it now
      * stands so the caller can report both fields from one round trip without
      * assuming what the other one is.

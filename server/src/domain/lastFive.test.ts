@@ -73,10 +73,9 @@ describe('!fursona and !waifu', () => {
 
     it('does not point waifu at the dead arfa.dev path', async () => {
         /*
-         * The health check that gated this port: arfa.dev/waifu-ed/ returns 404
-         * for the whole path, not just the hashed filename. Porting the legacy
-         * URL would have shipped a command that posts a broken link to every
-         * viewer who runs it.
+         * arfa.dev/waifu-ed/ returns 404 for the whole path, not just the
+         * hashed filename. Pointing at it would ship a command that posts a
+         * broken link to every viewer who runs it.
          */
         const reply = await run('waifu', [], 'someviewer');
 
@@ -246,8 +245,8 @@ describeDb('!chats, !topchats and !follow', () => {
 
         it('is channel-relative: following alpha is not following beta', async () => {
             /*
-             * Phase 0 read a single global `viewers.followed_at`, so it would
-             * have claimed this person follows every channel the bot serves.
+             * A single global `viewers.followed_at` would claim this person
+             * follows every channel the bot serves.
              */
             expect(await run(betaId, 'followAge', ['@busyviewer']))
                 .toContain('is not following this channel');
@@ -262,19 +261,15 @@ describeDb('!chats, !topchats and !follow', () => {
 
 describeDb('every production command row has a handler', () => {
     /**
-     * The Legacy Retirement gate, expressed as a test.
+     * Every production command row must resolve to a handler this build has.
      *
      * These are the `handler_name` values in the owner's production `commands`
-     * table, read from the live database on 2026-08-16. A row naming a handler
-     * this build does not have is not a crash — the pipeline logs "Command
-     * references an unknown handler" and answers nothing — so the failure mode
-     * is a command that silently stops working.
+     * table. A row naming a handler this build does not have is not a crash. The
+     * pipeline logs "Command references an unknown handler" and answers nothing,
+     * so the failure mode is a command that silently stops working.
      *
-     * This exists because comparing the two lists BY HAND got it wrong: the
-     * P1-WP4.3 audit reported five missing handlers and the real number was
-     * seven, because the enumeration only matched inline handler literals and
-     * skipped the factory-built ones. A machine does not make that mistake
-     * twice.
+     * The check is mechanical because comparing the two lists by hand misses the
+     * factory-built handlers and only matches the inline literals.
      */
     const PRODUCTION_HANDLERS = [
         'advice', 'combinedStats', 'currentSong', 'followAge', 'fursona',

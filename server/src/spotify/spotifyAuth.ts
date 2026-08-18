@@ -9,9 +9,10 @@ import { ManualReauthRequiredError, TwitchError } from '../twitch/errors.js';
  * `state`-protected, tokens encrypted into `channel_tokens` under the
  * `spotify` provider. A second auth model would be a second set of mistakes.
  *
- * The refresh semantics mirror `UserTokenProvider` for the same reasons —
- * expiry-based rather than interval-based, a floor on implausible lifetimes,
- * single-flight, and a distinct manual-reauth error rather than a retry loop.
+ * The refresh semantics mirror `UserTokenProvider` for the same reasons. They
+ * are expiry-based rather than interval-based, with a floor on implausible
+ * lifetimes, single-flight, and a distinct manual-reauth error rather than a
+ * retry loop.
  *
  * One difference worth knowing: **Spotify does not always return a new refresh
  * token.** Overwriting the stored one with `undefined` would disconnect the

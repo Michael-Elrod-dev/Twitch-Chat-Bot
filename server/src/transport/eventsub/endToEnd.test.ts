@@ -18,10 +18,10 @@ import type { EmoteRecord } from '../../db/repositories/emoteRepository.js';
 import type { ChannelRecord } from '../../db/repositories/channelRepository.js';
 
 /**
- * THE EXIT CRITERION, as a test.
+ * The end-to-end path, as a test.
  *
  * A signed synthetic `channel.chat.message` is POSTed to the real webhook route
- * and a command response comes out at the ChatSink — for two channels at once,
+ * and a command response comes out at the ChatSink, for two channels at once,
  * through the real signature check, the real queue, the real session router, the
  * real composition root and the real pipeline. Everything between the HTTP
  * request and the outbound message is production code; only Postgres, Redis and
@@ -174,8 +174,8 @@ describe('webhook to ChatSink, end to end', () => {
     });
 
     it('applies the badge-derived permission level', async () => {
-        // Roles arrive as Twitch badges and end up deciding a permission check —
-        // the whole translation, exercised in one test.
+        // Roles arrive as Twitch badges and end up deciding a permission check.
+        // The whole translation, exercised in one test.
         await deliver(chatMessageDelivery(SECRET, { broadcasterUserId: '2002', text: '!mods' }));
         expect(sink.textsFor(BETA.id)).toEqual([]);
 

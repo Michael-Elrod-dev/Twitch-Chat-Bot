@@ -17,10 +17,11 @@ const DEFAULT_MAX_DEPTH = 5_000;
  * The enqueue-and-ack buffer between the webhook endpoint and the sessions.
  *
  * Twitch expects a response "within a few seconds" and revokes subscriptions
- * that repeatedly miss it (facts §3), so the handler must never do real work on
- * the request thread. It writes here and returns; this drains afterwards.
+ * that repeatedly miss it (docs/TWITCH_PLATFORM_FACTS.md section 3), so the
+ * handler must never do real work on the request thread. It writes here and
+ * returns, and this drains afterwards.
  *
- * Processing is serial and per-item isolated: chat volume does not need
+ * Processing is serial and isolated per item. Chat volume does not need
  * parallelism, ordering is free, and one poisonous event must never stall the
  * queue behind it.
  */

@@ -26,11 +26,11 @@ export interface CommandManagerOptions {
 /**
  * Per-channel command registry.
  *
- * Three Phase-0 lessons are load-bearing here and each is pinned by a test:
- *  - permission is enforced in exactly one place (WP-6 task 9),
+ * Three properties are load-bearing here and each is pinned by a test:
+ *  - permission is enforced in exactly one place,
  *  - a handler's declared level beats the database row, and the row is corrected
  *    at load so the table stops lying,
- *  - a cache miss must not cost a full hash fetch (WP-7 trim a).
+ *  - a cache miss must not cost a full hash fetch.
  */
 export class CommandManager {
     private readonly channelId: string;
@@ -59,8 +59,8 @@ export class CommandManager {
             const registration = row.handlerName ? this.handlers[row.handlerName] : undefined;
             const declared = registration?.level;
 
-            // The declaration wins. Phase 0 found handler commands whose stored
-            // level said 'everyone' while the real check lived inside the handler.
+            // The declaration wins. Otherwise a stored level of 'everyone' can
+            // sit beside a real check that lives inside the handler.
             if (declared && declared !== row.userLevel) {
                 this.logger.warn(
                     { channelId: this.channelId, command: row.name, was: row.userLevel, now: declared },
@@ -73,7 +73,7 @@ export class CommandManager {
              * The same rule, applied to the sentence the app shows.
              *
              * Written here rather than served from the registry at request
-             * time because the API has no registry to consult — the handlers
+             * time because the API has no registry to consult. The handlers
              * are built per session, and a channel whose bot is switched off
              * has none. Reconciling onto the row means the description is a
              * fact about the command wherever it is read from, and a built-in

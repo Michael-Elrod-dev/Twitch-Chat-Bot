@@ -31,7 +31,7 @@ export interface ChatMessageOptions {
  * Signs an already-serialized body.
  *
  * Exposed because a test that hand-builds a payload must still be able to sign
- * it correctly — otherwise it would only ever prove that the signature check
+ * it correctly. Otherwise it would only ever prove that the signature check
  * works, never the thing it meant to test.
  */
 export function signRaw(

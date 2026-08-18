@@ -26,13 +26,13 @@ import { apiUsage } from '../../db/schema/index.js';
  * The dashboard's read model.
  *
  * Every figure here is a read over rows the bot already writes on its ordinary
- * paths, so these tests write through those paths — real repositories, real
- * database — rather than seeding the aggregate they then assert on. A test that
+ * paths, so these tests write through those paths, with real repositories and a
+ * real database, rather than seeding the aggregate they then assert on. A test that
  * inserted its own totals would pass over a pipeline that had stopped feeding
  * them, which is the exact failure the points-redeemed tile was in.
  *
- * The tenancy rule is the same as everywhere else: no route accepts a channel
- * identifier, so the isolation case here is about the QUERIES — a `where` that
+ * The tenancy rule is the same as everywhere else. No route accepts a channel
+ * identifier, so the isolation case here is about the queries. A `where` that
  * forgot its channel would show one broadcaster another's numbers.
  */
 
@@ -167,8 +167,8 @@ describeDb('dashboard', () => {
         });
 
         it('counts messages and distinct chatters, not rows per person', async () => {
-            // Two people, four lines. The chatter figure is people, not lines —
-            // the mistake that would report a busy stream as a crowded one.
+            // Two people, four lines. The chatter figure is people, not lines.
+            // Counting lines would report a busy stream as a crowded one.
             const streamId = await openStream(alpha.id, new Date('2026-08-16T18:00:00.000Z'));
             await chatLine(alpha.id, 'dash-viewer-1', streamId);
             await chatLine(alpha.id, 'dash-viewer-1', streamId);
@@ -214,11 +214,12 @@ describeDb('dashboard', () => {
 
     describe('when offline', () => {
         it('falls back to the last stream and captions it', async () => {
-            // `2b` shows last-stream totals under a `Last stream / …` caption;
-            // both come from the same row, so they cannot disagree.
+            // The offline dashboard shows last-stream totals under a
+            // `Last stream` caption, and both come from the same row, so they
+            // cannot disagree.
             //
-            // Its own channel, because the point is a channel with NO open
-            // stream — reusing one the live tests left streaming would assert
+            // Its own channel, because the point is a channel with no open
+            // stream. Reusing one the live tests left streaming would assert
             // the offline path while exercising the live one.
             const offline = await newChannel('dashoffline');
             const streams = new StreamRepository(handle.db, offline.id);
@@ -274,8 +275,8 @@ describeDb('dashboard', () => {
              *
              * Stream ids are UUIDs and therefore unique across channels, so a
              * query that dropped its channel filter would still return the right
-             * rows through the normal path — the isolation test above passes
-             * either way, which the reintroduction pass caught. This asks the
+             * rows through the normal path, so the isolation test above passes
+             * either way. This asks the
              * question directly instead: alpha's repository, handed beta's
              * stream id, must see nothing. That fails the moment the channel
              * predicate goes.

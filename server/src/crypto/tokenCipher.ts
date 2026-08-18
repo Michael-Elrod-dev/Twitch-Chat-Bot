@@ -18,9 +18,10 @@ export interface TokenCipher {
     encrypt: (plaintext: string, purpose: TokenPurpose) => string;
     /**
      * @param toleratePlaintext accepts an unencrypted value and returns it
-     * as-is. Set only where a not-yet-upgraded ETL row is genuinely expected —
-     * the upgrade script and the read path during migration — so that everywhere
-     * else, a plaintext value is an error rather than a silent downgrade.
+     * as-is. Set only where a not-yet-upgraded imported row is genuinely
+     * expected, which is the upgrade script and the read path during migration,
+     * so that everywhere else a plaintext value is an error rather than a silent
+     * downgrade.
      */
     decrypt: (stored: string, purpose: TokenPurpose, toleratePlaintext?: boolean) => string;
 }

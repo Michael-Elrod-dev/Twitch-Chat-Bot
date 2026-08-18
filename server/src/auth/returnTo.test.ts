@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { isAllowedReturnTo, APP_URI_SCHEME } from './returnTo.js';
 
 /**
- * The open-redirect fix.
+ * The open-redirect guard.
  *
- * `return_to` was unvalidated and the sign-in callback redirected to it with a
- * live access token AND refresh token in the fragment, so any URL an attacker
- * could get a user to click handed over a working session. Found in P1-WP8; it
- * was live in production.
+ * The sign-in callback redirects to `return_to` with a live access token and
+ * refresh token in the fragment. Unvalidated, any URL an attacker could get a
+ * user to click would hand over a working session.
  */
 describe('return_to allow-list', () => {
     const prod = { allowLoopback: false };

@@ -328,7 +328,7 @@ async function main(): Promise<void> {
      *
      * The seam is **required** on the router, so this function existing is a
      * compile-time obligation rather than something a future edit could quietly
-     * drop — see `ResourceOptions.releaseManagedRewards` for why a reward left
+     * drop. `ResourceOptions.releaseManagedRewards` says why a reward left
      * standing on a disconnected channel is worse than an untidy one.
      *
      * Which is exactly why the credential-less case is a LOUD log rather than a
@@ -525,10 +525,10 @@ async function main(): Promise<void> {
     /**
      * A Spotify client for one channel, or null.
      *
-     * Null in two distinct cases that the songs screen renders identically —
-     * the deployment has no Spotify credentials, and this channel has not
-     * linked an account. Both mean "no Spotify surface", and neither is worth a
-     * different empty state.
+     * Null in two distinct cases that the songs screen renders identically. The
+     * deployment has no Spotify credentials, or this channel has not linked an
+     * account. Both mean "no Spotify surface", and neither is worth a different
+     * empty state.
      *
      * Built per call rather than cached: the token provider it wraps holds the
      * refresh state, and a second long-lived provider racing the session's own
@@ -565,8 +565,8 @@ async function main(): Promise<void> {
              *
              * The card asking these questions sits on a screen the streamer
              * opened to fix Spotify. A 500 there would replace the Connect
-             * button with an error wall — the `4b` rule, applied to a panel
-             * rather than a page.
+             * button with an error wall, which is the degraded-state rule
+             * applied to a panel rather than a page.
              */
             account: async () => {
                 try {
@@ -606,11 +606,9 @@ async function main(): Promise<void> {
             /**
              * `skipTrack()`'s first caller.
              *
-             * The method has existed on the client since the Spotify work landed
-             * and nothing had ever invoked it — the missing half that made the
-             * design's Skip button unbuildable. Nothing is playing is reported as
-             * false rather than thrown: Spotify answers 404 for a skip against an
-             * idle player, and that is an ordinary state, not a fault.
+             * Nothing playing is reported as false rather than thrown, because
+             * Spotify answers 404 for a skip against an idle player and that is
+             * an ordinary state, not a fault.
              */
             skipPlayingTrack: async () => {
                 try {
@@ -634,8 +632,8 @@ async function main(): Promise<void> {
                 /*
                  * Rebuild, so the running session drops the client it captured
                  * at start. Without it the playback monitor keeps polling with
-                 * a token that has been deleted from under it — the mirror of
-                 * the connect path, which rebuilds for the same reason.
+                 * a token that has been deleted from under it. The connect path
+                 * rebuilds for the same reason.
                  */
                 try {
                     await rebuildSession(channelId);
@@ -660,7 +658,7 @@ async function main(): Promise<void> {
      * account's own playlists are searched by name first, and only a name that
      * matches nothing becomes a new private playlist. Creating unconditionally
      * would leave a second "Song Requests" behind every time the streamer
-     * re-typed the same name — including on a save that changed nothing else.
+     * re-typed the same name, including on a save that changed nothing else.
      *
      * Answers null rather than throwing on any failure. The streamer has named
      * a playlist; the name is worth keeping even when Spotify cannot be reached
@@ -723,7 +721,7 @@ async function main(): Promise<void> {
         repositories: (channelId) => createChannelRepositories(database.db, channelId),
         // Built with the same cache every session reads through, so a toggle
         // saved in the app invalidates the copy the bot is holding. The router
-        // has no other way to write settings — see `ResourceOptions`.
+        // has no other way to write settings, as `ResourceOptions` shows.
         settings: (channelId) => new SettingsService({
             channelId,
             repository: createChannelRepositories(database.db, channelId).settings,
@@ -790,9 +788,10 @@ async function main(): Promise<void> {
         server,
         logger,
         // Order matters. The HTTP server closes first (handled inside), so no new
-        // deliveries arrive; then the queue drains what was already acknowledged
-        // — dropping those would lose events Twitch believes were accepted;
-        // then sessions stop; then the connections they used close.
+        // deliveries arrive. Then the queue drains what was already
+        // acknowledged, because dropping those would lose events Twitch
+        // believes were accepted. Then sessions stop, then the connections they
+        // used close.
         closeables: [
             // Sockets first: a client that reconnects during shutdown would
             // otherwise attach to a server that is already tearing down.
@@ -828,7 +827,7 @@ async function main(): Promise<void> {
  * These are the two URLs the owner has to visit to activate the system, and
  * hunting for them in a README while the server is already running is exactly
  * the kind of friction that makes an activation step get skipped. They contain
- * no secret — a client id is public by design, and the `state` is issued per
+ * no secret. A client id is public by design, and the `state` is issued per
  * request by the route itself, not here.
  */
 function logOnboardingUrls(env: Env, logger: Logger, redirectUri: string, configured: boolean): void {

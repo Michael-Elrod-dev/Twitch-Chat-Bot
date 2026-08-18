@@ -3,12 +3,12 @@ import type { Logger } from '../logger.js';
 import type { RedisHandle } from './redis.js';
 
 /**
- * Channel-scoped cache with a hard guarantee: **every method degrades to a
- * cache miss when Redis is unavailable, and never throws.**
+ * Channel-scoped cache with a hard guarantee. Every method degrades to a cache
+ * miss when Redis is unavailable, and never throws.
  *
- * Phase 0 established that Redis is optional infrastructure. Callers are written
- * as "ask the cache, fall back to the database" and must never need a try/catch
- * around a cache read — if that discipline slips, a Redis blip becomes an outage.
+ * Redis is optional infrastructure. Callers are written as "ask the cache, fall
+ * back to the database" and must never need a try/catch around a cache read. If
+ * that discipline slips, a Redis blip becomes an outage.
  */
 export class CacheManager {
     private readonly redis: RedisHandle;
@@ -68,11 +68,10 @@ export class CacheManager {
     /**
      * Reads one field of a cached hash.
      *
-     * The three-state return is the point. Phase 0's WP-7 trim replaced a
-     * `hget` + full `hgetall` on every non-matching chat message with an O(1)
-     * existence check; distinguishing "the hash is populated and this field is
-     * genuinely absent" from "we have nothing cached" is what lets a miss avoid
-     * a database round-trip.
+     * The three-state return is the point. Every non-matching chat message costs
+     * one O(1) existence check rather than a full hash read, and distinguishing
+     * "the hash is populated and this field is genuinely absent" from "there is
+     * nothing cached" is what lets a miss avoid a database round-trip.
      *
      * @returns `{ hit: true, value }` on a hit, `{ hit: false, populated: true }`
      * when the hash exists but lacks the field, and `{ hit: false, populated: false }`

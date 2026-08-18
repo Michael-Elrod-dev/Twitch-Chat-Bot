@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import type { DbHandle } from './client.js';
 
 /**
- * Design §4.1 guardrail 2: schema exists solely as versioned migrations. There is
- * no other path by which a table comes into being - not a seed script, not a
- * hand-run DDL statement.
+ * Guardrail 2 of the database-hosting decision. Schema exists solely as
+ * versioned migrations. There is no other path by which a table comes into
+ * being, not a seed script and not a hand-run DDL statement.
  */
 
 /**

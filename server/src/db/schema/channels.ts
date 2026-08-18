@@ -64,9 +64,9 @@ export const channels = pgTable(
 /**
  * Per-channel OAuth credentials.
  *
- * The broadcaster's Twitch token pair is genuinely required (not merely
- * convenient): Update Redemption Status - the refund path - accepts only a user
- * access token with channel:manage:redemptions. See the WP-3 report.
+ * The broadcaster's Twitch token pair is genuinely required rather than merely
+ * convenient. Update Redemption Status, which is the refund path, accepts only
+ * a user access token with channel:manage:redemptions.
  */
 export const channelTokens = pgTable(
     'channel_tokens',
@@ -80,7 +80,7 @@ export const channelTokens = pgTable(
         provider: text('provider', { enum: ['twitch', 'spotify'] }).notNull(),
         accessToken: text('access_token').notNull(),
         refreshToken: text('refresh_token').notNull(),
-        /** Absolute expiry. Phase 0 learned to store this rather than re-derive it. */
+        /** Absolute expiry, stored rather than re-derived. */
         expiresAt: timestamp('expires_at', { withTimezone: true }),
         scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -93,7 +93,7 @@ export const channelTokens = pgTable(
     ]
 );
 
-/** Per-channel behavior knobs. Replaces the Phase-0 `tokens` key/value junk drawer. */
+/** Per-channel behavior knobs, one typed column each. */
 export const channelSettings = pgTable('channel_settings', {
     channelId: uuid('channel_id')
         .primaryKey()
@@ -120,17 +120,17 @@ export const channelSettings = pgTable('channel_settings', {
     lastDiscordNotificationAt: timestamp('last_discord_notification_at', { withTimezone: true }),
     songRequestsEnabled: boolean('song_requests_enabled').notNull().default(true),
     /*
-     * The requests playlist, elevated by the owner to a core feature
-     * (PHASE1_DESIGN §3): requested songs are saved to a playlist the streamer
-     * names, so the community's history survives the stream.
+     * The requests playlist, a core feature. Requested songs are saved to a
+     * playlist the streamer names, so the community's history survives the
+     * stream. The product spec is docs/UI_FUNCTIONALITY.md section 8.
      *
-     * P1-WP4.3 ships the foundation — append with DB-side dedup — against a
+     * What exists today is the append with database-side dedup, against a
      * default-off toggle and a playlist id supplied out of band. The naming and
-     * create-if-missing UX belongs to the app's settings screen, so these
+     * create-if-missing flow belongs to the app's settings screen, so these
      * columns exist now to keep that a UI change rather than a migration.
      */
     requestsPlaylistEnabled: boolean('requests_playlist_enabled').notNull().default(false),
-    /** What the streamer calls it. Display and creation only — never used to look one up. */
+    /** What the streamer calls it. Display and creation only, never used to look one up. */
     requestsPlaylistName: text('requests_playlist_name'),
     /** Spotify's id. Null means "not connected yet", and the append is skipped. */
     requestsPlaylistId: text('requests_playlist_id'),
@@ -153,10 +153,9 @@ export const channelSettings = pgTable('channel_settings', {
  *
  * Deliberately NOT a rotating token pair. Every Helix call the bot itself makes
  * (send chat message, create EventSub subscriptions, get chatters) runs on an
- * *app* access token, which derives from the application's client credentials
- * plus prior user consent - not from a stored bot user token. What we must
- * persist is the identity and the fact of consent. See the WP-3 report for the
- * per-endpoint enumeration behind this.
+ * app access token, which derives from the application's client credentials
+ * plus prior user consent, not from a stored bot user token. What must be
+ * persisted is the identity and the fact of consent.
  */
 export const botIdentity = pgTable('bot_identity', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -175,7 +174,7 @@ export const botIdentity = pgTable('bot_identity', {
 });
 
 /**
- * Refresh tokens for the app's *own* sessions — not Twitch's.
+ * Refresh tokens for the app's own sessions, not Twitch's.
  *
  * Only the hash is stored, so a database leak yields no usable token. Rows are
  * revoked by deletion or by stamping `revoked_at`, which is the whole reason
@@ -198,7 +197,7 @@ export const appRefreshTokens = pgTable(
     ]
 );
 
-/** Schema-prep only: no UI until a later phase (design §2.4). */
+/** Schema only. Nothing reads these rows yet. */
 export const editors = pgTable(
     'editors',
     {
@@ -220,7 +219,7 @@ export const editors = pgTable(
  *
  * Hashed at rest for the same reason as app refresh tokens: a database leak
  * must not yield working credentials. The prefix is stored in clear so a key
- * can be identified in a list — "which of these three is taped inside my Stream
+ * can be identified in a list. "Which of these three is taped inside my Stream
  * Deck profile" is a question the UI has to answer without ever holding the key.
  */
 export const apiKeys = pgTable(

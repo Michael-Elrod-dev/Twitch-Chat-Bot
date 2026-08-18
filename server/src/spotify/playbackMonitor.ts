@@ -6,36 +6,35 @@ import { ManualReauthRequiredError } from '../twitch/errors.js';
 /**
  * Feeds queued tracks into Spotify as the current one ends.
  *
- * Two Phase-0 gates are ported and both are load-bearing:
+ * Two gates are load-bearing:
  *
- *  - **The `is_playing` gate.** If playback is paused, the queue does not
- *    advance. Without it a streamer who pauses for five minutes returns to an
- *    empty queue: every track "ended" on the timer and was handed to Spotify
+ *  - The `is_playing` gate. If playback is paused, the queue does not advance.
+ *    Without it a streamer who pauses for five minutes returns to an empty
+ *    queue, because every track "ended" on the timer and was handed to Spotify
  *    while nothing was listening. The viewers paid points for songs nobody
  *    heard.
- *  - **Advance near the end, not at the end.** Spotify's queue needs the track
+ *  - Advance near the end, not at the end. Spotify's queue needs the track
  *    before the current one finishes, or there is a silent gap.
  *
- * Lifecycle follows the P1-WP4 discipline: start and stop are idempotent, stop
- * is safe on a monitor that never started, and the interval is unref'd so it
- * can never hold the process open.
+ * Start and stop are idempotent, stop is safe on a monitor that never started,
+ * and the interval is unref'd so it can never hold the process open.
  */
 
 /**
  * How close to the end counts as "about to finish".
  *
- * **Consequence worth knowing before someone rediscovers it from chat:** a skip
- * outside this window plays one of the streamer's own tracks before the next
- * request. Handoff only happens in the last ten seconds, so skipping with two
- * minutes left leaves nothing of ours in Spotify's queue and the player falls
- * through to whatever it was going to play anyway; the queued request is handed
- * over at the end of *that* interlude track instead. Nothing is lost and nothing
- * is out of order — the request keeps its place — but "skip, and the next request
- * plays immediately" is not what happens, and the ten-second window is the reason.
+ * One consequence is worth stating plainly. A skip outside this window plays one
+ * of the streamer's own tracks before the next request. Handoff only happens in
+ * the last ten seconds, so skipping with two minutes left leaves nothing of this
+ * app's in Spotify's queue and the player falls through to whatever it was going
+ * to play anyway. The queued request is handed over at the end of that interlude
+ * track instead. Nothing is lost and nothing is out of order, because the
+ * request keeps its place, but "skip, and the next request plays immediately" is
+ * not what happens, and the ten-second window is the reason.
  */
 const ADVANCE_WINDOW_MS = 10_000;
 
-/** Polling cadence. Phase 0 used 3s; the same trade of freshness against calls. */
+/** Polling cadence, trading freshness against Spotify calls. */
 const DEFAULT_POLL_MS = 3_000;
 
 export interface PlaybackMonitorOptions {
@@ -68,12 +67,12 @@ export class PlaybackMonitor {
      *
      * This is the only place the pairing survives. The monitor removes the row
      * from the queue at the instant it hands the track to Spotify, so by the
-     * time the track is *playing* — which is when the card asks — the requester
-     * is no longer in any table. Recording it here costs one field; the
+     * time the track is playing, which is when the card asks, the requester is
+     * no longer in any table. Recording it here costs one field, where the
      * alternative would be a played-history table for one line of UI.
      *
-     * In memory, like `lastPlayedTrack`: after a restart the card shows the
-     * track with no requester, which is honest — we genuinely no longer know.
+     * In memory, like `lastPlayedTrack`. After a restart the card shows the
+     * track with no requester, which is honest, because the pairing is gone.
      */
     private lastHandoff: { trackUri: string; requestedByLogin: string | null } | null = null;
 
@@ -92,10 +91,10 @@ export class PlaybackMonitor {
 
     /**
      * @returns who requested `trackUri`, when it is the track this monitor last
-     * handed to Spotify. Null for anything else — including a track the
-     * streamer started themselves, which is most of a stream.
+     * handed to Spotify. Null for anything else, including a track the streamer
+     * started themselves, which is most of a stream.
      *
-     * Matched on the uri rather than assumed: the streamer can skip in Spotify
+     * Matched on the uri rather than assumed, because the streamer can skip in Spotify
      * at any moment, and attributing whatever is playing now to the last
      * requester would credit a stranger's song to a viewer.
      */
@@ -176,7 +175,7 @@ export class PlaybackMonitor {
             /*
              * A dead Spotify authorization is NOT transient. Polling on would
              * attempt a refresh that cannot succeed, every three seconds, until
-             * somebody noticed — so the monitor stops itself and says why. It
+             * somebody noticed, so the monitor stops itself and says why. It
              * starts again when the broadcaster reconnects, because that
              * rebuilds the session.
              */

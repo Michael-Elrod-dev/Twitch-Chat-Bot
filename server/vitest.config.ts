@@ -16,7 +16,7 @@ export default defineConfig({
          * Test FILES run one at a time.
          *
          * The database-backed suites share one Postgres, and some of the schema
-         * is genuinely global rather than channel-scoped — `bot_identity` holds
+         * is genuinely global rather than channel-scoped. `bot_identity` holds
          * exactly one row by design, and `viewers` is a shared identity table.
          * Two files mutating those in parallel workers fail against each other
          * in ways that look like real defects and move around between runs.

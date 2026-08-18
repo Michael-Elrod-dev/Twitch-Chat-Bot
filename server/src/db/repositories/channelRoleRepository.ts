@@ -27,8 +27,8 @@ export class ChannelRoleRepository extends ChannelScopedRepository {
     /**
      * Resolves `@name` to a Twitch user id, within this channel.
      *
-     * Channel-scoped on purpose. Phase 0 searched the whole `viewers` table, so
-     * `!roast @someone` in channel A could name a person who has only ever
+     * Channel-scoped on purpose. Searching the whole `viewers` table would let
+     * `!roast @someone` in channel A name a person who has only ever
      * appeared in channel B. Restricting the lookup to viewers this channel has
      * actually seen keeps one tenant's audience invisible to another.
      */
@@ -49,9 +49,8 @@ export class ChannelRoleRepository extends ChannelScopedRepository {
     /**
      * @returns when this viewer followed THIS channel, or null.
      *
-     * Channel-relative, which is the correction Phase 0 could not express: its
-     * `!follow` read a single global `viewers.followed_at`, so it would claim
-     * someone follows every channel the bot serves.
+     * Channel-relative on purpose. A single global `viewers.followed_at` would
+     * claim someone follows every channel the bot serves.
      */
     async followedAt(twitchUserId: string): Promise<Date | null> {
         const [row] = await this.db
@@ -68,10 +67,10 @@ export class ChannelRoleRepository extends ChannelScopedRepository {
     /**
      * Records roles observed on a chat message.
      *
-     * Only ever called from a path that genuinely knows the roles. Phase 0's
-     * P1-1 was a poll that wrote default-false roles once a minute and wiped
-     * everything the chat path had learned; the equivalent presence-touch path
-     * lives in `touchPresence` and deliberately writes no role columns.
+     * Only ever called from a path that genuinely knows the roles. A poll that
+     * wrote default-false roles on a timer would wipe everything the chat path
+     * had learned, which is why the presence-touch path in `touchPresence`
+     * deliberately writes no role columns.
      */
     async upsertRoles(twitchUserId: string, login: string, roles: ChannelRoleRecord): Promise<void> {
         await this.db

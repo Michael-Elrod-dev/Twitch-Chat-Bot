@@ -15,7 +15,7 @@ export interface ChannelSettingsRecord {
     aiLimits: AiLimitsRecord;
     songRequestsEnabled: boolean;
     discordWebhookUrl: string | null;
-    /** See the schema: the requests-playlist feature, foundation shipped in P1-WP4.3. */
+    /** The requests-playlist feature. The schema carries the detail. */
     requestsPlaylistEnabled: boolean;
     requestsPlaylistName: string | null;
     requestsPlaylistId: string | null;
@@ -83,7 +83,7 @@ export class ChannelSettingsRepository extends ChannelScopedRepository {
         if (patch.aiLimits !== undefined) {
             // All four or none. A partial set would have to be merged against a
             // read, and two edits in flight would resolve to whichever landed
-            // second — with the other tier's change lost inside a write that
+            // second, with the other tier's change lost inside a write that
             // never mentioned it.
             changes['aiLimitEveryone'] = patch.aiLimits.everyone;
             changes['aiLimitVip'] = patch.aiLimits.vip;

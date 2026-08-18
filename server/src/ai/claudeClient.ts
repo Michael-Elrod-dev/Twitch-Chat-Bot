@@ -4,14 +4,14 @@ import type { Logger } from '../logger.js';
 /**
  * The Claude client.
  *
- * The official SDK replaces Phase 0's hand-rolled fetch client, which had to
- * reimplement retries, error shapes and streaming for itself. Everything the
+ * The official SDK handles retries, error shapes and streaming. Everything the
  * bot needs from it is behind this interface, so the AI service can be tested
- * end to end without a network — and without an API key existing at all.
+ * end to end without a network and without an API key existing at all.
  *
- * **The API key is a server secret.** It comes from the environment, is never
+ * The API key is a server secret. It comes from the environment, is never
  * per-channel, never stored in the database, and never logged. A channel
- * connecting to the bot does not bring its own key and cannot see ours.
+ * connecting to the bot does not bring its own key and cannot read the
+ * server's.
  */
 
 export interface CompletionRequest {

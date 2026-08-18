@@ -18,9 +18,9 @@ function asString(value: unknown): string {
 }
 
 /**
- * Roles come from badges rather than a flags object. `founder` is a legacy
- * subscriber badge — a founder who is not also badged `subscriber` is still a
- * subscriber, and missing that would silently demote long-standing supporters.
+ * Roles come from badges rather than a flags object. `founder` is an older
+ * subscriber badge, and a founder who is not also badged `subscriber` is still
+ * a subscriber, so missing it would silently demote long-standing supporters.
  */
 export function rolesFromBadges(badges: unknown, broadcasterUserId: string, chatterUserId: string): {
     isModerator: boolean;
@@ -49,9 +49,10 @@ export function rolesFromBadges(badges: unknown, broadcasterUserId: string, chat
 }
 
 /**
- * @param messageId the `Twitch-Eventsub-Message-Id` header — the delivery id, and
- * the dedup key. Deliberately *not* the payload's own `message_id`: a redelivery
- * repeats the delivery id, which is exactly what dedup needs to catch.
+ * @param messageId the `Twitch-Eventsub-Message-Id` header, which is the
+ * delivery id and the dedup key. Deliberately not the payload's own
+ * `message_id`, because a redelivery repeats the delivery id, which is exactly
+ * what dedup needs to catch.
  * @returns the normalized event, or null for a subscription type this build does
  * not handle.
  */

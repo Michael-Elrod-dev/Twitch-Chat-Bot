@@ -6,24 +6,20 @@ import type { ChatHistoryEntry } from '../../ai/promptBuilder.js';
 /**
  * Recent chat, for AI context.
  *
- * This is the dependency the AI port surfaced: the prompt builder needs the
- * last N messages, and nothing was writing `chat_messages` — the Phase-0
- * analytics pipeline that populated it has not been ported yet (P1-WP4.3). The
- * minimal write path lives here so the AI has context to work with, and the
- * full analytics pipeline replaces it rather than duplicating it.
+ * The prompt builder needs the last N messages, so this is the write path that
+ * populates `chat_messages` and the read path that serves them back.
  *
- * **Cost, stated plainly:** one INSERT per chat message per channel — commands
- * included, recorded with the `command` message type, and now fulfilled
- * redemptions too. (An earlier version of this comment said "non-command",
- * which was never true of the code below it: the chat pipeline records every
- * message it sees and only varies the type.) At a busy channel's ~1
- * message/second that is 86k rows/day; the table is indexed on
- * (channel_id, stream_id, message_time) and nothing prunes it yet. Retention is
- * a P1-WP4.3 decision, and it needs one — this grows without bound.
+ * The cost, stated plainly, is one INSERT per chat message per channel.
+ * Commands are included and recorded with the `command` message type, as are
+ * fulfilled redemptions. The chat pipeline records every message it sees and
+ * only varies the type. At a busy channel's roughly one message per second that
+ * is 86k rows per day. The table is indexed on
+ * (channel_id, stream_id, message_time) and nothing prunes it, so it grows
+ * without bound. Retention is tracked work and it is genuinely needed.
  */
 export class ChatHistoryRepository extends ChannelScopedRepository {
     /**
-     * @returns oldest-first, which is the order a transcript reads in — the
+     * @returns oldest-first, which is the order a transcript reads in. The
      * query takes newest-first to use the index, then reverses.
      */
     async recent(limit: number): Promise<ChatHistoryEntry[]> {
@@ -50,7 +46,7 @@ export class ChatHistoryRepository extends ChannelScopedRepository {
      * `twitch_user_id` references `viewers` with RESTRICT, so the viewer must
      * exist first. The chat pipeline already upserts the chatter's roles (and
      * therefore the viewer) before reaching here, which is why this can insert
-     * directly — but it is also why this must never run before that.
+     * directly, and it is also why this must never run before that.
      */
     async record(message: {
         twitchUserId: string;

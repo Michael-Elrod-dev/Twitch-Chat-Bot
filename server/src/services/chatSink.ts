@@ -3,10 +3,10 @@ import type { Logger } from '../logger.js';
 /**
  * The bot's outbound seam.
  *
- * Every reply the pipeline produces leaves through here, so the day the real
- * Helix sender arrives (P1-WP6) it is one implementation swap rather than a
- * search for `sendMessage` call sites. It also means rate limiting, truncation
- * and per-channel muting have exactly one place to live.
+ * Every reply the pipeline produces leaves through here, so changing where
+ * replies go is one implementation swap rather than a search for `sendMessage`
+ * call sites. It also means rate limiting, truncation and per-channel muting
+ * have exactly one place to live.
  */
 export interface OutboundMessage {
     channelId: string;

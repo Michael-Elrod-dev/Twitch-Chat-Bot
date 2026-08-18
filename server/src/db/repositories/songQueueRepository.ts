@@ -24,29 +24,20 @@ export type QueueChangedListener = (queueLength: number) => void;
 /**
  * The song queue, as the API sees it.
  *
- * Read and skip only. Adding a song is the redemption path's job — the API
+ * Read and skip only. Adding a song is the redemption path's job, and the API
  * deliberately does not offer a way to enqueue, because a track that entered
  * without a redemption would have no channel points behind it and nothing to
  * refund if it were skipped.
  *
- * **Every mutation notifies, as part of the write.** This is the same
- * construction the settings cache uses, applied to the same class of bug and for
- * the same reason: the queue changed and nobody was told.
+ * Every mutation notifies, as part of the write. This is the same construction
+ * the settings cache uses, for the same reason, which is that a queue nobody is
+ * told about looks to the app like a queue that never changed.
  *
- * The defect that forced it is worth keeping written down. `song_queue.updated`
- * had exactly ONE publisher — the HTTP skip route — so a song added by
- * redemption and a song handed to Spotify by the playback monitor both changed
- * the queue in silence. Production timeline from the owner's own test: the row
- * was written at `…456228` and handed off at `…577560`, so it sat in the table
- * for **121 seconds** while the app, which had subscribed correctly and was
- * waiting, was never told it existed. The owner reported the queue as never
- * appearing, and they were right.
- *
- * Making the listener a REQUIRED constructor argument is what stops that
- * recurring. An optional one, or a publish call beside each mutation, leaves
- * "someone adds a third way to change the queue and forgets" permanently
- * available — which is precisely what happened. Now the queue cannot be mutated
- * by anything that has not said where the news goes.
+ * The listener is a required constructor argument rather than an optional one,
+ * and rather than a publish call written beside each mutation. Either of those
+ * leaves "someone adds a third way to change the queue and forgets" permanently
+ * available. As written, the queue cannot be mutated by anything that has not
+ * said where the news goes.
  */
 export class SongQueueRepository extends ChannelScopedRepository {
     private readonly onChanged: QueueChangedListener;
@@ -101,7 +92,7 @@ export class SongQueueRepository extends ChannelScopedRepository {
     /**
      * Appends a requested track.
      *
-     * Only the redemption path calls this — there is deliberately no API route
+     * Only the redemption path calls this. There is deliberately no API route
      * to enqueue, because a track that entered without a redemption has no
      * channel points behind it and nothing to refund if it is skipped.
      */
@@ -174,7 +165,7 @@ export class SongQueueRepository extends ChannelScopedRepository {
     }
 
     /**
-     * Removes and returns the oldest queued track — the Stream Deck skip.
+     * Removes and returns the oldest queued track, which is the Stream Deck skip.
      *
      * @returns the removed song, or null when the queue was already empty.
      */

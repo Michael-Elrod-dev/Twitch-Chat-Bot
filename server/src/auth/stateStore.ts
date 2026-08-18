@@ -3,9 +3,9 @@ import type { CacheManager } from '../cache/cacheManager.js';
 import type { OAuthFlow } from '../twitch/oauth.js';
 
 /**
- * OAuth `state` — the CSRF defense for the callback.
+ * OAuth `state`, the CSRF defense for the callback.
  *
- * Without it, anyone could send the owner a crafted callback URL carrying *their*
+ * Without it, anyone could send the owner a crafted callback URL carrying their
  * authorization code and silently attach their Twitch account to this server.
  * The value is issued here, stored, and must be presented back exactly once.
  *
@@ -44,8 +44,8 @@ export interface StateStore {
  *
  * Redis is a cache and never a source of truth (house rule), but OAuth state is
  * genuinely ephemeral, so the fallback is a plain Map rather than the database.
- * The fallback is correct for a single process — which is what we run — and the
- * consequence of losing state is one retried consent screen.
+ * The fallback is correct for a single process, which is what runs here, and
+ * the consequence of losing state is one retried consent screen.
  */
 export function createStateStore(cache: CacheManager, memory = new Map<string, StateRecord>()): StateStore {
     const key = (state: string): string => `oauth:state:${state}`;

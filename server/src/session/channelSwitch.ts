@@ -9,7 +9,7 @@ import type { ChannelSession } from './channelSession.js';
  * `SessionManager` rather than a spy. The distinction this file exists to keep
  * is the one the whole master switch rests on: `status` is what the world did to
  * a channel, `enabled` is what its owner chose. Neither is inferred from the
- * other here — `listActive()` is the single place both are consulted, and it
+ * other here. `listActive()` is the single place both are consulted, and it
  * requires both to hold.
  */
 
@@ -26,12 +26,12 @@ export interface ChannelSwitchPorts {
 /**
  * Rebuilds one channel session in place.
  *
- * A session captures its capabilities at construction — the Spotify client, the
- * playback monitor, the redemption handlers, the bot identity — so a capability
- * acquired at **runtime** needs the session rebuilt before it takes effect.
- * Twice now a runtime grant has been applied only at boot (the bot identity in
- * P1-WP6.1, Spotify connect in P1-WP4.2), so every such path goes through this
- * one function rather than reinventing it.
+ * A session captures its capabilities at construction, meaning the Spotify
+ * client, the playback monitor, the redemption handlers and the bot identity,
+ * so a capability acquired at runtime needs the session rebuilt before it takes
+ * effect. Every path that grants one at runtime goes through this one function
+ * rather than reinventing it, because a grant applied only at boot leaves the
+ * running session without it.
  *
  * Removed and re-added individually rather than via `stopAll()`, which would
  * also stop the transport and close the ingest queue.
@@ -51,7 +51,7 @@ export async function rebuildChannelSession(
  * Makes the running server match the owner's master switch.
  *
  * Called after the flag is persisted, so `listActive()` already agrees about
- * this channel. Switching off is a plain removal — there is no
+ * this channel. Switching off is a plain removal. There is no
  * "stopped but registered" state to leave behind, and `remove` is a no-op when
  * nothing is running, which makes a repeated flip harmless.
  *

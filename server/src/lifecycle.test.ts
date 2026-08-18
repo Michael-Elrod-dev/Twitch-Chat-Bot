@@ -4,9 +4,8 @@ import { pino } from 'pino';
 import { createShutdownHandler, type Closeable } from './lifecycle.js';
 
 /**
- * Phase 0 learned this the hard way: a teardown that abandons itself partway
- * leaves the process half-alive. These tests pin the properties that mattered
- * then and matter more now that the process is long-lived.
+ * A teardown that abandons itself partway leaves the process half-alive. These
+ * tests pin the properties that keep that from happening.
  */
 
 const logger = pino({ level: 'silent' });
@@ -95,7 +94,7 @@ describe('graceful shutdown', () => {
 
         await shutdown();
 
-        // The Phase 0 lesson: one failing step must not abandon the teardown.
+        // One failing step must not abandon the teardown.
         expect(later).toHaveBeenCalled();
     });
 

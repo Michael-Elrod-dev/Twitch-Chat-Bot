@@ -2,9 +2,9 @@
  * Twitch failure modes, as distinct types.
  *
  * The distinction that matters most is "retry this" versus "a human has to go
- * and click something". Phase 0 learned that the hard way: a dead refresh token
- * produced the same generic error as a network blip, so the bot retried forever
- * and nobody noticed it had been disconnected until a stream went quiet.
+ * and click something". A dead refresh token that produced the same generic
+ * error as a network blip would have the bot retrying forever, with nobody
+ * noticing it had been disconnected until a stream went quiet.
  */
 
 /** Base class, so a caller can catch everything from this layer at once. */
@@ -16,8 +16,8 @@ export class TwitchError extends Error {
 }
 
 /**
- * The refresh token is dead. Nothing the process can do will fix it — the user
- * has to re-authorize.
+ * The refresh token is dead. Nothing the process can do will fix it, so the
+ * user has to re-authorize.
  *
  * Logged at error level with the channel named, never retried in a loop.
  */

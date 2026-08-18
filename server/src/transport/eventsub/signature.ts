@@ -42,11 +42,11 @@ export function verifySignature(input: SignatureInput & { signature: string }): 
 /**
  * Replay guard.
  *
- * Twitch's documented window is 10 minutes, and widening it is not laziness: a
- * retried delivery repeats the *original* timestamp, so a tight window rejects
+ * Twitch's documented window is 10 minutes, and widening it is not laziness. A
+ * retried delivery repeats the original timestamp, so a tight window rejects
  * precisely the redeliveries the retry policy exists to make. Dedup on the
- * message id — not a narrow clock window — is what stops a replayed event being
- * processed twice.
+ * message id, rather than a narrow clock window, is what stops a replayed event
+ * being processed twice.
  *
  * @returns false when the timestamp is unparseable or outside the window in
  * either direction (a future timestamp is as suspect as an ancient one).

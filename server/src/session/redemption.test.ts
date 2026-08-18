@@ -92,7 +92,7 @@ describe('RedemptionSettlement', () => {
         expect(update).toHaveBeenCalledWith('1001', 'broadcaster-token', 'reward-song', 'redemption-1', 'FULFILLED');
     });
 
-    describe('the refund retry (the P1-WP7 flag)', () => {
+    describe('the refund retry', () => {
         it('retries a rate-limited refund once rather than dropping it', async () => {
             // An unrefunded failed redemption is stolen channel points, and
             // "we were rate limited" is not something a viewer can act on.
@@ -232,8 +232,8 @@ describeDb('RedemptionPipeline', () => {
         });
 
         it('routes by reward id, not by title', async () => {
-            // A reward renamed in the dashboard keeps working - the Phase-0 bug
-            // this design exists to prevent.
+            // A reward renamed in the dashboard keeps working, which is what
+            // routing by id rather than by title buys.
             const outcome = await buildPipeline(alphaId).handle(redemption({
                 rewardId: 'alpha-quote-reward',
                 rewardTitle: 'Completely Different Name Now',
@@ -374,12 +374,10 @@ describeDb('RedemptionPipeline', () => {
     });
 
     /**
-     * The write that was never there.
+     * The redemption path's analytics write.
      *
-     * Before this, the redemption path recorded no analytics at all: the
-     * dashboard's "points redeemed" tile read zero forever, and so did every
-     * viewer's lifetime `redemption_count` — a column that had been in the
-     * schema, and empty, since it was added.
+     * Without it the dashboard's "points redeemed" tile reads zero forever, and
+     * so does every viewer's lifetime `redemption_count`.
      *
      * Against the real database on purpose. The risk in this write is not the
      * arithmetic, it is the foreign key: `chat_messages.twitch_user_id`
@@ -519,7 +517,7 @@ describeDb('RedemptionPipeline', () => {
 
         it('serves the viewer even when the analytics write fails', async () => {
             // Bookkeeping must never turn a successful redemption into a failed
-            // one — the same rule the chat path follows.
+            // one, which is the same rule the chat path follows.
             const pipeline = new RedemptionPipeline({
                 channelId: alphaId,
                 rewards: new ChannelRewardRepository(handle.db, alphaId),

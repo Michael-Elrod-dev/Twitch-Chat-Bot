@@ -9,13 +9,12 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
 /**
  * What happens when a viewer spends channel points.
  *
- * The Phase-0 discipline ported whole: **every redemption ends fulfilled or
- * refunded, never neither.** A redemption left in its default `UNFULFILLED`
- * state has taken the viewer's points and given nothing back, and nobody
- * notices until they complain.
+ * Every redemption ends fulfilled or refunded, never neither. A redemption left
+ * in its default `UNFULFILLED` state has taken the viewer's points and given
+ * nothing back, and nobody notices until they complain.
  *
- * Routing is by reward id. Phase 0 matched on the title string, so renaming a
- * reward in the Twitch dashboard silently broke it.
+ * Routing is by reward id, never by title string, so renaming a reward in the
+ * Twitch dashboard cannot break it.
  */
 
 export type RedemptionOutcome =
@@ -48,11 +47,9 @@ export interface RedemptionPipelineOptions {
     /**
      * Where a fulfilled redemption is counted.
      *
-     * Until this existed the redemption path wrote no analytics at all: the
-     * dashboard's "points redeemed" tile read zero forever, and so did every
-     * viewer's lifetime `redemption_count` — a column that has been in the
-     * schema, and empty, the whole time. Omitted means nothing is counted,
-     * which is what every existing caller without one gets.
+     * Without a sink the redemption path writes no analytics at all, so the
+     * dashboard's "points redeemed" tile reads zero forever and so does every
+     * viewer's lifetime `redemption_count`. Omitted means nothing is counted.
      */
     analytics?: AnalyticsSink;
     /**
@@ -64,10 +61,10 @@ export interface RedemptionPipelineOptions {
     /**
      * Presence for the redeemer.
      *
-     * Required before the history row: `chat_messages.twitch_user_id`
-     * references `viewers` with RESTRICT, and someone can redeem a reward
-     * without ever having typed in chat — so the path that records the
-     * redemption cannot assume the chat path already created them.
+     * Required before the history row, because `chat_messages.twitch_user_id`
+     * references `viewers` with RESTRICT and someone can redeem a reward
+     * without ever having typed in chat. The path that records the redemption
+     * cannot assume the chat path already created them.
      */
     roles?: ChannelRoleRepository;
     /** Buckets the redemption into the stream it happened in. */
@@ -138,11 +135,11 @@ export class RedemptionPipeline {
     /**
      * Counts a redemption the bot actually delivered.
      *
-     * **Fulfilled only, and managed rewards only.** A refund hands the points
-     * back, so counting one as "points redeemed" would report a spend that did
-     * not stick; and an unmanaged reward is the broadcaster's own — the pipeline
+     * Fulfilled only, and managed rewards only. A refund hands the points back,
+     * so counting one as "points redeemed" would report a spend that did not
+     * stick. An unmanaged reward is the broadcaster's own, and the pipeline
      * deliberately leaves those alone, so claiming them on the bot's dashboard
-     * would attribute someone else's reward economy to us.
+     * would attribute someone else's reward economy to this app.
      *
      * Best-effort throughout, like every other bookkeeping write on a live path:
      * the viewer has already been served, and losing a counter is not a reason
@@ -152,7 +149,7 @@ export class RedemptionPipeline {
         const o = this.options;
 
         try {
-            // Presence first — always, not only when history is configured.
+            // Presence first, always, not only when history is configured.
             // The viewers row is what the history insert's FK needs, and a
             // redeemer who has never chatted does not have one yet.
             await o.roles?.touchPresence(event.redeemer.twitchUserId, event.redeemer.login);

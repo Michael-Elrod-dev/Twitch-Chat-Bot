@@ -6,7 +6,7 @@ export interface QuoteRecord {
     quoteNumber: number;
     quoteText: string;
     author: string | null;
-    /** When it was saved. `!quote` prints the year, as Phase 0 did. */
+    /** When it was saved. `!quote` prints the year. */
     savedAt: Date;
 }
 
@@ -54,8 +54,7 @@ export class QuoteRepository extends ChannelScopedRepository {
      * Appends a quote, allocating the next per-channel number.
      *
      * The read-then-insert runs in one transaction with a row lock, so two
-     * concurrent saves cannot claim the same number - the Phase-0 P1-8 lesson,
-     * applied to the equivalent shape here.
+     * concurrent saves cannot claim the same number.
      */
     async add(quoteText: string, author: string | null, savedByTwitchUserId: string | null): Promise<number> {
         return this.db.transaction(async (tx) => {
@@ -63,8 +62,9 @@ export class QuoteRepository extends ChannelScopedRepository {
              * `saved_by_twitch_user_id` references `viewers` with RESTRICT, so
              * it can only name someone the system has actually seen. A quote
              * saved from the dashboard may come from an account that has never
-             * chatted here — the broadcaster's own, on a fresh channel — and
-             * attributing it would violate the constraint and fail the write.
+             * chatted here, the broadcaster's own on a fresh channel being the
+             * obvious case, and attributing it would violate the constraint and
+             * fail the write.
              *
              * Null is not data loss in that case, it is the accurate answer:
              * there is no viewer record to point at. The chat `!quote` path

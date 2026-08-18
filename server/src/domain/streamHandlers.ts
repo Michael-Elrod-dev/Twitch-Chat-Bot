@@ -4,10 +4,9 @@ import type { StreamService } from './streamService.js';
 /**
  * Stream-context commands.
  *
- * `!uptime` is the one Phase-0 command that could never be ported before now,
- * because it needs a stream to ask about. It answers from the recorded stream's
- * real start time rather than from process uptime — a mid-stream deploy must
- * not reset it.
+ * `!uptime` needs a stream to ask about. It answers from the recorded stream's
+ * real start time rather than from process uptime, because a mid-stream deploy
+ * must not reset it.
  */
 
 export interface StreamHandlerDeps {

@@ -9,8 +9,8 @@ import type { CacheManager } from './cacheManager.js';
  * reader already holds". Against a null cache a stale-read bug is unreachable:
  * the read falls through to the database and the test passes over the defect.
  *
- * So this stores what it is given, in a Map, and returns it again — Redis's
- * observable behavior for the operations we use.
+ * So this stores what it is given, in a Map, and returns it again, which is
+ * Redis's observable behavior for the operations in use here.
  *
  * **TTLs are recorded and never enforced.** Time does not pass inside a test,
  * and the interesting window is the one *before* expiry: a value that has aged
@@ -82,10 +82,10 @@ export class MapCache {
 export const asCacheManager = (cache: MapCache): CacheManager => cache as unknown as CacheManager;
 
 /**
- * A cache that never holds anything — every read is a miss, every write is
- * discarded. What a suite wants when the cache is scaffolding rather than the
- * subject: reads fall through to the database and assertions are about the
- * data, not about staleness.
+ * A cache that never holds anything. Every read is a miss and every write is
+ * discarded. This is what a suite wants when the cache is scaffolding rather
+ * than the subject, so reads fall through to the database and assertions are
+ * about the data, not about staleness.
  *
  * Exported rather than shared by default. It is opt-in per call site precisely
  * so it cannot quietly change what a test that did not ask for it observes.

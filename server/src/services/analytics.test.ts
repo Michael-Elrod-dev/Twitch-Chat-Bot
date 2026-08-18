@@ -98,7 +98,7 @@ describeDb('chat totals', () => {
     it('keeps one viewer totals separate per channel', async () => {
         /*
          * The same person chats in both channels. Their totals are a property
-         * of the person *in a channel* — one shared row would let either
+         * of the person in a channel. One shared row would let either
          * broadcaster read the other's engagement numbers.
          */
         await sinkFor(alphaId).recordInteraction(alphaId, message('shared', 'bothchannels'), 'message');
@@ -136,7 +136,7 @@ describeDb('chat totals', () => {
 
     it('does NOT roll the stream message count for a redemption', async () => {
         // Spending channel points is an interaction, and it belongs in the
-        // viewer's totals — but it is not a line of chat, and counting it as one
+        // viewer's totals, but it is not a line of chat, and counting it as one
         // would inflate the stream's message figure by every reward redeemed.
         const streamRepository = new StreamRepository(handle.db, alphaId);
         const open = await streamRepository.findOpen();
@@ -164,8 +164,8 @@ describeDb('chat totals', () => {
     });
 
     it('reports the real numbers through the analytics summary', async () => {
-        // The end of the wire: the API surface that has been returning
-        // structurally-correct zeroes since P1-WP7 now returns history.
+        // The end of the wire. The API surface returns real history rather than
+        // structurally-correct zeroes.
         const summary = await new AnalyticsRepository(handle.db, betaId).summary();
 
         expect(summary.messages).toBeGreaterThan(0);

@@ -33,13 +33,14 @@ export interface EventSubWebhookOptions {
 /**
  * The EventSub webhook endpoint.
  *
- * The order of checks is the security contract, and it is deliberate: nothing
+ * The order of checks is the security contract and it is deliberate. Nothing
  * that could act on attacker-controlled data runs before the signature is
  * proven. Parsing happens after verification, not before.
  *
- * The handler never processes an event inline — it enqueues and returns. Twitch
- * revokes subscriptions whose endpoint is repeatedly slow (facts §3), so doing
- * real work here would eventually turn a slow database into a dead bot.
+ * The handler never processes an event inline. It enqueues and returns. Twitch
+ * revokes subscriptions whose endpoint is repeatedly slow
+ * (docs/TWITCH_PLATFORM_FACTS.md section 3), so doing real work here would
+ * eventually turn a slow database into a dead bot.
  */
 export function createEventSubRouter(options: EventSubWebhookOptions): Router {
     const { secret, logger, maxSkewMs, onEvent, onRevocation, path = EVENTSUB_WEBHOOK_PATH } = options;
@@ -85,8 +86,8 @@ export function createEventSubRouter(options: EventSubWebhookOptions): Router {
             return;
         }
 
-        // Signature first, freshness second — an unsigned request does not get
-        // to tell us what time it is.
+        // Signature first, freshness second. An unsigned request does not get
+        // to say what time it is.
         if (!isTimestampFresh(timestamp, maxSkewMs)) {
             logger.warn({ messageId, timestamp }, 'Webhook timestamp outside the accepted window');
             res.status(403).send('stale timestamp');

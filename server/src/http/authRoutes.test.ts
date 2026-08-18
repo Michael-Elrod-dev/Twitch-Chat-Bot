@@ -151,11 +151,10 @@ function buildHarness(overrides: {
     /*
      * The REAL API router, not a stand-in.
      *
-     * These tests are about the auth chain — a forged token, an expired one, a
-     * server with no signing key — but the thing the chain is protecting has to
-     * be the thing production actually serves, or the test proves the guard on
-     * a door nobody uses. The WP6 stub that used to sit here had already
-     * drifted from `/me`'s real shape by the time it was removed.
+     * These tests are about the auth chain, meaning a forged token, an expired
+     * one, and a server with no signing key. The thing the chain is protecting
+     * has to be the thing production actually serves, or the test proves the
+     * guard on a door nobody uses. A stub here drifts from `/me`'s real shape.
      */
     const apiRouter = Router();
     apiRouter.use('/api/v1', createRequireJwt(

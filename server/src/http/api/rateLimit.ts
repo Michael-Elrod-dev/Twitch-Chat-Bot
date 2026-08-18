@@ -5,7 +5,7 @@ import type { ApiRequest } from './middleware.js';
 /**
  * Per-principal sliding-window rate limiting.
  *
- * Keyed on the authenticated principal — a user or an API key — rather than an
+ * Keyed on the authenticated principal, a user or an API key, rather than on an
  * IP address. Behind Caddy every request shares one source address, so an
  * IP-keyed limiter would either throttle the whole tenancy at once or trust a
  * forwarded header the client controls. The credential is the thing we actually

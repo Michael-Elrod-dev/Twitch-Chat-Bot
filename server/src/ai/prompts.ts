@@ -1,12 +1,10 @@
 /**
- * Prompt assets, ported verbatim from Phase 0.
+ * Prompt assets.
  *
- * The text is the product of a lot of iteration against real chat, and it is
- * deliberately unchanged: rewording a system prompt changes the bot's voice,
+ * The text is the product of a lot of iteration against real chat and is
+ * deliberately left alone. Rewording a system prompt changes the bot's voice,
  * which is a content decision and not an engineering one. Anything that needs
  * new wording gets flagged for a content pass rather than invented here.
- *
- * Source: src/ai/prompts/{chat,advice,roast}Prompt.js
  */
 
 export const CHAT_SYSTEM_PROMPT = `You're a chill Twitch chat bot. Respond like a regular viewer who's knowledgeable but not trying too
@@ -49,10 +47,8 @@ export const GAME_PROMPTS: Record<GamePromptType, string> = {
 };
 
 /**
- * How much chat history each mode gets.
- *
- * Phase 0's `aiSettings.claude.chatHistoryLimits`: conversation needs context,
- * the game commands are about one person and get none.
+ * How much chat history each mode gets. Conversation needs context, and the
+ * game commands are about one person and get none.
  */
 export const CHAT_HISTORY_LIMITS: Record<'chat' | GamePromptType, number> = {
     chat: 50,

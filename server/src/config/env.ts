@@ -2,16 +2,15 @@ import { z } from 'zod';
 import { parseEncryptionKey } from '../crypto/tokenCrypto.js';
 
 /**
- * The typed control panel. Phase 0's config.js was the developer's dashboard;
- * this is the same idea with the guarantee that a misconfigured deployment fails
- * at boot with a readable report, rather than at 3am with `undefined` in a URL.
+ * The typed control panel. A misconfigured deployment fails at boot with a
+ * readable report, rather than at 3am with `undefined` in a URL.
  */
 
 const port = z.coerce.number().int().min(1).max(65535);
 
 /**
  * A deliberately obvious placeholder so `docker compose up` works with no
- * configuration at all. Production refuses to start on it — see loadEnv.
+ * configuration at all. Production refuses to start on it, in loadEnv.
  */
 export const DEV_EVENTSUB_SECRET = 'dev-only-eventsub-secret-change-me';
 
@@ -21,14 +20,14 @@ const envSchema = z.object({
     /** Port the HTTP server binds. */
     PORT: port.default(3000),
 
-    /** Postgres connection string. Location-agnostic by design (see PHASE1_DESIGN §4.1 guardrail 1). */
+    /** Postgres connection string. Location-agnostic by design (decision 8, guardrail 1). */
     DATABASE_URL: z.string({ error: 'a Postgres connection string is required' }).min(1),
 
     /**
      * Credentials used for migrations only, opened at boot and closed again.
      *
-     * Guardrail 3 says the application connects as a least-privilege role — but
-     * ALTER TABLE requires *ownership*, which a least-privilege role must not
+     * Guardrail 3 says the application connects as a least-privilege role, but
+     * ALTER TABLE requires ownership, which a least-privilege role must not
      * have. Splitting the two is what lets runtime hold only DML rights while
      * migrations still work. Unset means migrations run on DATABASE_URL, which
      * is the right default for development where both are the same user.
@@ -111,8 +110,8 @@ const envSchema = z.object({
      * How often subscriptions are reconciled in the background. 0 disables it.
      *
      * Reconciliation is otherwise only event-driven, which leaves the enable
-     * path with no retry: if the creates fail, the channel is left running with
-     * no subscriptions — on, and silent — until something else changes. Fifteen
+     * path with no retry. If the creates fail, the channel is left running with
+     * no subscriptions, on and silent, until something else changes. Fifteen
      * minutes is slow enough to be free (one list call per tick) and fast
      * enough that nobody sits through a broken bot for long.
      */
@@ -207,7 +206,7 @@ export class ConfigError extends Error {
  */
 /**
  * Shells, Docker Compose and CI all render an unset variable as an empty string
- * rather than omitting it, so `FOO=` must mean "not set" — otherwise an optional
+ * rather than omitting it, so `FOO=` must mean "not set". Otherwise an optional
  * field fails validation for a variable nobody actually configured.
  */
 function stripEmpty(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

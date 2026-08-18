@@ -228,7 +228,7 @@ describeDb('schema v2 against a real Postgres', () => {
             expect(row?.user_level).toBe('everyone');
         });
 
-        it('accepts the vip level added in Phase 0 WP-7.1', async () => {
+        it('accepts the vip level', async () => {
             const channel = await makeChannel('vip');
             await expect(
                 sql`insert into commands (channel_id, name, user_level) values (${channel}, '!v', 'vip')`
@@ -247,8 +247,8 @@ describeDb('schema v2 against a real Postgres', () => {
             const userId = `api-${Date.now()}`;
             await makeViewer(userId);
 
-            // The Phase-0 schema had ENUM('claude'); adding a provider needed a
-            // migration. A varchar means it does not.
+            // A varchar rather than an enum, so adding a provider needs no
+            // migration.
             await expect(
                 sql`insert into api_usage (channel_id, twitch_user_id, api_type, usage_count) values (${channel}, ${userId}, 'some-future-model', 1)`
             ).resolves.toBeDefined();

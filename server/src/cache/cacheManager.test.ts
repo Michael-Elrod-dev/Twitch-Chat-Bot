@@ -5,9 +5,8 @@ import { channelKey, CacheKeys } from './keys.js';
 import type { RedisHandle } from './redis.js';
 
 /**
- * Redis-down fallback is house law: every method degrades to a miss and none of
- * them throw. Phase 0 proved a bot that survives a Redis outage; that guarantee
- * does not get to weaken because the code is now TypeScript.
+ * Redis-down fallback is house law. Every method degrades to a miss and none of
+ * them throw, so a Redis outage costs performance and nothing else.
  */
 
 const logger = pino({ level: 'silent' });
@@ -105,7 +104,7 @@ describe('CacheManager', () => {
             client.hget.mockResolvedValue(null);
             await cache.getHashField('k', 'f');
 
-            // Phase 0 WP-7 trim (a): every non-matching chat message used to pay
+            // Without the existence check, every non-matching chat message pays
             // for pulling the entire hash back.
             expect(client.exists).toHaveBeenCalledWith('k');
             expect((client as unknown as { hgetall?: unknown }).hgetall).toBeUndefined();

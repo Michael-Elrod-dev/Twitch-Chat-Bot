@@ -1,7 +1,7 @@
 /**
- * The seam the real Helix client drops into (P1-WP6, when tokens exist).
+ * The seam the real Helix client drops into.
  *
- * Deliberately minimal: the reconciler needs exactly three operations, and a
+ * Deliberately minimal. The reconciler needs exactly three operations, and a
  * smaller interface is a smaller thing to fake honestly.
  */
 
@@ -35,8 +35,9 @@ export interface HelixClient {
 }
 
 /**
- * In-memory Helix. Used by the reconciler tests and, until P1-WP6, by the
- * running server — where the reconciler runs in dry-run mode and never calls it.
+ * In-memory Helix. Used by the reconciler tests, and by a running server with
+ * no Helix credentials, where the reconciler runs in dry-run mode and never
+ * calls it.
  */
 export class FakeHelixClient implements HelixClient {
     private readonly subscriptions = new Map<string, EventSubSubscription>();

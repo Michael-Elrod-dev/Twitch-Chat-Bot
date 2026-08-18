@@ -22,8 +22,8 @@ import { NoopAnalyticsSink } from '../services/analytics.js';
 import type { CacheManager } from '../cache/cacheManager.js';
 
 /**
- * THE REALTIME CENTREPIECE: a signed EventSub delivery goes in, and a
- * WebSocket client receives it — **only** if it belongs to that channel.
+ * The realtime centerpiece. A signed EventSub delivery goes in, and a WebSocket
+ * client receives it, only if it belongs to that channel.
  *
  * The fan-out is where a multi-tenant realtime feed leaks. A socket is bound to
  * one channel at the upgrade and there is no subscribe message, so these tests
@@ -260,9 +260,9 @@ describeDb('realtime feed', () => {
             /*
              * A broadcaster's own messages do not reliably carry the badge, so
              * the normalizer derives it from the id. This asserts the role
-             * follows that derivation rather than the badge list — otherwise
-             * the owner's own lines would render as ordinary viewers in their
-             * own dashboard.
+             * follows that derivation rather than the badge list. Otherwise the
+             * owner's own lines would render as ordinary viewers in their own
+             * dashboard.
              */
             const client = await connect(alpha.token);
             await client.waitFor('hello');
@@ -343,10 +343,10 @@ describeDb('realtime feed', () => {
         it('does not mark a reward-attached viewer line as the bot', async () => {
             /*
              * The distinction `fromBot` exists for. A reward-attached message
-             * is `skipped` too — it arrives again as a redemption, so the chat
-             * path declines it — but it is a VIEWER's line. Deriving the marker
-             * from `skipped` alone would put the bot's wash on it and tell the
-             * broadcaster their viewer was the bot.
+             * is `skipped` too, because it arrives again as a redemption and the
+             * chat path declines it, but it is a viewer's line. Deriving the
+             * marker from `skipped` alone would put the bot's wash on it and
+             * tell the broadcaster their viewer was the bot.
              */
             const client = await connect(alpha.token);
             await client.waitFor('hello');
@@ -413,7 +413,7 @@ describeDb('realtime feed', () => {
          * moment, so a leak is visible in the payload rather than only in the
          * count: alpha runs a command, beta just chats. If an event crossed,
          * beta's dashboard would put a `CMD` chip on a line its viewer never
-         * sent — a wrong story about someone else's channel, which is worse
+         * sent, which is a wrong story about someone else's channel and worse
          * than a missing line.
          */
         it('never carries one channel outcome onto another channel feed', async () => {

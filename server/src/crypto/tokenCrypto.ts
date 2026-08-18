@@ -3,13 +3,13 @@ import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from '
 /**
  * At-rest encryption for OAuth tokens.
  *
- * A leaked database dump is the threat being defended against — Phase 0 stored
- * token values in plaintext, and the recovered production dump is exactly why
- * that matters. AES-256-GCM rather than CBC because it authenticates as well as
- * encrypts: a tampered ciphertext fails loudly instead of decrypting to garbage
- * that some caller then sends to Twitch.
+ * A leaked database dump is the threat being defended against, and the
+ * recovered production dump is exactly why that matters. AES-256-GCM rather
+ * than CBC because it authenticates as well as encrypts, so a tampered
+ * ciphertext fails loudly instead of decrypting to garbage that some caller
+ * then sends to Twitch.
  *
- * NOTHING in this module ever logs, returns, or embeds a plaintext value in an
+ * Nothing in this module ever logs, returns, or embeds a plaintext value in an
  * error message. Every failure says what went wrong and nothing about what was
  * being protected.
  */
@@ -33,7 +33,8 @@ export class TokenCryptoError extends Error {
  *
  * Accepts base64 or hex so an operator can paste whatever their key generator
  * produced, and rejects anything that is not exactly 32 bytes rather than
- * silently padding — a short key would be a quiet downgrade of the whole scheme.
+ * silently padding, because a short key would be a quiet downgrade of the whole
+ * scheme.
  *
  * @throws {TokenCryptoError} never including the key material.
  */
@@ -64,7 +65,7 @@ export function parseEncryptionKey(configured: string): Buffer {
  * @param purpose bound into the ciphertext as additional authenticated data, so
  * a value cannot be moved between columns. An access token pasted into the
  * refresh-token column fails to decrypt rather than being used as a refresh
- * token — cheap, and it turns a class of mistakes into a loud error.
+ * token. That is cheap, and it turns a class of mistakes into a loud error.
  */
 export function encryptToken(plaintext: string, key: Buffer, purpose: string): string {
     if (key.length !== KEY_BYTES) {

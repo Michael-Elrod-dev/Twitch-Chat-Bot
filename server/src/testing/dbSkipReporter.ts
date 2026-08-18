@@ -3,23 +3,20 @@ import type { Reporter, TestModule } from 'vitest/node';
 /**
  * Makes database-gated skips impossible to miss, and impossible in CI.
  *
- * ## Why this exists
+ * The database-backed suites self-skip without `TEST_DATABASE_URL` so a
+ * contributor without Docker can still run the suite. The cost is that
+ * `vitest run` prints a confident green while a large share of the tests never
+ * ran, which can turn a reintroduction proof into no proof at all. A defect can
+ * be reintroduced, the suite report a small green number, and the tests that
+ * would have caught it have silently skipped.
  *
- * The DB-backed suites self-skip without `TEST_DATABASE_URL` so a contributor
- * without Docker can still run the suite. The cost of that kindness is that
- * `vitest run` prints a confident green while **181 of 693 tests never ran** —
- * and during P1-WP4.3 that produced a *reintroduction proof that proved
- * nothing*: a defect was reintroduced, the suite reported "12 passed", and the
- * tests that would have caught it had silently skipped.
+ * The reintroduction protocol is this project's proof standard, and a protocol
+ * whose evidence can quietly evaporate is not a protocol. So:
  *
- * That aims squarely at the reintroduction protocol, which is this project's
- * proof standard. A protocol whose evidence can quietly evaporate is not a
- * protocol, so:
- *
- *  - **Locally**, a missing `TEST_DATABASE_URL` prints a banner naming the
- *    exact number of tests that did not run, and how to run them.
- *  - **In CI**, `REQUIRE_DB_TESTS=1` turns any skip into a failure, so the gap
- *    can never migrate from a laptop into the pipeline.
+ *  - Locally, a missing `TEST_DATABASE_URL` prints a banner naming the exact
+ *    number of tests that did not run, and how to run them.
+ *  - In CI, `REQUIRE_DB_TESTS=1` turns any skip into a failure, so the gap can
+ *    never migrate from a laptop into the pipeline.
  */
 
 const ESC = String.fromCharCode(27);

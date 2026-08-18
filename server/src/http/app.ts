@@ -8,10 +8,10 @@ export interface AppOptions {
     version: string;
     probes?: ReadinessProbe[];
     /**
-     * Routers that need the unparsed request body — today, only the EventSub
-     * webhook, whose HMAC covers the exact bytes Twitch sent.
+     * Routers that need the unparsed request body. Today that is only the
+     * EventSub webhook, whose HMAC covers the exact bytes Twitch sent.
      *
-     * They mount *before* the global JSON parser deliberately. Once
+     * They mount before the global JSON parser deliberately. Once
      * `express.json()` has consumed the stream, the raw bytes are gone, and a
      * signature check against a re-serialized parse would fail on nothing worse
      * than a difference in key order.

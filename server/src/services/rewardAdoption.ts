@@ -6,19 +6,17 @@ import type { ChannelRewardRepository, RewardKind } from '../db/repositories/cha
 /**
  * Binds the bot's reward kinds to real Twitch rewards.
  *
- * The P1-WP3 finding made operational: only rewards **this application created**
- * can have their redemption status updated, so a reward we cannot manage is one
- * we must never route. `only_manageable_rewards=true` is the filter that decides
- * — and the WP6 live check confirmed the owner's existing production rewards
- * pass it, because the Phase-0 bot created them under this same client id.
+ * Only rewards this application created can have their redemption status
+ * updated, so a reward that cannot be managed is one that must never be routed.
+ * `only_manageable_rewards=true` is the filter that decides. Rewards created
+ * under the same client id pass it, which is why the owner's existing
+ * production rewards are adoptable.
  *
- * Adoption matches on title **once**, at bind time, and stores the id. From
- * then on routing is by id alone, so renaming a reward afterwards is harmless.
- * That is the whole difference from Phase 0, which re-matched the title on
- * every redemption.
+ * Adoption matches on title once, at bind time, and stores the id. From then on
+ * routing is by id alone, so renaming a reward afterwards is harmless.
  */
 
-/** Titles the Phase-0 bot used. Matched case-insensitively, once, at adoption. */
+/** The reward titles in use. Matched case-insensitively, once, at adoption. */
 export const KNOWN_REWARD_TITLES: Record<RewardKind, string[]> = {
     song_request: ['song request'],
     skip_queue: ['skip song queue', 'skip queue'],

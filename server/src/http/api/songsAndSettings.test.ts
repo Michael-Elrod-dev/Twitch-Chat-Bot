@@ -24,11 +24,11 @@ import type { LiveSongQueueUpdated } from '@almosthadai/shared';
  *
  * Two rules run through the whole file:
  *
- *  - **Every read is checked against a second channel.** Not because these
- *    routes take an id — none of them does — but because "no route takes an id"
- *    is a property that has to keep being true as routes are added, and a test
- *    per route is what keeps it true.
- *  - **The Spotify surface is a seam, and the double here is a real one.** It
+ *  - Every read is checked against a second channel. Not because these routes
+ *    take an id, since none of them does, but because "no route takes an id" is
+ *    a property that has to keep being true as routes are added, and a test per
+ *    route is what keeps it true.
+ *  - The Spotify surface is a seam, and the double here is a real one. It
  *    records what it was asked and answers from state a test sets, so a route
  *    that stopped calling it, or called it with the wrong playlist, fails.
  */
@@ -309,8 +309,8 @@ describeDb('songs, analytics and settings', () => {
 
             await as(alpha, request(app).patch('/api/v1/me/settings').send({ aiEnabled: false })).expect(200);
 
-            // Re-resolving on every unrelated save would hit Spotify — and
-            // create a duplicate playlist — for a field nobody edited.
+            // Re-resolving on every unrelated save would hit Spotify, and create
+            // a duplicate playlist, for a field nobody edited.
             expect(resolvedNames).toEqual([]);
             const stored = await createChannelRepositories(handle.db, alpha.id).settings.get();
             expect(stored?.requestsPlaylistId).toBe('resolved-playlist');
@@ -346,8 +346,8 @@ describeDb('songs, analytics and settings', () => {
         });
 
         it('reports no playlist when the one we recorded has been deleted at Spotify', async () => {
-            // The surface knows nothing about this id — a playlist the streamer
-            // deleted in the Spotify app. The card must not claim a count.
+            // The surface knows nothing about this id, which is a playlist the
+            // streamer deleted in the Spotify app. The card must not claim a count.
             await as(alpha, request(app).patch('/api/v1/me/settings').send({
                 requestsPlaylistName: 'Gone'
             })).expect(200);
@@ -374,7 +374,7 @@ describeDb('songs, analytics and settings', () => {
             await as(beta, request(app).get('/api/v1/spotify')).expect(200);
 
             // Beta has no playlist of its own, so beta's surface must have been
-            // asked nothing — and alpha's must not have been used at all.
+            // asked nothing, and alpha's must not have been used at all.
             expect(surfaces.get(beta.id)!.playlistLookups).toEqual([]);
             expect(surfaces.get(alpha.id)!.playlistLookups).toEqual([]);
         });
@@ -487,12 +487,10 @@ describeDb('songs, analytics and settings', () => {
         };
 
         /**
-         * THE REINTRODUCTION TARGET.
-         *
-         * Skip must advance the *player* and never touch the waiting queue. Those
-         * were conflated once already — the design drew Skip beside the playing
-         * track while the only route available dropped the next request — so this
-         * asserts both halves at once: the player was told, and the queue that a
+         * Skip must advance the player and never touch the waiting queue. The
+         * two are easy to conflate, because Skip sits beside the playing track
+         * while a route that drops the next request looks similar, so this
+         * asserts both halves at once. The player was told, and the queue that a
          * viewer paid into is exactly as it was.
          */
         it('advances the player and leaves every queued row alone', async () => {
@@ -551,12 +549,9 @@ describeDb('songs, analytics and settings', () => {
         };
 
         /**
-         * THE DEFECT THE OWNER FOUND.
-         *
-         * A song added by redemption changed the queue and announced nothing, so
-         * the app — subscribed and waiting — never learned the row existed. In
-         * production it sat in the table for 121 seconds and the owner reported,
-         * correctly, that the queue never appeared.
+         * A song added by redemption must announce the change. Without it the
+         * app stays subscribed and waiting and never learns the row exists, so
+         * the queue simply never appears.
          *
          * This is the assertion that was missing. Every other test in this block
          * exercised a *skip*, which was the one path that did publish, so the
@@ -674,9 +669,9 @@ describeDb('songs, analytics and settings', () => {
          * number of messages in each.
          *
          * The point of the arrangement is that no two ranges can agree. An
-         * assertion on the echoed `range` field alone proved nothing — it
-         * passed against a repository that ignored the range entirely, which
-         * is how this test came to exist in its second form.
+         * assertion on the echoed `range` field alone would prove nothing,
+         * because it passes against a repository that ignores the range
+         * entirely.
          */
         const seedTwoStreams = async (): Promise<void> => {
             await handle.sql`
@@ -841,8 +836,8 @@ describeDb('songs, analytics and settings', () => {
             const analytics = await as(alpha, request(app)
                 .get('/api/v1/analytics/summary?range=this_stream')).expect(200);
 
-            // The agreement itself is the assertion — one screen's figure equal
-            // to the other's, not each equal to a number typed here.
+            // The agreement itself is the assertion. One screen's figure equals
+            // the other's, rather than each equalling a number typed here.
             expect(analytics.body.data.messages).toBe(dashboard.body.data.numbers.messages);
         });
 

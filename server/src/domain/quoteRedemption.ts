@@ -3,10 +3,9 @@ import type { QuoteRepository } from '../db/repositories/quoteRepository.js';
 import type { Logger } from '../logger.js';
 
 /**
- * `Add a quote`, ported from Phase 0 with its format validation and its
- * refund-on-malformed behavior.
+ * `Add a quote`, with format validation and refund-on-malformed behavior.
  *
- * The format is strict on purpose: a quote is recalled later by number and
+ * The format is strict on purpose. A quote is recalled later by number and
  * displayed verbatim, so a malformed one is a permanent piece of junk in the
  * channel's collection. Refusing it and giving the points back is better than
  * storing something nobody wants and cannot easily remove.

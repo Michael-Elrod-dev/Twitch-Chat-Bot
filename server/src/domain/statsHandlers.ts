@@ -3,23 +3,21 @@ import type { AnalyticsRepository } from '../db/repositories/analyticsRepository
 import type { ChannelRoleRepository } from '../db/repositories/channelRoleRepository.js';
 
 /**
- * `!chats`, `!topchats` and `!follow` — the last of the Phase-0 commands.
+ * `!chats`, `!topchats` and `!follow`.
  *
- * All three read data this channel already owns. Two notes on faithfulness:
+ * All three read data this channel already owns. Two notes on where that data
+ * comes from:
  *
- *  - **`!topchats` changes its source, not its answer.** Phase 0 grouped and
- *    counted the whole `chat_messages` table on every invocation. That table
- *    grows without bound and the owner has deferred pruning it, so the cost of
- *    that query only ever goes up. `chat_totals` is the aggregate that exists
- *    for exactly this question.
- *  - **`!follow` was never a Helix call.** The legacy handler read
- *    `viewers.followed_at` straight from its own database, so it could only
- *    answer for people it had already recorded. This ports that behavior
- *    against `channel_roles.followed_at`, which is the same fact made
- *    channel-relative — you can follow one channel and not another.
+ *  - `!topchats` reads `chat_totals`, the aggregate that exists for exactly
+ *    this question. Grouping and counting the whole `chat_messages` table on
+ *    every invocation would cost more every day, because that table grows
+ *    without bound and nothing prunes it.
+ *  - `!follow` is not a Helix call. It reads `channel_roles.followed_at`, so it
+ *    answers only for people this channel has recorded, and it is
+ *    channel-relative, because someone can follow one channel and not another.
  */
 
-/** Phase 0 said "Top 5 Most Active Viewers". */
+/** The chat reply reads "Top 5 Most Active Viewers". */
 const TOP_N = 5;
 
 export interface StatsHandlerDeps {
@@ -27,7 +25,7 @@ export interface StatsHandlerDeps {
     roles: ChannelRoleRepository;
 }
 
-/** `!chats`, `!follow @name` — the target is the argument, or the caller. */
+/** `!chats` and `!follow @name`. The target is the argument, or the caller. */
 function resolveTarget(context: HandlerContext): string {
     const requested = (context.args[0] ?? '').replace('@', '').trim();
     return requested === '' ? context.chatter.login : requested;
@@ -99,7 +97,7 @@ export function createStatsHandlers(deps: StatsHandlerDeps): HandlerRegistry {
     };
 }
 
-/** MM/DD/YY, as Phase 0 rendered it. */
+/** MM/DD/YY. */
 function formatDate(at: Date): string {
     const month = String(at.getMonth() + 1).padStart(2, '0');
     const day = String(at.getDate()).padStart(2, '0');
@@ -107,8 +105,8 @@ function formatDate(at: Date): string {
 }
 
 /**
- * "1 year, 2 days, 3 hours" — Phase 0's shape, including its rule that a
- * duration under a second still reads as "0 seconds" rather than empty.
+ * "1 year, 2 days, 3 hours". A duration under a second still reads as
+ * "0 seconds" rather than empty.
  */
 function formatElapsed(elapsedMs: number): string {
     const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));

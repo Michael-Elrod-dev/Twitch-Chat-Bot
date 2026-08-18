@@ -213,15 +213,15 @@ describeDb('repositories', () => {
                 isModerator: false, isVip: true, isSubscriber: false, isBroadcaster: false
             });
 
-            // The correction to Phase 0's global flags: a mod in one channel is
-            // not a mod in the next.
+            // Roles are channel-relative. A mod in one channel is not a mod in
+            // the next.
             expect(await repoA.get(userId)).toMatchObject({ isModerator: true, isVip: false });
             expect(await repoB.get(userId)).toMatchObject({ isModerator: false, isVip: true });
         });
 
         it('touchPresence does NOT clear roles', async () => {
-            // Phase 0's P1-1: a presence poll wrote default-false roles once a
-            // minute and wiped everything the chat path had learned.
+            // A presence poll that wrote default-false roles would wipe
+            // everything the chat path had learned, once a minute.
             const repo = new ChannelRoleRepository(handle.db, channelA);
             await repo.upsertRoles(userId, 'someone', {
                 isModerator: true, isVip: true, isSubscriber: false, isBroadcaster: false

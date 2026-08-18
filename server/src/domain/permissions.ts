@@ -5,9 +5,8 @@ export const USER_LEVELS = ['everyone', 'vip', 'mod', 'broadcaster'] as const;
 export type UserLevel = (typeof USER_LEVELS)[number];
 
 /**
- * Ordered ranks: a command at a given level runs for that level and everything
- * above it. Ported verbatim from Phase 0 WP-7.1, including the reasoning behind
- * the fail-open default below.
+ * Ordered ranks. A command at a given level runs for that level and everything
+ * above it.
  */
 const RANK: Record<UserLevel, number> = {
     everyone: 0,
@@ -68,10 +67,10 @@ export function isUserLevel(value: string): value is UserLevel {
 /**
  * The single place permission is decided.
  *
- * An unrecognized level resolves to `everyone` — deliberately fail-OPEN. The
- * database CHECK constraint added in P1-WP3 is what keeps bad values out of the
- * data path; failing closed here would instead disable a command on a code typo,
- * which is the worse outcome. (Phase 0 WP-7.1, decision recorded by the lead.)
+ * An unrecognized level resolves to `everyone`, which is deliberately fail-open.
+ * The database CHECK constraint is what keeps bad values out of the data path,
+ * and failing closed here would instead disable a command on a code typo, which
+ * is the worse outcome.
  */
 export function hasPermission(requiredLevel: string, roles: ChatterRoles): boolean {
     const required = isUserLevel(requiredLevel) ? RANK[requiredLevel] : RANK.everyone;

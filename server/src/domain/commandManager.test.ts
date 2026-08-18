@@ -6,10 +6,9 @@ import type { CacheManager } from '../cache/cacheManager.js';
 import type { HandlerRegistry } from './handlers.js';
 
 /**
- * Ported behaviors from Phase 0 tests/commands/commandManager.test.js and
- * tests/commands/permissions.test.js — specifically the WP-6 task 9 findings:
- * one enforcement point, declaration beats the database row, and the row gets
- * corrected at load.
+ * Three properties, each pinned here. Permission has one enforcement point, a
+ * handler's declaration beats the database row, and the row gets corrected at
+ * load.
  */
 
 const logger = pino({ level: 'silent' });
@@ -29,7 +28,7 @@ const makeRepo = (rows: CommandRecord[]) => {
         }),
         // Mutates the store like its sibling does. A no-op stub here would let
         // `load` write the same correction on every call and no test would see
-        // it — the reconciliation is only observable if the row changes.
+        // it, because the reconciliation is only observable if the row changes.
         updateDescription: vi.fn(async (name: string, description: string) => {
             const row = store.find((r) => r.name === name);
             if (row) row.description = description;
@@ -138,7 +137,7 @@ describe('CommandManager', () => {
              * The reply column has nothing else to show for a handler-backed
              * row. The description reaches the API through the row rather than
              * through the registry, because the API has no registry to
-             * consult — the handlers are built per session, and a channel whose
+             * consult. The handlers are built per session, and a channel whose
              * bot is switched off has none.
              */
             expect(repository.updateDescription).toHaveBeenCalledWith('!skip', 'A test handler');

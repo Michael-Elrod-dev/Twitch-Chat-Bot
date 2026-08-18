@@ -14,11 +14,10 @@ export interface StreamRecord {
 /**
  * Stream sessions.
  *
- * Phase 0 minted `Date.now().toString()` as the stream id, so its rows can only
- * be correlated with Twitch by eyeballing timestamps. Every row written here
- * carries Twitch's own id from the `stream.online` payload, which is what makes
- * a stream identifiable across a restart — and what lets `open()` be idempotent
- * rather than trusting the process to remember.
+ * Every row written here carries Twitch's own id from the `stream.online`
+ * payload rather than a locally minted one. That is what makes a stream
+ * identifiable across a restart, and what lets `open()` be idempotent rather
+ * than trusting the process to remember.
  */
 export class StreamRepository extends ChannelScopedRepository {
     /**
@@ -86,8 +85,8 @@ export class StreamRepository extends ChannelScopedRepository {
      * Closes the open stream and every viewing session inside it.
      *
      * Both halves in one statement pair because a closed stream with sessions
-     * still open would report viewers watching a stream that ended - the exact
-     * orphan the legacy tracker had to sweep for on boot.
+     * still open would report viewers watching a stream that ended, which is an
+     * orphan something else then has to sweep for on boot.
      */
     async close(streamId: string, endedAt: Date): Promise<boolean> {
         const closed = await this.db
@@ -171,10 +170,9 @@ export class StreamRepository extends ChannelScopedRepository {
     }
 
     /*
-     * There was a `setUniqueChatters` here. It never had a caller, so the
-     * column it wrote read 0 for every stream in the database — see migration
-     * 0006, which drops both. Distinct chatters come from `chat_messages`,
-     * counted by whoever is asking, because that is the only table that knows.
+     * There is no `unique_chatters` column and nothing writes one. Distinct
+     * chatters come from `chat_messages`, counted by whoever is asking, because
+     * that is the only table that knows.
      */
 }
 

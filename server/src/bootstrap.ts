@@ -56,8 +56,8 @@ import type { SessionManager } from './session/sessionManager.js';
 /**
  * How a row in `channels` becomes a running tenant.
  *
- * Every dependency below is constructed *per channel*. That repetition is the
- * point: there is no shared mutable object for one channel to reach another
+ * Every dependency below is constructed per channel. That repetition is the
+ * point. There is no shared mutable object for one channel to reach another
  * through, so isolation survives a careless edit rather than depending on one.
  */
 
@@ -95,7 +95,7 @@ export interface ChannelDependencies {
      *
      * A factory rather than a `Database`, so the composition root can be wired
      * and tested end to end without a Postgres. The repositories themselves are
-     * exercised against a real one in repositories.test.ts — this seam moves the
+     * exercised against a real one in repositories.test.ts. This seam moves the
      * database out of the wiring test, it does not replace those.
      */
     repositories: (channelId: string) => ChannelRepositories;
@@ -109,7 +109,7 @@ export interface ChannelDependencies {
     /** Realtime fan-out. Omitted means nothing is watching. */
     bus?: EventBus;
     /**
-     * The Claude client, shared across channels — the API key is a server
+     * The Claude client, shared across channels. The API key is a server
      * secret, so there is exactly one. Per-channel state (limits, history,
      * settings) is built around it below.
      */
@@ -123,9 +123,9 @@ export interface ChannelDependencies {
     /** Spotify application credentials, for the per-channel connect. */
     spotifyOAuth?: SpotifyOAuthConfig;
     cipher?: TokenCipher;
-    /** AI_COUNTER_THRESHOLD — how few requests left before the viewer is told. */
+    /** AI_COUNTER_THRESHOLD, how few requests are left before the viewer is told. */
     counterThreshold?: number;
-    /** IMAGE_SEED_SALT — bumping it resets every fursona/waifu association. */
+    /** IMAGE_SEED_SALT. Bumping it resets every fursona and waifu association. */
     imageSeedSalt?: string;
 }
 
@@ -147,23 +147,20 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
     /*
      * The Spotify half, per channel.
      *
-     * Built only when the deployment has Spotify credentials AND the channel
-     * has connected: a channel with no Spotify gets null, and every song path
+     * Built only when the deployment has Spotify credentials and the channel
+     * has connected. A channel with no Spotify gets null, and every song path
      * reports "not connected" rather than failing obscurely.
      */
     /*
      * The queue, wired to the live bus at construction.
      *
-     * This is the fix for the invisible-row defect: the redemption path and the
-     * playback monitor both mutate this queue, and neither published anything —
-     * so a requested song sat in the table for two minutes with the app watching
-     * and never being told. The repository now announces every mutation itself,
-     * and the listener is a required constructor argument, so a future third way
-     * to change the queue cannot repeat it.
+     * The redemption path and the playback monitor both mutate this queue, and
+     * the app learns of a change only when the mutation is published. The
+     * repository announces every mutation itself, and the listener is a required
+     * constructor argument, so a third way to change the queue cannot skip it.
      *
-     * `deps.bus` absent means nothing is watching, which is that field's existing
-     * documented meaning — the no-op listener is the honest wiring for it, not a
-     * hole.
+     * `deps.bus` absent means nothing is watching, which is that field's
+     * documented meaning, so the no-op listener is the honest wiring for it.
      */
     const songQueue = deps.db
         ? new SongQueueRepository(deps.db, channelId, (queueLength) => {
@@ -177,7 +174,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         : null;
 
     /*
-     * Stream lifecycle. Needs only a database: metadata comes from Helix where
+     * Stream lifecycle. Needs only a database. Metadata comes from Helix where
      * available, but a channel without Helix still records its streams, which
      * is what the AI rate-limit bucket and !uptime actually depend on.
      */
@@ -211,15 +208,15 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         : null;
 
     /*
-     * Redemptions. Settlement needs the BROADCASTER's user token, so this only
-     * exists where the credentials to obtain one do - and a channel without it
+     * Redemptions. Settlement needs the broadcaster's user token, so this only
+     * exists where the credentials to obtain one do. A channel without it
      * leaves redemptions unhandled rather than taking points it cannot refund.
      */
     let redemptions: RedemptionPipeline | undefined;
     let songToggle: SongToggleService | null = null;
-    // Hoisted: presence polling needs the same broadcaster token, and building
-    // a second provider would mean two independent refresh paths racing to
-    // rotate one refresh token.
+    // Hoisted because presence polling needs the same broadcaster token, and
+    // building a second provider would mean two independent refresh paths
+    // racing to rotate one refresh token.
     let userTokens: UserTokenProvider | null = null;
 
     if (deps.db && deps.cipher && deps.helix && deps.twitchOAuth && songQueue) {
@@ -263,7 +260,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
             }),
             handlers: {
                 add_quote: createQuoteRedemptionHandler({ quotes: repositories.quotes, logger: channelLogger }),
-                // Song handlers only where Spotify is connected; without it the
+                // Song handlers only where Spotify is connected. Without it the
                 // pipeline refunds rather than pretending to queue.
                 ...(spotify ? {
                     song_request: createSongRequestHandler(songDeps),
@@ -275,7 +272,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                 await chatSink.send({ channelId, broadcasterTwitchId: channel.twitchBroadcasterId, text });
             },
             // The same three mechanisms the chat path uses, pointed at the
-            // redemption path — which until now wrote no analytics at all.
+            // redemption path.
             analytics: deps.analytics,
             roles: repositories.roles,
             ...(repositories.history ? { history: repositories.history } : {}),
@@ -285,7 +282,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
 
     /*
      * The real AI when a client and a database are available, the injected stub
-     * otherwise. Everything per-channel - the budget, the history, the settings -
+     * otherwise. Everything per-channel (the budget, the history, the settings)
      * is constructed here around the single shared client, which is what keeps
      * one channel's usage from touching another's.
      */
@@ -299,13 +296,13 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                 db: deps.db,
                 channelId,
                 // Asked at the moment of the decision, through the same cache
-                // the API invalidates on write — so the owner's stepper reaches
+                // the API invalidates on write, so the owner's stepper reaches
                 // the running bot without a restart.
                 limits: async () => streamLimitsFrom((await settings.get()).aiLimits)
             }),
             logger: channelLogger,
-            // The P1-WP4.1 flag, closed: buckets are per stream and the
-            // prompt carries the real title and category.
+            // Buckets are per stream, and the prompt carries the real title
+            // and category.
             currentStreamId: () => streams?.currentStreamId() ?? null,
             streamContext: () => streams?.context() ?? null,
             broadcasterLogin: channel.twitchLogin,
@@ -331,7 +328,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         : null;
 
     /*
-     * A holder rather than the manager itself: `!command` edits the very
+     * A holder rather than the manager itself. `!command` edits the very
      * registry it is registered in, so the CommandManager cannot exist yet when
      * its handlers are built. Filled in immediately after construction, and
      * read only from inside a handler.
@@ -343,7 +340,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         repository: repositories.commands,
         cache,
         logger: channelLogger,
-        // The AI toggle is always available; a channel-specific registry adds
+        // The AI toggle is always available. A channel-specific registry adds
         // to it rather than replacing it.
         handlers: {
             ...createAiHandlers({ settings, logger: channelLogger }),
@@ -366,7 +363,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
                     roles: repositories.roles
                 })
                 : {}),
-            // No database and no network: these only need a username.
+            // No database and no network. These only need a username.
             ...createThirdPartyHandlers(deps.imageSeedSalt === undefined ? {} : { salt: deps.imageSeedSalt }),
             ...createQuoteHandlers({
                 quotes: new QuoteManager({ repository: repositories.quotes }),
@@ -409,7 +406,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         currentStreamId: () => streams?.currentStreamId() ?? null,
         ...(repositories.history ? { history: repositories.history } : {}),
         ...(deps.bus ? { bus: deps.bus } : {}),
-        // The pipeline knows only "say this"; where it goes is the sink's problem.
+        // The pipeline knows only "say this". Where it goes is the sink's problem.
         sendMessage: async (text: string) => {
             await chatSink.send({
                 channelId,
@@ -427,15 +424,15 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
         commands,
         emotes,
         ...(redemptions ? { redemptions } : {}),
-        // The session owns the monitor's lifetime: started on start, stopped on
-        // stop. Building one and never handing it over is exactly the bug that
-        // left a queued track untouched through ninety minutes of playback.
+        // The session owns the monitor's lifetime, started on start and stopped
+        // on stop. A monitor that is built but never handed to the session
+        // leaves queued tracks untouched.
         ...(monitor ? { monitor } : {}),
         ...(streams ? { streams } : {}),
         ...(presence ? { presence } : {}),
         // The same bus the pipeline publishes chat on. The session's own
-        // announcements — session up/down, stream on/off — are what drive the
-        // dashboard's status strip and uptime clock.
+        // announcements (session up and down, stream on and off) are what
+        // drive the dashboard's status strip and uptime clock.
         ...(deps.bus ? { bus: deps.bus } : {})
     });
 }
@@ -443,7 +440,7 @@ export function buildChannelSession(deps: ChannelDependencies, channel: ChannelR
 /**
  * Brings up every active channel.
  *
- * One channel failing to start must not stop the others: a single bad row would
+ * One channel failing to start must not stop the others. A single bad row would
  * otherwise take the whole service down for every tenant.
  */
 export async function bootstrapChannels(
@@ -474,10 +471,10 @@ export async function bootstrapChannels(
 /**
  * Resolves the shared bot account.
  *
- * The database is the source of truth; env is the escape hatch for a deployment
- * that has not been through onboarding yet. Neither present is not fatal — the
- * bot simply cannot recognize its own messages — but it is worth a warning,
- * because the symptom (a bot answering itself) reads as a logic bug.
+ * The database is the source of truth, and env is the escape hatch for a
+ * deployment that has not been through onboarding yet. Neither present is not
+ * fatal, the bot simply cannot recognize its own messages, but it is worth a
+ * warning because the symptom (a bot answering itself) reads as a logic bug.
  */
 export async function resolveBotIdentity(db: Database, env: Env, logger: Logger): Promise<BotIdentity> {
     const stored = await new BotIdentityRepository(db).get().catch((err: unknown) => {

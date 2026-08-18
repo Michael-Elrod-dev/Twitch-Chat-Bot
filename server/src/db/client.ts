@@ -16,10 +16,10 @@ export interface DbHandle {
 /**
  * Postgres connection.
  *
- * Design §4.1 guardrail 1: the app knows only DATABASE_URL. No locality
- * assumptions live here, so moving to a managed Postgres is a URL change.
- * Guardrail 6: pooling is configured here so a managed pooler slots in without
- * touching call sites.
+ * Guardrail 1 of the database-hosting decision. The app knows only
+ * DATABASE_URL, and no locality assumptions live here, so moving to a managed
+ * Postgres is a URL change. Guardrail 6 is why pooling is configured here, so a
+ * managed pooler slots in without touching call sites.
  */
 export function createDb(env: DatabaseEnv): DbHandle {
     const sql = postgres(env.DATABASE_URL, {

@@ -2,11 +2,11 @@ import type { UserLevel } from './permissions.js';
 
 /**
  * Handler-backed commands declare the level they require. The declaration is the
- * single source of truth; a database row that disagrees is corrected at load
- * (Phase 0 WP-6 task 9 — the DB stops lying).
+ * single source of truth, and a database row that disagrees is corrected at
+ * load, so the table stops lying.
  *
- * Handlers themselves arrive with their domains in P1-WP4.1/4.2/4.3; this is the
- * registry shape they slot into.
+ * Handlers themselves live with their domains. This is the registry shape they
+ * slot into.
  */
 export interface HandlerContext {
     channelId: string;
@@ -36,15 +36,14 @@ export interface HandlerRegistration {
     level: UserLevel;
     /**
      * What this command does, in the streamer's words, for the app's reply
-     * column — a handler-backed row has no `responseText` to show there.
+     * column, because a handler-backed row has no `responseText` to show there.
      *
-     * **Required, so behavior and the sentence describing it cannot be edited
-     * apart.** The content screens shipped this map on the client instead, and
-     * the cost was exactly what a required field prevents: a built-in added
-     * here rendered "A built-in behavior" until somebody remembered a file in
-     * another workspace. Optional would have re-offered that.
+     * Required, so behavior and the sentence describing it cannot be edited
+     * apart. Holding the same map on the client instead means a built-in added
+     * here renders a generic placeholder until somebody remembers to edit a
+     * file in another workspace.
      *
-     * One short phrase, no trailing full stop, present tense — it sits in a
+     * One short phrase, no trailing full stop, present tense. It sits in a
      * table cell beside a command name, not in a paragraph.
      */
     description: string;
@@ -56,15 +55,14 @@ export type HandlerRegistry = Readonly<Record<string, HandlerRegistration>>;
  * There is deliberately no `declaredLevels` or `declaredDescriptions` helper
  * here.
  *
- * Both were written; neither had a production caller. `CommandManager.load`
- * reconciles the database against the registry by reading `registration.level`
- * and `registration.description` directly off each entry, so a module-level
- * projection of the same two fields exists only to be exported — and an exported
- * helper with a test and no caller is dead code wearing a green tick. The test
- * passes, the coverage counts, and nothing it covers runs.
+ * `CommandManager.load` reconciles the database against the registry by reading
+ * `registration.level` and `registration.description` directly off each entry.
+ * A module-level projection of the same two fields would exist only to be
+ * exported, and an exported helper with a test and no caller is dead code
+ * wearing a green tick. The test passes, the coverage counts, and nothing it
+ * covers runs.
  *
- * `declaredLevels` outlived its companion by one package, on the reasoning that
- * deleting it was not that change's business. It is this one's: a second
- * reconciliation path nobody calls is precisely where the registry and the rows
- * would be free to drift, because no failing test would ever say so.
+ * A second reconciliation path nobody calls is also precisely where the registry
+ * and the rows would be free to drift, because no failing test would ever say
+ * so.
  */

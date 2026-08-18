@@ -10,9 +10,8 @@ import type { EmoteManager } from '../domain/emoteManager.js';
 import type { EventBus } from '../live/eventBus.js';
 
 /**
- * Lifecycle discipline ported from Phase 0 tests/bot/bot.lifecycle.test.js and
- * bot.teardown.test.js — idempotent start/stop, teardown that completes through a
- * failing step, and dedup that survives the whole session.
+ * Lifecycle discipline. Start and stop are idempotent, teardown completes
+ * through a failing step, and dedup survives the whole session.
  */
 
 const logger = pino({ level: 'silent' });
@@ -29,7 +28,7 @@ const chatEvent = (id: string, broadcasterTwitchId = '1'): TransportEvent => ({
 });
 
 // `streamId` is Twitch's own stream id, which every real stream.online payload
-// carries — the fixture supplies one rather than a synthetic shape the
+// carries, so the fixture supplies one rather than a synthetic shape the
 // normalizer could never produce.
 const streamOnlineEvent = (id: string, streamId = '48765430'): TransportEvent => ({
     kind: 'stream_online',
@@ -72,8 +71,8 @@ describe('ChannelSession', () => {
         });
 
         it('does NOT report running when startup fails', async () => {
-            // A half-started session masquerading as healthy is the Phase-0
-            // failure this guards against.
+            // A half-started session masquerading as healthy is the failure
+            // this guards against.
             commands.load.mockRejectedValue(new Error('DB down'));
 
             await expect(session.start()).rejects.toThrow('DB down');
@@ -199,8 +198,8 @@ describe('ChannelSession', () => {
  *
  * The client ticks its uptime clock locally and re-syncs on every one of these,
  * so the load-bearing property is not that an event is published but that
- * `startedAt` is the STREAM's start — the thing that does not move — rather than
- * the moment of publication, which does.
+ * `startedAt` is the stream's start, which does not move, rather than the moment
+ * of publication, which does.
  */
 describe('ChannelSession channel.status', () => {
     const published: LiveEvent[] = [];
@@ -263,7 +262,7 @@ describe('ChannelSession channel.status', () => {
     it('publishes AFTER the stream is recorded, so startedAt is never null while live', async () => {
         // Ordering, asserted rather than assumed: announcing first would send a
         // live status with no start time and stall the client's clock until the
-        // next transition — which may be hours away.
+        // next transition, which may be hours away.
         let recorded = false;
         const streams = {
             load: vi.fn(async () => undefined),

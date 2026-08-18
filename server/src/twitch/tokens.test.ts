@@ -140,7 +140,7 @@ describe('UserTokenProvider', () => {
     });
 
     it('refreshes when no expiry is recorded', async () => {
-        // An unknown expiry is not a valid one - the Phase-0 rule.
+        // An unknown expiry is not a valid one.
         stored = { ...(stored as StoredTokens), expiresAt: null };
         const fetchImpl = vi.fn(async () =>
             jsonResponse(200, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 14_400 }));
@@ -172,7 +172,7 @@ describe('UserTokenProvider', () => {
 
     describe('a dead refresh token', () => {
         it('raises the distinct manual-reauth error, not a generic failure', async () => {
-            // Phase 0 retried this forever and stayed quietly disconnected.
+            // Retrying this forever is how a bot stays quietly disconnected.
             const fetchImpl = vi.fn(async () =>
                 jsonResponse(400, { status: 400, message: 'Invalid refresh token' }));
 

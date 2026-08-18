@@ -12,19 +12,19 @@ import { withUsageSuffix } from './usageCounter.js';
 /**
  * The real AI service, per channel.
  *
- * Every Phase-0 behavior is preserved with channel scope added:
+ * Everything it does is scoped to one channel:
  *   - rate limits by role rank, per channel per stream,
  *   - the usage counter prefixed on the reply,
  *   - XML prompt building with escaping,
  *   - the AI flag checked fail-closed (upstream, in the pipeline),
  *   - a fallback message on failure.
  *
- * The hard rule: **this never throws into the pipeline.** A chat message that
- * triggers the AI must be answerable or silently skipped, never a source of an
- * exception that could stop the session processing subsequent messages.
+ * The hard rule is that this never throws into the pipeline. A chat message
+ * that triggers the AI must be answerable or silently skipped, never a source
+ * of an exception that could stop the session processing later messages.
  */
 
-/** Phase 0's default when a channel has configured nothing. */
+/** The default when a channel has configured nothing. */
 export const DEFAULT_FALLBACK_MESSAGE = 'Sorry, I could not come up with anything just now.';
 
 const DEFAULT_MAX_TOKENS = 300;
@@ -39,10 +39,11 @@ export interface ChannelAiServiceOptions {
     /** Resolves the current stream, so limits bucket per stream. Null when offline. */
     currentStreamId: () => string | null;
     /**
-     * The live stream's title/category/duration for the prompt. Null offline.
+     * The live stream's title, category and duration for the prompt. Null
+     * offline.
      *
-     * Phase 0 put this in every prompt; without it the bot cannot answer "what
-     * game is this" or "how long have you been live" with anything true.
+     * Every prompt carries it. Without it the bot cannot answer "what game is
+     * this" or "how long have you been live" with anything true.
      */
     streamContext: () => StreamContext | null;
     broadcasterLogin: string;
@@ -81,12 +82,11 @@ export class ChannelAiService implements AiService {
     }
 
     /**
-     * `!advice` and `!roast` — about one person rather than a conversation.
+     * `!advice` and `!roast`, about one person rather than a conversation.
      *
-     * The prompt is about the TARGET; the allowance is charged to the
-     * REQUESTER. Phase 0 conflated the two and charged the target, which made
-     * `!roast @victim` a way to burn someone else's budget until they could no
-     * longer use the bot. Lead ruling, P1-WP4.4.
+     * The prompt is about the target, and the allowance is charged to the
+     * requester. Charging the target instead would make `!roast @victim` a way
+     * to burn someone else's budget until they could no longer use the bot.
      */
     async handleGameRequest(
         type: GamePromptType,
@@ -154,8 +154,8 @@ export class ChannelAiService implements AiService {
             });
 
             if (!completion.ok || !completion.text) {
-                // The channel's fallback, exactly as Phase 0 did: the viewer
-                // gets an answer, not silence, and not a stack trace.
+                // The channel's fallback, so the viewer gets an answer rather
+                // than silence or a stack trace.
                 o.logger.warn(
                     { channelId: o.channelId, reason: completion.reason },
                     'AI request failed - using the fallback message'
@@ -163,9 +163,8 @@ export class ChannelAiService implements AiService {
                 return { ok: false, message: o.fallbackMessage ?? DEFAULT_FALLBACK_MESSAGE };
             }
 
-            // Counted only on success. Phase 0 charged for answers, not for
-            // outages, and charging for a failure would let a bad API key burn
-            // every viewer's budget.
+            // Counted only on success. Charging for a failure would let a bad
+            // API key burn every viewer's budget.
             const used = await o.rateLimiter.record(job.twitchUserId, streamId);
 
             return {

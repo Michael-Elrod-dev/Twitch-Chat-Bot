@@ -24,12 +24,12 @@ import { nullCache } from '../../cache/testing.js';
 import { signJwt } from '../../auth/jwt.js';
 
 /**
- * THE API-LAYER CENTREPIECE: channel A's token against channel B's data.
+ * The API-layer centerpiece. Channel A's token against channel B's data.
  *
- * P1-WP4 proved two sessions cannot leak into each other. This proves the same
- * for the HTTP surface, where the attack is easier to attempt — a caller
- * controls the whole request. The design that makes it impossible is that no
- * route accepts a channel identifier at all: the token *is* the tenant
+ * The session suites prove two sessions cannot leak into each other. This proves
+ * the same for the HTTP surface, where the attack is easier to attempt because a
+ * caller controls the whole request. The design that makes it impossible is that
+ * no route accepts a channel identifier at all. The token is the tenant
  * selector, so there is nothing to tamper with.
  *
  * These tests therefore try the things a real attacker would: another tenant's
@@ -214,7 +214,7 @@ describeDb('API tenant isolation', () => {
             /*
              * A trigger long enough that the schema rejects it. The route used
              * to `parse` this rather than `safeParse`, and the throw landed in
-             * the handler's catch — so an input the client got wrong came back
+             * the handler's catch, so an input the client got wrong came back
              * as a 500 saying the request failed, which describes the server
              * breaking rather than the client sending something invalid.
              *

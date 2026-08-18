@@ -7,9 +7,8 @@ import type { ChannelRewardRepository } from '../db/repositories/channelRewardRe
 /**
  * Turning song requests on and off.
  *
- * Ported from Phase 0's songToggleService, and the important half is the part
- * that is easy to skip: **the reward itself is disabled at Twitch**, not just a
- * flag in our database.
+ * The important half is the part that is easy to skip. The reward itself is
+ * disabled at Twitch, not just a flag in this database.
  *
  * A flag alone leaves the reward visible and redeemable. A viewer spends their
  * points, the bot refuses and refunds, and from their side the reward is simply

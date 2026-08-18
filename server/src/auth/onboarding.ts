@@ -13,9 +13,9 @@ import { buildChannelSession } from '../bootstrap.js';
  * What happens after consent.
  *
  * Onboarding is deliberately one transaction-shaped unit: identify, persist,
- * start, subscribe. A channel that is half-onboarded — a row with no tokens, or
- * tokens with no session — is worse than one that failed outright, because it
- * looks connected and is not.
+ * start, subscribe. A channel that is half-onboarded, meaning a row with no
+ * tokens or tokens with no session, is worse than one that failed outright,
+ * because it looks connected and is not.
  */
 
 export interface OnboardingResult {
@@ -40,8 +40,8 @@ export interface ChannelOnboardingOptions {
      * Called after the bot account's consent changes.
      *
      * Bot identity is read once at boot, so without this a fresh consent sits in
-     * the database while the running process keeps using the previous value —
-     * the bot would answer as the wrong account until someone restarted it. That
+     * the database while the running process keeps using the previous value and
+     * the bot answers as the wrong account until someone restarts it. That
      * is a bad enough failure on a laptop and a worse one on a server nobody is
      * watching.
      */
@@ -58,7 +58,7 @@ export class OnboardingService {
     /**
      * Connects a broadcaster's channel.
      *
-     * @param identity from Twitch's validate endpoint — the authoritative answer
+     * @param identity from Twitch's validate endpoint, the authoritative answer
      * to "whose token is this". Trusting a login supplied any other way would let
      * a user onboard a channel they do not own.
      */
@@ -111,10 +111,10 @@ export class OnboardingService {
          * redemption arriving the moment the subscription goes live already has
          * somewhere to route.
          *
-         * Without this, adoption only ever ran at boot — so a channel that
-         * onboarded at runtime had no bound rewards and every redemption in it
-         * was treated as unmanaged and silently ignored until the next restart.
-         * Same class as the playback monitor and the bot identity.
+         * Without this, adoption would run only at boot, so a channel that
+         * onboarded at runtime would have no bound rewards and every redemption
+         * in it would be treated as unmanaged and silently ignored until the
+         * next restart.
          */
         try {
             await this.options.adoptRewards?.(channel.id, channel.twitchBroadcasterId);
@@ -144,7 +144,7 @@ export class OnboardingService {
      * Records the shared bot account's consent.
      *
      * Consent is global and happens once. What is persisted is the identity and
-     * the fact of the grant — the refresh token is kept only so consent can be
+     * the fact of the grant. The refresh token is kept only so consent can be
      * re-established, and is on no request path.
      */
     async recordBotConsent(identity: ValidatedIdentity, grant: TokenGrant): Promise<{ missingScopes: string[] }> {

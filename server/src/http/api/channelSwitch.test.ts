@@ -190,8 +190,8 @@ describeDb('channel master switch', () => {
             // The session is genuinely gone, not merely marked.
             expect(manager.get(alpha.id)).toBeUndefined();
             // And the transport no longer carries the subscription, so events
-            // for a switched-off channel are not merely dropped downstream —
-            // they are never requested.
+            // for a switched-off channel are not merely dropped downstream.
+            // They are never requested.
             expect(transport.subscribed.has(alpha.broadcasterId)).toBe(false);
         });
 
@@ -209,7 +209,7 @@ describeDb('channel master switch', () => {
             expect(transport.subscribed.has(alpha.broadcasterId)).toBe(true);
         });
 
-        it('is idempotent — switching off twice is not an error', async () => {
+        it('is idempotent, so switching off twice is not an error', async () => {
             await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
                 .send({ enabled: false }).expect(200);
             await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
@@ -224,7 +224,7 @@ describeDb('channel master switch', () => {
             const res = await request(app).patch('/api/v1/me/channel').set('authorization', asAlpha())
                 .send({ enabled: false }).expect(200);
 
-            // The response says both, and they disagree — which is the point.
+            // The response says both, and they disagree, which is the point.
             expect(res.body.data).toEqual({ enabled: false, status: 'active' });
 
             const [row] = await handle.sql`select status, enabled from channels where id = ${alpha.id}`;
@@ -346,11 +346,11 @@ describeDb('channel master switch', () => {
     });
 
     /**
-     * The danger zone (`5c`).
+     * The danger zone.
      *
      * The most consequential thing the app can do, and the only one behind a
-     * confirmation. **It is never exercised against the owner's live channel** —
-     * this suite is where it is proven, on throwaway channels in a throwaway
+     * confirmation. It is never exercised against the owner's live channel. This
+     * suite is where it is proven, on throwaway channels in a throwaway
      * database, and the live proof deliberately skips it.
      *
      * Everything here asks the same question from a different side: did the bot
@@ -374,8 +374,8 @@ describeDb('channel master switch', () => {
                 .expect(200);
 
             expect(res.body.data.status).toBe('disconnected');
-            // Genuinely gone, not merely recorded — the same standard the switch
-            // is held to one describe block up.
+            // Genuinely gone, not merely recorded, which is the same standard
+            // the switch is held to one describe block up.
             expect(manager.get(alpha.id)).toBeUndefined();
             expect(transport.subscribed.has(alpha.broadcasterId)).toBe(false);
         });
@@ -390,9 +390,9 @@ describeDb('channel master switch', () => {
              * against a bot that has left: the viewer spends points and nothing
              * happens. That is the failure this asserts against.
              *
-             * Disabled and not deleted, deliberately — two of the owner own
-             * rewards predate this application entirely, and their title, cost,
-             * prompt and redemption history are theirs to keep for a channel they
+             * Disabled and not deleted, deliberately. An adopted reward predates
+             * this application entirely, and its title, cost, prompt and
+             * redemption history are the streamer's to keep for a channel they
              * may reconnect.
              */
             expect(disabledRewards.map((r) => r.rewardId).sort()).toEqual([
@@ -444,9 +444,9 @@ describeDb('channel master switch', () => {
 
         it('leaves the owner pause preference alone rather than folding it in', async () => {
             // `enabled` is what the owner chose about pausing and means nothing
-            // right now; `status` is what disconnecting did. Writing `enabled`
+            // right now. `status` is what disconnecting did. Writing `enabled`
             // here would offer a one-click undo for something one click cannot
-            // undo — see the contract's note on the two fields.
+            // undo, as the contract's note on the two fields says.
             const res = await request(app).delete('/api/v1/me/channel')
                 .set('authorization', asAlpha()).expect(200);
 
@@ -474,7 +474,7 @@ describeDb('channel master switch', () => {
 
             expect(manager.get(beta.id)).toBeDefined();
             expect(transport.subscribed.has(beta.broadcasterId)).toBe(true);
-            // Beta was never named in the request and cannot be — including in
+            // Beta was never named in the request and cannot be, including in
             // the reward cleanup, which is the part that reaches out to Twitch.
             expect(disabledRewards.every((r) => r.channelId === alpha.id)).toBe(true);
             expect(await new ChannelRewardRepository(handle.db, beta.id).listAll()).toHaveLength(3);

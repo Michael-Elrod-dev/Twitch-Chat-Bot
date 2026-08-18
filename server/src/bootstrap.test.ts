@@ -94,13 +94,11 @@ describe('buildChannelSession', () => {
     });
 
     /**
-     * The coverage hole that let the same bug ship twice.
+     * Covers the optional-capability half of this function.
      *
-     * Every test above builds deps WITHOUT `db`/`cipher`/`spotifyOAuth`, so the
-     * optional-capability half of this function was never executed by anything.
-     * That is where both monitor defects lived: first the session was never told
-     * to start it, then — in the fix itself — the monitor was built and never
-     * handed over. Both compiled, both passed the suite, both shipped.
+     * Every test above builds deps without `db`, `cipher` or `spotifyOAuth`, so
+     * without this one nothing executes that half. A monitor that is built and
+     * never handed to the session compiles and passes every other test here.
      *
      * Wiring is only observable through behavior, so this asserts the lifecycle
      * the session is supposed to drive rather than reaching for a private field.
@@ -126,7 +124,7 @@ describe('buildChannelSession', () => {
             // NonNullable, not the bare indexed type: `cipher?:` makes
             // ChannelDependencies['cipher'] include undefined, and under
             // exactOptionalPropertyTypes an optional property may be absent or
-            // a TokenCipher — never explicitly undefined. This test does supply
+            // a TokenCipher, never explicitly undefined. This test does supply
             // one, so the cast should say so.
             cipher: {} as unknown as NonNullable<ChannelDependencies['cipher']>,
             spotifyOAuth: { clientId: 'id', clientSecret: 'secret', redirectUri: 'https://x/cb' }
@@ -258,13 +256,11 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
 const describeDb = TEST_DATABASE_URL ? describe : describe.skip;
 
 /**
- * Task 0 of P1-WP4.3 — the coverage debt named in the WP4.2 report.
+ * The rest of the optional-capability half of `buildChannelSession`.
  *
- * The monitor bug shipped twice through a hole in this file: every test above
- * builds dependencies WITHOUT `db`/`cipher`/`helix`/`twitchOAuth`, so the
- * optional-capability half of `buildChannelSession` was executed by nothing.
- * One branch of that half (the monitor) is now covered. These close the other
- * two — the redemption pipeline and the song toggle.
+ * Every test above builds dependencies without `db`, `cipher`, `helix` or
+ * `twitchOAuth`. The monitor branch is covered above, and these two close the
+ * redemption pipeline and the song toggle.
  *
  * Both assert through behavior reaching a real collaborator, because "was it
  * constructed" is not the failure mode. The failure mode is "constructed and
@@ -359,8 +355,8 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
             redemptionId: 'redemption-1',
             rewardId: 'reward-quote',
             rewardTitle: 'Add a quote',
-            // Malformed on purpose: the refund path is the loudest proof that
-            // the whole chain — routing, handler, settlement, Helix — is joined.
+            // Malformed on purpose, because the refund path is the loudest
+            // proof that routing, handler, settlement and Helix are joined.
             userInput: 'no attribution here',
             redeemer: { twitchUserId: '99', login: 'viewer', displayName: 'Viewer' }
         });
@@ -371,10 +367,9 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
 
     it('feeds the live stream into the AI prompt and the rate-limit bucket', async () => {
         /*
-         * Added because reintroducing the P1-WP4.1 flag — `streamContext: () =>
-         * null` in the composition root — broke NOTHING. The stream service and
-         * its context were fully tested; the wire from one to the other was not,
-         * which is the same hole that shipped the monitor bug twice.
+         * Reverting the composition root to `streamContext: () => null` breaks
+         * nothing else in this suite. The stream service and its context are
+         * fully tested, but the wire from one to the other is only covered here.
          *
          * So this asserts through the only thing that proves the wire exists:
          * what Claude is actually sent.
@@ -444,8 +439,8 @@ describeDb('composition root: redemption + song-toggle wiring', () => {
          * test that names two things and checks one is a test that lies about
          * its own coverage.
          *
-         * Usage charged against the stream's uuid — not against the offline
-         * bucket — is what makes a viewer's allowance reset per stream.
+         * Usage charged against the stream's uuid, rather than against the
+         * offline bucket, is what makes a viewer's allowance reset per stream.
          */
         const usage = await handle.sql<{ stream_id: string | null }[]>`
             select stream_id from api_usage

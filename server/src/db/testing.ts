@@ -19,7 +19,7 @@ export interface WaitOptions {
 const DEFAULT_ATTEMPTS = 30;
 const DEFAULT_DELAY_MS = 1_000;
 
-/** @throws the last connection error once the attempts are exhausted — bounded, never a hang. */
+/** @throws the last connection error once the attempts are exhausted. Bounded, never a hang. */
 export async function waitForDatabase(handle: DbHandle, options: WaitOptions = {}): Promise<void> {
     const attempts = options.attempts ?? DEFAULT_ATTEMPTS;
     const delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
@@ -51,9 +51,9 @@ export async function waitForDatabase(handle: DbHandle, options: WaitOptions = {
  * holds the owner's imported production data and their live Twitch credentials;
  * the suites delete rows, truncate `bot_identity`, and generally assume they own
  * the schema. Pointing them at that database once already destroyed the
- * production import (P1-WP6), so "remember not to" is not a control.
+ * production import once already, so "remember not to" is not a control.
  *
- * Tests get their own throwaway container — see `scripts/test-db.sh`.
+ * Tests get their own throwaway container, started by `scripts/test-db.sh`.
  */
 const FORBIDDEN_DATABASE_NAMES = ['almosthadai'];
 
@@ -85,8 +85,8 @@ export function assertSafeTestDatabase(url: string): void {
 }
 
 /**
- * Opens a connection, waits for readiness, and migrates — the three steps every
- * database suite needs before it can assert anything.
+ * Opens a connection, waits for readiness, and migrates. Those are the three
+ * steps every database suite needs before it can assert anything.
  */
 export async function connectTestDatabase(url: string, options: WaitOptions = {}): Promise<DbHandle> {
     assertSafeTestDatabase(url);

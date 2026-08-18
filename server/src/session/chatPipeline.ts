@@ -39,8 +39,8 @@ export interface ChatPipelineOptions {
      */
     bus?: EventBus;
     /**
-     * Chat persistence for AI context. Omitted means no history is kept — the
-     * AI then works from stream context alone.
+     * Chat persistence for AI context. Omitted means no history is kept, and
+     * the AI then works from stream context alone.
      */
     history?: ChatHistoryRepository;
     /** Buckets history and rate limits per stream. */
@@ -50,7 +50,7 @@ export interface ChatPipelineOptions {
 /**
  * The chat message pipeline for one channel.
  *
- * Order is deliberate and every step encodes a Phase-0 finding:
+ * The order is deliberate:
  *   own-message skip -> reward-attached skip -> `!` command dispatch ->
  *   exact emote match -> AI mention detection -> analytics hook.
  *
@@ -107,8 +107,8 @@ export class ChatPipeline {
 
         const text = event.text.trim();
 
-        // A command is a command even when it names the bot. Phase 0 WP-6 task 5:
-        // "!stats almosthadai" was swallowed by the AI path and burned rate limit.
+        // A command is a command even when it names the bot. Otherwise
+        // "!stats almosthadai" is swallowed by the AI path and burns rate limit.
         if (text.startsWith('!')) {
             const outcome = await this.dispatchCommand(event, text, roles);
             await this.record(event, 'command');
@@ -260,7 +260,7 @@ export class ChatPipeline {
                 login: event.chatter.login,
                 displayName: event.chatter.displayName,
                 // Read off the same event flags the permission check uses, via
-                // the same precedence function — so the feed cannot disagree
+                // the same precedence function, so the feed cannot disagree
                 // with what the pipeline actually let this person do.
                 role: chatRoleOf({
                     isModerator: event.chatter.isModerator,

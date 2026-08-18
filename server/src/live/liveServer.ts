@@ -14,13 +14,13 @@ import type { EventBus } from './eventBus.js';
  * socket that reaches the connection handler is already authenticated and
  * already bound to exactly one channel. There is no subscribe message and no
  * way to ask for a different channel, so the fan-out cannot be talked into
- * crossing tenants — the same rule as the REST API, enforced the same way.
+ * crossing tenants. It is the same rule as the REST API, enforced the same way.
  *
  * Browsers cannot set headers on a WebSocket handshake, so the token arrives as
  * a query parameter. That is a real trade: query strings land in access logs.
  * It is acceptable here because these are our own short-lived access tokens
- * (15 minutes, revocable by rotating the signing key), never Twitch's, and the
- * alternative — a ticket endpoint issuing single-use handshake codes — is
+ * (15 minutes, revocable by rotating the signing key), never Twitch's. The
+ * alternative, a ticket endpoint issuing single-use handshake codes, is
  * complexity the desktop client does not need yet.
  */
 

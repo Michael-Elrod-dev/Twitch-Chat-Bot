@@ -17,12 +17,12 @@ import type { ChannelRoleRepository } from '../db/repositories/channelRoleReposi
 import type { ChannelSettingsRepository } from '../db/repositories/channelSettingsRepository.js';
 
 /**
- * THE CENTREPIECE: two channels running concurrently in one process, proving
+ * The centerpiece. Two channels running concurrently in one process, proving
  * that nothing leaks between them.
  *
- * Every Phase-0 subsystem was single-tenant. The single most expensive mistake
- * this architecture could make is for channel A's configuration, permissions, or
- * state to influence channel B — so it gets its own file and its own scrutiny.
+ * The single most expensive mistake this architecture could make is for channel
+ * A's configuration, permissions, or state to influence channel B, so it gets
+ * its own file and its own scrutiny.
  */
 
 const logger = pino({ level: 'silent' });

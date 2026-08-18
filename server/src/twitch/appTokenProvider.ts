@@ -22,9 +22,9 @@ const TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const SAFETY_MARGIN_MS = 60_000;
 
 /**
- * Twitch reports app tokens as lasting ~60 days, but a nonsense value would park
- * the token permanently inside the margin and turn every call into a refresh.
- * The same floor Phase 0's tokenManager applies, for the same reason.
+ * Twitch reports app tokens as lasting about 60 days, but a nonsense value would
+ * park the token permanently inside the margin and turn every call into a
+ * refresh, so the lifetime has a floor.
  */
 const MIN_LIFETIME_MS = 5 * 60_000;
 
