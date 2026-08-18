@@ -12,15 +12,15 @@ import { ApiError } from '../api/client.js';
  *
  * Placement, and why each is where it is:
  *
- * - **field** — `bad_request` and `conflict`. The user typed something the
+ * - field, for `bad_request` and `conflict`. The user typed something the
  *   server refused, so the message belongs next to what they typed. A banner
  *   for "that name is taken" would make them hunt for which of two fields is
  *   wrong.
- * - **inline** — `rate_limited`. Deliberately not a banner: being asked to wait
- *   nine seconds is not an error state, and dressing it as one teaches people
- *   their bot is broken when it is merely busy. Carries `Retry-After` so the
- *   line can say how long rather than "try again later".
- * - **banner** — everything else. `unauthorized`, `unavailable`, `internal`,
+ * - inline, for `rate_limited`. Deliberately not a banner, because being asked
+ *   to wait nine seconds is not an error state, and dressing it as one teaches
+ *   people their bot is broken when it is merely busy. Carries `Retry-After` so
+ *   the line can say how long rather than "try again later".
+ * - banner, for everything else. `unauthorized`, `unavailable`, `internal`,
  *   `forbidden` and transport failure are all conditions the user did not cause
  *   and cannot fix by editing a field.
  *
@@ -33,7 +33,7 @@ export type ErrorPlacement = 'field' | 'inline' | 'banner';
 
 export interface PresentedError {
     placement: ErrorPlacement;
-    /** The server's own message where there is one — it is written for humans. */
+    /** The server's own message where there is one, written for humans. */
     message: string;
     /** Seconds from `Retry-After`, on `rate_limited` only. */
     retryAfterSeconds: number | null;
@@ -48,7 +48,7 @@ export function presentError(error: unknown): PresentedError {
         /*
          * Not one of ours. `apiRequest` already folds transport failures into
          * `ApiError('unavailable')`, so reaching here means a genuine bug in the
-         * client — which the user still should not be shown a stack trace for.
+         * client, which the user still should not be shown a stack trace for.
          */
         return {
             placement: 'banner',

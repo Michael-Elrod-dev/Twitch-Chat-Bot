@@ -82,7 +82,7 @@ export function Dashboard({
      * One guard, not two.
      *
      * `unknown` below is what decides whether a figure is rendered at all, so
-     * an additional `reachable ?` here would be redundant — and redundancy that
+     * an additional `reachable ?` here would be redundant, and redundancy that
      * no test can distinguish from the real guard is worse than none, because
      * it reads like protection while contributing nothing. Null figures mean
      * "not loaded yet"; `unknown` means "cannot see the server".

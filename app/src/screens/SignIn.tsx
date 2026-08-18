@@ -2,7 +2,7 @@ import { ExternalLink, KeyRound } from 'lucide-react';
 import { APP_VERSION } from '../api/config.js';
 
 /**
- * `3g` — sign in.
+ * Sign in.
  *
  * No rail, no channel header: there is nothing to navigate to yet. The
  * reachability pill belongs on this screen specifically, because this is where
@@ -34,7 +34,7 @@ export function SignIn({
 
                 <p className="auth__explainer">
                     Twitch handles the sign-in in your browser. This app never sees your
-                    password — it only receives permission to act in your channel, and you
+                    password. It only receives permission to act in your channel, and you
                     can withdraw that from Twitch at any time.
                 </p>
 

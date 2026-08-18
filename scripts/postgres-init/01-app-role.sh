@@ -1,12 +1,13 @@
 #!/bin/bash
-# Design §4.1 guardrail 3: the application connects as a least-privilege role,
-# never as superuser. The bootstrap POSTGRES_USER owns the database and every
-# table in it; the app role can read and write data and nothing else.
+# Guardrail 3 of the database-hosting decision. The application connects as a
+# least-privilege role, never as superuser. The bootstrap POSTGRES_USER owns the
+# database and every table in it, and the app role can read and write data and
+# nothing else.
 #
-# The split matters because ALTER TABLE requires table *ownership*, not merely
+# The split matters because ALTER TABLE requires table ownership, not merely
 # CREATE on the schema. A runtime role that could migrate could also drop, so
 # migrations run on separate credentials (MIGRATION_DATABASE_URL) that are
-# opened at boot and closed again — see server/src/index.ts.
+# opened at boot and closed again, in server/src/index.ts.
 #
 # If the runtime credential leaks, the blast radius is the data it was always
 # able to read, not the schema and not the roles.

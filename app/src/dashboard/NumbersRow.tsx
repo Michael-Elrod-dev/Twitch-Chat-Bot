@@ -4,8 +4,8 @@ import type { NumberCard } from './dashboardState.js';
  * Today's four figures.
  *
  * When the server is unreachable these become skeleton blocks rather than
- * zeroes or `?` figures at full size — the handoff's rule, and the right one: a
- * `30px` zero is a confident statement, and the one thing this screen must
+ * zeroes or `?` figures at full size, which is the handoff's rule and the right
+ * one. A `30px` zero is a confident statement, and the one thing this screen must
  * never do is state a number it does not have.
  */
 
@@ -13,7 +13,7 @@ export interface NumbersRowProps {
     cards: NumberCard[];
     /** True when we cannot see the server. Renders skeletons. */
     unknown: boolean;
-    /** `Thursday · 4h 02m`, shown above the row when the channel is offline. */
+    /** `Thursday, 4h 02m`, shown above the row when the channel is offline. */
     lastStreamCaption?: string | null;
 }
 

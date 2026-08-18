@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# pg_dump -> verify -> S3, carrying Phase 0's verification discipline forward.
+# pg_dump -> verify -> S3.
 #
-# Design §4.1 guardrail 4: the backup artifact IS the migration and resurrection
-# vehicle, so an unverified dump is worse than no dump - it looks like safety.
+# Guardrail 4 of the database-hosting decision. The backup artifact is the
+# migration and resurrection vehicle, so an unverified dump is worse than no
+# dump, because it looks like safety.
 # Nothing is uploaded, and nothing is rotated, unless the dump verifies.
 #
 # RETENTION IS TIERED, and the reason is a real incident rather than a policy
@@ -64,8 +65,8 @@ fi
 
 # 2. Structural check. pg_restore --list parses the archive's table of contents;
 #    it fails on a truncated or corrupt file. This is the custom-format
-#    equivalent of Phase 0's "-- Dump completed" marker, and strictly stronger:
-#    it proves the archive is readable, not merely that it ended.
+#    equivalent of a trailing "dump completed" marker, and strictly stronger,
+#    because it proves the archive is readable rather than merely that it ended.
 if ! pg_restore --list "$LOCAL_PATH" > /dev/null 2>&1; then
     echo "FAILED: dump is not a readable pg_restore archive" >&2
     exit 1
@@ -100,7 +101,7 @@ aws s3 cp "$LOCAL_PATH" "s3://${S3_BUCKET}/${S3_PREFIX}${FILENAME}"
 #
 # Idempotent by construction: the first run of a day claims that day, the rest
 # find it already there and do nothing. That matters because the timer is
-# `Persistent=true` — a box that was off catches up, and a catch-up run must not
+# `Persistent=true`, so a box that was off catches up, and a catch-up run must not
 # make a second copy of a day it already has.
 
 # Only real dumps, never the `PRE daily/` lines a prefix listing also returns.
@@ -128,7 +129,7 @@ promote 'monthly/' "backup-${MONTH}.dump" 'monthly'
 # ---- rotation --------------------------------------------------------------
 #
 # Rotation happens only after a verified upload, so a run of bad dumps can never
-# age out the last good backup - the Phase-0 P1-10 lesson.
+# age out the last good backup.
 #
 # The monthly tier is deliberately absent from this section. It is the only
 # record that survives a mistake nobody noticed for a season, and a "keeping

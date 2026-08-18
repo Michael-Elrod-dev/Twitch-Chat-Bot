@@ -10,9 +10,9 @@ import type { Command, UserLevel } from '@almosthadai/shared';
  * field on the handler's own registration, reconciled onto the command row and
  * served on the wire, so the sentence and the behavior change together.
  *
- * The fallback survives, and only as a fallback: a handler-backed row whose
- * description has not been written yet — a built-in whose channel session has
- * not started since it was added — is still a built-in, and saying so is
+ * The fallback survives, and only as a fallback. A handler-backed row whose
+ * description has not been written yet, meaning a built-in whose channel session
+ * has not started since it was added, is still a built-in, and saying so is
  * honest where an empty cell would read as a broken row.
  */
 export function describeHandler(command: Pick<Command, 'description'>): string {

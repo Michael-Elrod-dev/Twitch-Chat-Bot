@@ -16,8 +16,8 @@ export interface ChannelSummary {
      *
      * `needs_reauth` is Twitch withdrawing consent; `suspended` is
      * administrative. `disconnected` is the one the broadcaster can reach
-     * themselves — the danger zone's "Disconnect this channel" — and it is
-     * deliberately NOT the same thing as `enabled: false`:
+     * themselves through the danger zone's "Disconnect this channel", and it is
+     * deliberately not the same thing as `enabled: false`:
      *
      * - `enabled: false` is a pause. The header switch put it there, the header
      *   switch takes it back, nothing was torn down.
@@ -37,7 +37,7 @@ export interface ChannelSummary {
      *
      * Deliberately a separate field from `status`, not a fifth status value.
      * They answer different questions, and collapsing them lies to the
-     * broadcaster in both directions — a bot they paused would report itself
+     * broadcaster in both directions. A bot they paused would report itself
      * broken, and a bot Twitch cut off would report itself merely paused. The
      * app needs both to render the header honestly.
      */
@@ -52,7 +52,7 @@ export type SetChannelEnabledRequest = z.infer<typeof setChannelEnabledSchema>;
  * The result of flipping the switch.
  *
  * Carries `status` as well as `enabled` so the header updates from one round
- * trip — and so the two stay visibly independent: turning the bot off does not
+ * trip, and so the two stay visibly independent. Turning the bot off does not
  * change what Twitch thinks of the channel, and this response is where that is
  * asserted rather than assumed.
  */
@@ -64,15 +64,15 @@ export interface ChannelEnabledResponse {
 /**
  * What the danger zone's Disconnect leaves behind.
  *
- * The same two fields, from the same row, for the same reason — the app's header
+ * The same two fields, from the same row, for the same reason. The app's header
  * reads both and must not infer either. It is a separate type only so the name
  * says which action produced it; a shared alias would read as if disconnecting
  * and pausing were the same operation with a different verb.
  *
  * `contentKept` is not a field here on purpose. Commands, emotes and quotes
  * surviving a disconnect is a promise the danger card makes in words, and a
- * boolean echoing it back would be the server agreeing with itself — the thing
- * that proves it is the test that reads the rows afterwards.
+ * boolean echoing it back would be the server agreeing with itself. What proves
+ * it is the test that reads the rows afterwards.
  */
 export interface ChannelDisconnectedResponse {
     enabled: boolean;
@@ -84,10 +84,10 @@ export interface ChannelDisconnectedResponse {
  *
  * The broadcaster is deliberately absent. They are unlimited, that is not a
  * number anyone should be able to edit down to three by accident, and the
- * settings screen renders it as the word "Unlimited" rather than a stepper —
- * so there is nothing here for a field to carry.
+ * settings screen renders it as the word "Unlimited" rather than a stepper, so
+ * there is nothing here for a field to carry.
  *
- * A viewer holding several tiers gets the **best** of them, not the one the
+ * A viewer holding several tiers gets the best of them, not the one the
  * code happens to check first. That rule lives in `limitFor` on the server and
  * is stated here because it is what makes "VIPs 5" readable as a floor rather
  * than a cap.
@@ -120,8 +120,8 @@ export interface ChannelSettings {
     songRequestsEnabled: boolean;
     /**
      * Whether requested songs are also appended to a playlist the streamer
-     * keeps. Off until they turn it on and name one — saving a viewer's request
-     * somewhere nobody asked for is a surprise.
+     * keeps. Off until they turn it on and name one, because saving a viewer's
+     * request somewhere nobody asked for is a surprise.
      */
     requestsPlaylistEnabled: boolean;
     /**
@@ -136,12 +136,12 @@ export interface ChannelSettings {
     /**
      * Whether a Spotify account is linked.
      *
-     * A boolean and nothing more, for the same reason the webhook is: the
+     * A boolean and nothing more, for the same reason the webhook is. The
      * dashboard's SPOTIFY tile needs to say "Connected" or "Not set up" and
-     * needs no part of the credential to do it. The full surface — account
-     * name, linked-since date, disconnect — belongs to the songs settings
-     * screen and lands with it; putting it here would ship a payload nothing
-     * reads yet and commit us to keeping it right.
+     * needs no part of the credential to do it. The full surface (account name,
+     * linked-since date, disconnect) belongs to the songs settings screen and
+     * lands with it. Putting it here would ship a payload nothing reads yet and
+     * commit this contract to keeping it right.
      */
     spotifyConnected: boolean;
 }
@@ -149,7 +149,7 @@ export interface ChannelSettings {
 export interface MeResponse {
     twitchUserId: string;
     login: string;
-    /** Null when signed in but no channel has been connected — an ordinary state. */
+    /** Null when signed in but no channel has been connected, an ordinary state. */
     channel: ChannelSummary | null;
     settings: ChannelSettings | null;
 }
@@ -163,7 +163,7 @@ export const updateSettingsSchema = z
          * A stepper changes one tier, but the screen holds all four and sends
          * all four. Merging a partial server-side would need a read before the
          * write and would silently resolve two people editing at once to
-         * whichever request arrived second — with the other tier's change lost
+         * whichever request arrived second, with the other tier's change lost
          * inside a body that never mentioned it.
          */
         aiLimits: aiLimitsSchema.optional(),
@@ -171,8 +171,8 @@ export const updateSettingsSchema = z
         requestsPlaylistEnabled: z.boolean().optional(),
         /**
          * Naming the playlist. Explicit null clears the name, which also clears
-         * the id the server resolved for it — a name and the playlist it points
-         * at cannot be allowed to drift apart.
+         * the id the server resolved for it, because a name and the playlist it
+         * points at cannot be allowed to drift apart.
          *
          * The messages are here rather than in the app for the same reason the
          * rules are: the settings form runs this schema to validate the field, so
@@ -207,7 +207,7 @@ export interface Command {
     /** Set when a built-in handler backs this command rather than static text. */
     handlerName: string | null;
     /**
-     * What a built-in *does*, in the streamer's language — the reply column has
+     * What a built-in does, in the streamer's language. The reply column has
      * nothing else to show for a row whose behavior is code.
      *
      * Null for a static command, whose `responseText` already says everything
@@ -282,10 +282,10 @@ export type ToggleSongRequestsRequest = z.infer<typeof toggleSongRequestsSchema>
 /**
  * The requests playlist, as Spotify currently holds it.
  *
- * Separate from `ChannelSettings.requestsPlaylistName` on purpose: that is what
- * the streamer typed, this is what exists. They disagree in an ordinary case —
- * a playlist named but not yet created, or one deleted from the Spotify app
- * afterwards — and collapsing them would let the settings screen report a
+ * Separate from `ChannelSettings.requestsPlaylistName` on purpose. That is what
+ * the streamer typed, and this is what exists. They disagree in ordinary cases,
+ * such as a playlist named but not yet created, or one deleted from the Spotify
+ * app afterwards, and collapsing them would let the settings screen report a
  * track count for a playlist that is gone.
  */
 export interface SpotifyPlaylist {
@@ -306,7 +306,7 @@ export interface SpotifyStatus {
     connected: boolean;
     /** The Spotify display name, or null when not connected. */
     accountName: string | null;
-    /** When the link was made — the card's "since 4 Aug". Null when not connected. */
+    /** When the link was made, the card's "since 4 Aug". Null when not connected. */
     connectedSince: string | null;
     /**
      * The requests playlist, when one is set AND still exists at Spotify. Null
@@ -320,20 +320,20 @@ export interface SpotifyStatus {
 /**
  * What Spotify is playing right now.
  *
- * Null means nothing is playing — a paused player, a closed app, an account
- * that has not started anything. Deliberately not an error: the now-playing
- * card's empty state is an ordinary state, not a failure.
+ * Null means nothing is playing, whether a paused player, a closed app, or an
+ * account that has not started anything. Deliberately not an error, because the
+ * now-playing card's empty state is an ordinary state and not a failure.
  */
 export interface NowPlaying {
     trackName: string;
     artistName: string;
-    /** Album art, or null — the card keeps its striped placeholder in that case. */
+    /** Album art, or null, in which case the card keeps its striped placeholder. */
     albumArtUrl: string | null;
     progressMs: number;
     durationMs: number;
     /**
      * Whether the track is advancing. A paused player still has a track and a
-     * position, and the card shows them — with the progress bar frozen rather
+     * position, and the card shows them, with the progress bar frozen rather
      * than the whole card blanked.
      */
     isPlaying: boolean;
@@ -353,8 +353,8 @@ export type RewardKind = 'song_request' | 'skip_queue' | 'add_quote';
  *
  * The list is closed and the settings screen states why: a reward the
  * broadcaster made themselves is never in it, and therefore never touched.
- * `bound: false` means we have no reward recorded for that kind — the app can
- * say "not set up" instead of implying something is being managed that is not.
+ * `bound: false` means no reward is recorded for that kind, so the app can say
+ * "not set up" instead of implying something is being managed that is not.
  */
 export interface ManagedReward {
     kind: RewardKind;
@@ -368,9 +368,9 @@ export interface ManagedReward {
 /**
  * The four figures across the top of the dashboard.
  *
- * Scoped to ONE stream — the open one while live, the most recent one when
- * offline. Deliberately not lifetime totals: the dashboard is the glance from
- * the second monitor during a stream, and "4,182 messages" means nothing there
+ * Scoped to one stream, the open one while live and the most recent one when
+ * offline. Deliberately not lifetime totals, because the dashboard is the glance
+ * from the second monitor during a stream, and "4,182 messages" means nothing there
  * if it silently includes every stream that came before.
  */
 export interface DashboardNumbers {
@@ -388,7 +388,7 @@ export interface DashboardNumbers {
  * The realtime feed carries transitions; this carries state. A client that
  * connected mid-stream has missed every transition that ever happened, so
  * without this endpoint the uptime clock would not start until the broadcaster
- * went offline — which is exactly when it stops being interesting.
+ * went offline, which is exactly when it stops being interesting.
  *
  * Nothing here is a new table. Every field is a read over rows the bot already
  * writes.
@@ -402,14 +402,13 @@ export interface DashboardSummary {
     startedAt: string | null;
     /**
      * The current stream's figures while live, the last stream's when offline.
-     * Zeroes only ever mean a real zero — a client that cannot reach the server
+     * Zeroes only ever mean a real zero. A client that cannot reach the server
      * renders `?`, never this.
      */
     numbers: DashboardNumbers;
     /**
-     * The stream `numbers` describes, for the offline screen's
-     * `Last stream / Thursday · 4h 02m` caption. Null until a channel has
-     * streamed once with the bot connected.
+     * The stream `numbers` describes, for the offline screen's `Last stream`
+     * caption. Null until a channel has streamed once with the bot connected.
      */
     lastStream: { startedAt: string; endedAt: string | null } | null;
 }
@@ -417,10 +416,11 @@ export interface DashboardSummary {
 // ---- analytics -------------------------------------------------------------
 
 /**
- * Which window the analytics screen is asking about — its three range chips.
+ * Which window the analytics screen is asking about, matching its three range
+ * chips.
  *
- * `all_time` is the cheap one and stays the default: it reads the lifetime
- * counters the bot maintains per message. The other two range over
+ * `all_time` is the cheap one and stays the default, because it reads the
+ * lifetime counters the bot maintains per message. The other two range over
  * `chat_messages` because a counter cannot be sliced by time, which is a real
  * cost difference and the reason the default is the one it is.
  */
@@ -434,7 +434,7 @@ export const analyticsQuerySchema = z.object({ range: analyticsRangeSchema });
 /** One row of the streams table on the analytics screen. */
 export interface StreamSummary {
     startedAt: string;
-    /** Null while the stream is still running — the row reads "live" rather than a length. */
+    /** Null while the stream is still running, so the row reads "live" rather than a length. */
     endedAt: string | null;
     messages: number;
     /**
@@ -443,7 +443,7 @@ export interface StreamSummary {
      * Counted from the messages themselves. The `streams` table used to carry a
      * `unique_chatters` column that nothing ever wrote, so it read 0 for every
      * stream ever recorded; it has been dropped rather than backfilled, because
-     * a column that lies is worse than a column that is absent — an absent one
+     * a column that lies is worse than a column that is absent. An absent one
      * cannot be picked up by the next query that needs a chatter count.
      */
     chatters: number;
@@ -463,8 +463,8 @@ export interface AnalyticsSummary {
      * Most recent streams first, newest at the top of the table.
      *
      * Empty for a channel that has not streamed with the bot connected. The
-     * screen renders the real, small list — never an apologetic empty state:
-     * four streams in is a fact about a young channel, not a failure to have
+     * screen renders the real, small list, never an apologetic empty state.
+     * Four streams in is a fact about a young channel, not a failure to have
      * data.
      */
     recentStreams: StreamSummary[];
@@ -481,15 +481,15 @@ export interface ApiKeySummary {
     lastUsedAt: string | null;
 }
 
-/** The full key, returned exactly once — it is not recoverable afterwards. */
+/** The full key, returned exactly once. It is not recoverable afterwards. */
 export interface CreatedApiKey extends ApiKeySummary {
     key: string;
 }
 
 export const createApiKeySchema = z.object({
     /**
-     * What the streamer calls this key — "Stream Deck", "laptop". The only thing
-     * that will identify it in the table afterwards, since the key itself is
+     * What the streamer calls this key, such as "Stream Deck" or "laptop". It is
+     * the only thing that identifies it in the table afterwards, since the key itself is
      * never shown again, so an unnamed one would be unrevokable in practice.
      */
     name: z

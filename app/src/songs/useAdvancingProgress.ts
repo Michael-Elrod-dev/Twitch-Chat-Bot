@@ -55,8 +55,8 @@ export function useAdvancingProgress(source: NowPlaying | null): NowPlaying | nu
     const sourceProgress = source?.progressMs ?? 0;
 
     useEffect(() => {
-        // Re-anchored whenever the server speaks — a new track, or the same
-        // track at a position we did not predict.
+        // Re-anchored whenever the server speaks, whether that is a new track
+        // or the same track at an unpredicted position.
         anchor.current = { at: Date.now(), progressMs: sourceProgress };
         setProgressMs(sourceProgress);
     }, [trackKey, sourceProgress]);

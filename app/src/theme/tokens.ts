@@ -4,8 +4,8 @@
  * Every value here is taken from the design handoff README's token tables. This
  * module is the only place any of them are written down: components reference
  * CSS custom properties, and `applyTheme` is what turns these constants into
- * those properties. A color that appears literally in a stylesheet is a bug —
- * it is a value that cannot be changed from one place.
+ * those properties. A color that appears literally in a stylesheet is a bug,
+ * because it is a value that cannot be changed from one place.
  *
  * Scope is Windows desktop, dark theme only. Light theme and web layout were
  * explicitly deferred, so there is deliberately no second palette to keep in
@@ -15,7 +15,7 @@
 /**
  * The product name.
  *
- * ONE constant, everywhere — the mocks show the literal placeholder `APP NAME`
+ * One constant, everywhere. The mocks show the literal placeholder `APP NAME`
  * because the rebrand has not happened yet. The window title, the document
  * title and the title-bar wordmark all read this; nothing else names the app.
  */
@@ -31,7 +31,7 @@ export const colors = {
     insetSurface: '#141312',
 
     hairline: 'rgba(240,235,225,.06)',
-    /** Rail edge and header underline — one step stronger than a card border. */
+    /** Rail edge and header underline, one step stronger than a card border. */
     hairlineStructural: 'rgba(240,235,225,.07)',
     rowDivider: 'rgba(240,235,225,.04)',
 
@@ -46,7 +46,7 @@ export const colors = {
     disabledIcon: '#4f4a44',
 
     /**
-     * Clay. Also the warning and danger color — there is deliberately no
+     * Clay. Also the warning and danger color, because there is deliberately no
      * separate error red in this system.
      */
     accent: '#c8663f',
@@ -87,7 +87,7 @@ export const fonts = {
     mono: '"JetBrains Mono", ui-monospace, monospace'
 } as const;
 
-/** Role → the exact type spec from the handoff's typography table. */
+/** Role to the exact type spec from the handoff's typography table. */
 export const type = {
     pageTitle: { family: fonts.sans, weight: 600, size: '22px', lineHeight: '1', letterSpacing: '-.01em' },
     bigFigure: { family: fonts.mono, weight: 600, size: '30px', lineHeight: '1', letterSpacing: '-.02em' },
@@ -141,8 +141,8 @@ export const radius = {
  * The two keyframes this system has, and nothing else.
  *
  * Healthy dots stagger across the status row so it shimmers rather than blinks
- * in unison; offline is the same dot at reduced opacity with no animation —
- * on, but not busy.
+ * in unison. Offline is the same dot at reduced opacity with no animation, so
+ * it reads as on but not busy.
  */
 export const motion = {
     okGlowDuration: '3.4s',

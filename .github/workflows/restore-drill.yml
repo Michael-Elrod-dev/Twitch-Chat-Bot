@@ -1,8 +1,9 @@
 name: Restore drill
 
-# Design §4.1 guardrail 5: backups are proven restorable continuously, not
-# discovered broken during an incident. This drill needs no cloud credentials -
-# it proves the dump/restore *tooling and schema* round-trip. The S3-sourced
+# Guardrail 5 of the database-hosting decision. Backups are proven restorable
+# continuously, not discovered broken during an incident. This drill needs no
+# cloud credentials, because it proves the dump and restore tooling and the
+# schema round-trip. The S3-sourced
 # variant (restoring the newest real backup) becomes possible once AWS secrets
 # exist in the repo; see docs/DEPENDENCIES.md.
 

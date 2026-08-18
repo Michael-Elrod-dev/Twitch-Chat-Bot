@@ -4,7 +4,7 @@ import type { PillState } from './channelStatus.js';
 /**
  * The channel status pill, in all four of its states.
  *
- * `UNKNOWN` is not a decorative fallback — it is the honest answer whenever the
+ * `UNKNOWN` is not a decorative fallback. It is the honest answer whenever the
  * app cannot see the server, and it is deliberately worded so nobody mistakes
  * it for "offline".
  */

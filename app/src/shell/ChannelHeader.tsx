@@ -35,7 +35,7 @@ export function ChannelHeader({
         <div className="channel-header">
             <div className="channel-header__identity">
                 <span className="channel-header__avatar" aria-hidden="true" />
-                <span className="channel-header__login">{channel?.login ?? '—'}</span>
+                <span className="channel-header__login">{channel?.login ?? '-'}</span>
                 <StatusPill state={resolvePillState(inputs)} uptime={uptime} />
             </div>
 

@@ -4,9 +4,9 @@ import { formatShortDate } from './songsFormat.js';
 /**
  * The Spotify link, as a card.
  *
- * Shared by the songs screen (`3c`, right column) and the songs settings pane
- * (`5a`, bottom card) because it is the same card in both places — the design
- * draws it twice with different chrome around it, and building it twice is how
+ * Shared by the songs screen's right column and the songs settings pane's bottom
+ * card, because it is the same card in both places. The design draws it twice
+ * with different chrome around it, and building it twice is how
  * one of them ends up still offering Disconnect after the account is gone.
  *
  * There is nothing here that could authenticate, and that is a property of the

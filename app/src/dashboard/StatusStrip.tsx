@@ -3,7 +3,7 @@ import { okGlowDelay, type StatusTile } from './dashboardState.js';
 /**
  * Five tiles across the top of the dashboard.
  *
- * The dots are the whole point of this row — it is read at a glance from a
+ * The dots are the whole point of this row. It is read at a glance from a
  * second monitor, and the words are confirmation rather than the message. The
  * healthy ones are staggered so the row shimmers instead of blinking in unison;
  * the `?` state is deliberately not a dot at all, because a grey dot would read

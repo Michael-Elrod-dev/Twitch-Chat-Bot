@@ -9,11 +9,11 @@ import { formatStreamDay, formatStreamLength, TREND_THRESHOLD } from './analytic
 /**
  * Analytics (`3d`).
  *
- * The screen's one non-obvious rule: **the small numbers are the design.** This
- * channel's history starts in August 2026, so four streams and a five-name list
- * are facts about a young channel rather than a failure to have data — and the
- * tests here mostly assert what is NOT rendered: no apology, no "not enough data
- * yet", no zeroes standing in for a request that did not land.
+ * The screen's one non-obvious rule is that the small numbers are the design.
+ * Four streams and a five-name list are facts about a young channel rather than
+ * a failure to have data, so the tests here mostly assert what is not rendered.
+ * No apology, no "not enough data yet", and no zeroes standing in for a request
+ * that did not land.
  */
 
 const session = () => memorySessionStorage({ accessToken: 'token', refreshToken: 'r' });
@@ -62,7 +62,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('the analytics formatters', () => {
     it('writes a stream day weekday-first and day before month', () => {
         // 14 Aug 2026 is a FRIDAY. The design's mock draws "Thu 14 Aug" for the same
-        // date, which is the mock being a mock — the formatter reports the real day,
+        // date, which is the mock being a mock. The formatter reports the real day,
         // and this test is what would have caught it going the other way.
         expect(formatStreamDay('2026-08-14T14:00:00.000Z')).toBe('Fri 14 Aug');
         expect(formatStreamDay('nonsense')).toBe('');
@@ -130,7 +130,7 @@ describe('Analytics (3d)', () => {
         expect(fills).toHaveLength(2);
         // The browser normalizes a trailing-zero percentage, so this is '100%'.
         expect(fills[0]?.style.width).toBe('100%');
-        // 2408 / 3121 — the second bar is a proportion of the first, not of 24,806.
+        // 2408 of 3121. The second bar is a proportion of the first, not of 24,806.
         expect(Number.parseFloat(fills[1]?.style.width ?? '0')).toBeCloseTo(77.15, 1);
     });
 
@@ -179,8 +179,8 @@ describe('Analytics (3d)', () => {
     it('renders a young channel plainly, with no apology and no empty-state glyph', async () => {
         /*
          * The state every new tenant is in, and the one the handoff is most
-         * insistent about. Real zeroes and a plain sentence — not a dashed square,
-         * not "no data available", not a suggestion that something is wrong.
+         * insistent about. Real zeroes and a plain sentence, not a dashed square,
+         * not "no data available", and not a suggestion that something is wrong.
          */
         stubApi({
             all_time: summary({

@@ -24,8 +24,8 @@ fn deep_link_registered(app: tauri::AppHandle) -> bool {
 ///
 /// It does almost nothing on purpose: the window is a webview, and everything
 /// the user interacts with is the React app. What the shell must own is the
-/// three things a webview cannot do for itself — drive the window, open a URL
-/// in the *system* browser, and receive the `almosthadai://` deep link the
+/// three things a webview cannot do for itself. It drives the window, opens a
+/// URL in the system browser, and receives the `almosthadai://` deep link the
 /// sign-in flow hands back.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -57,9 +57,9 @@ pub fn run() {
 
                 // NOT best-effort-and-forget. This registration is what lets
                 // sign-in finish at all: without it Twitch consent succeeds,
-                // the server redirects to `almosthadai://auth#…`, Windows has
+                // the server redirects to `almosthadai://auth`, Windows has
                 // nowhere to deliver it, and the user is left retrying a link
-                // whose one-use state is already spent — an undiagnosable loop
+                // whose one-use state is already spent, an undiagnosable loop
                 // whose only visible symptom is "this authorization link is no
                 // longer valid". Swallowing the error here is what would make
                 // that loop impossible to explain, so it is logged loudly and

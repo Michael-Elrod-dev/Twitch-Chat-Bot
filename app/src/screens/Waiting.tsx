@@ -2,9 +2,9 @@ import { KeyRound, Loader } from 'lucide-react';
 import { APP_VERSION } from '../api/config.js';
 
 /**
- * `5d` — waiting for the browser.
+ * Waiting for the browser.
  *
- * The same frame as `3g` with the glyph pulsing, so the transition reads as one
+ * The same frame as the sign-in screen with the glyph pulsing, so the transition reads as one
  * screen continuing rather than two screens swapping. "Open the tab again"
  * exists because the browser tab is easy to lose behind a game.
  */
@@ -29,7 +29,7 @@ export function Waiting({ onReopen, onCancel, error = null }: WaitingProps): Rea
 
                 <div className="auth__waiting" role="status">
                     <Loader size={15} aria-hidden="true" />
-                    Waiting for Twitch…
+                    Waiting for Twitch...
                 </div>
 
                 <div className="auth__actions">

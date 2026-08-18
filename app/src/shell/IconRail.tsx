@@ -13,8 +13,8 @@ import {
 /**
  * The persistent navigation rail.
  *
- * Order and icons are fixed by the handoff. Labels are not rendered inline —
- * they appear on hover as a tooltip to the right, which is what keeps the rail
+ * Order and icons are fixed by the handoff. Labels are not rendered inline.
+ * They appear on hover as a tooltip to the right, which is what keeps the rail
  * 64px wide while remaining usable by someone who has not memorised six
  * glyphs.
  */

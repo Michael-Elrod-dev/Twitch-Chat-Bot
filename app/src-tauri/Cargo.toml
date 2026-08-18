@@ -16,7 +16,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Both are required by `tauri::generate_context!`, which expands into code that
-# names them at the crate root — they are not optional even though nothing in
+# names them at the crate root. They are not optional even though nothing in
 # this file references them directly.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,15 +27,15 @@ tauri-plugin-deep-link = "2"
 
 # HTTP from Rust rather than from the webview. The webview's origin is
 # `http://tauri.localhost`, so every API call would be a cross-origin request
-# the server does not (and should not have to) permit — the API's client is a
+# the server does not, and should not have to, permit. The API's client is a
 # desktop app, not a web page, and adding CORS to serve it would open the API
 # to every page a user visits. The scope in capabilities/default.json is what
 # limits where these requests may go.
 tauri-plugin-http = "2"
 
-# Auto-update against GitHub Releases. Windows code signing is deferred (owner
-# decision — unsigned installer, SmartScreen click accepted for a two-person
-# audience), but Tauri's own update signing is independent of that and keeps
+# Auto-update against GitHub Releases. Windows code signing is deferred by owner
+# decision, so the installer is unsigned and a SmartScreen click is accepted for
+# the current audience, but Tauri's own update signing is independent of that and keeps
 # updates cryptographically verified regardless.
 tauri-plugin-updater = "2"
 

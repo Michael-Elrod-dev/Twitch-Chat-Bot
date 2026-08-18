@@ -9,14 +9,14 @@ import { formatStreamDay, formatStreamLength, TREND_THRESHOLD } from './analytic
 /**
  * Analytics (`3d`).
  *
- * **The young-data framing is the design, not a fallback.** This channel's
- * history starts in August 2026, so four streams and a five-name chatter list are
- * the real numbers — and the handoff is explicit that they are rendered as facts
- * rather than as an apology. There is no "not enough data yet" state here: the
- * footer says how young the data is and the cards show what there is.
+ * The young-data framing is the design, not a fallback. A young channel's four
+ * streams and five-name chatter list are the real numbers, and the handoff is
+ * explicit that they are rendered as facts rather than as an apology. There is no
+ * "not enough data yet" state here. The footer says how young the data is and the
+ * cards show what there is.
  *
  * The chips are three windows over one dataset. `all_time` is the default because
- * it is the cheap one — it reads the counters the bot maintains per message,
+ * it is the cheap one. It reads the counters the bot maintains per message,
  * where the other two scan the message table. That is the repository's reasoning,
  * repeated here only to explain why the screen opens where it does.
  */
@@ -36,7 +36,7 @@ export function Analytics({ storage }: AnalyticsProps): React.JSX.Element {
 
     /*
      * The range is in the path, so switching chips changes the hook's key and
-     * re-fetches — and `useResource`'s sequence guard is what stops a slow
+     * re-fetches, and `useResource`'s sequence guard is what stops a slow
      * `all_time` response landing after a fast `this_stream` one and relabelling
      * the chip the user is looking at. The response echoes its own range for the
      * same reason from the server's side.
@@ -52,10 +52,10 @@ export function Analytics({ storage }: AnalyticsProps): React.JSX.Element {
      * The header's date, and it is NOT a "since".
      *
      * The design draws `since 1 Aug 2026`, meaning "this is how far back the data
-     * goes". The contract has no earliest-stream field — `lastStreamAt` is the
-     * MOST RECENT one — so wiring the design's label to the field that exists
-     * produced `since 14 Aug 2026` over figures that include everything before it.
-     * Caught by reading the rendered header rather than the code, which is the
+     * goes". The contract has no earliest-stream field, and `lastStreamAt` is the
+     * most recent one, so wiring the design's label to the field that exists
+     * produces `since 14 Aug 2026` over figures that include everything before it.
+     * Only reading the rendered header catches that, which is the
      * only place the two halves of a sentence sit next to each other.
      *
      * `recentStreams` is not the answer either: it is capped at twenty, so its
@@ -78,8 +78,8 @@ export function Analytics({ storage }: AnalyticsProps): React.JSX.Element {
         <div className="content-page">
             <header className="content-header">
                 <h1 className="content-title">Analytics</h1>
-                {/* Omitted entirely before the first stream: "last stream —"
-                    would be worse than nothing. */}
+                {/* Omitted entirely before the first stream, because a bare
+                    "last stream" label would be worse than nothing. */}
                 {lastStream && <span className="content-meta">last stream {lastStream}</span>}
 
                 <div className="content-header__spacer" />
@@ -195,8 +195,8 @@ export function Analytics({ storage }: AnalyticsProps): React.JSX.Element {
  *
  * `null` is "not loaded yet" and renders the skeleton block the dashboard's
  * unreachable state uses. It is never rendered as `0`, which would be a claim
- * about a channel rather than an admission about a request — the same rule `4b`
- * enforces on the dashboard.
+ * about a channel rather than an admission about a request, which is the same
+ * rule the dashboard's degraded state enforces.
  */
 function StatCard({ value, label }: { value: number | null; label: string }): React.JSX.Element {
     return (

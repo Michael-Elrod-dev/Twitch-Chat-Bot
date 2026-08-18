@@ -8,8 +8,8 @@ import { API_BASE_URL } from '../api/config.js';
  *
  * `connecting / open / reconnecting / down` describes **our link to the
  * server**. It says nothing about whether the broadcaster is live, whether the
- * bot is running, or whether Twitch is happy. The handoff is explicit (`4b`):
- * when the server is unreachable every status tile reads `?` / "Unknown" —
+ * bot is running, or whether Twitch is happy. The handoff is explicit. When the
+ * server is unreachable every status tile reads `?` or "Unknown", and
  * never zero, which would be a lie about a bot that is very likely still
  * running perfectly well without us watching.
  *
@@ -31,10 +31,10 @@ export interface ConnectionOptions {
      * Supplies a token for EACH attempt, rather than one captured for the life
      * of the connection.
      *
-     * A browser WebSocket does not expose the handshake's status code — a
-     * rejected upgrade arrives as an ordinary close — so a socket reconnecting
+     * A browser WebSocket does not expose the handshake's status code, because a
+     * rejected upgrade arrives as an ordinary close, so a socket reconnecting
      * with an expired token retries forever and never learns why. Access tokens
-     * live fifteen minutes; asking for a fresh one per attempt is what lets
+     * live fifteen minutes, and asking for a fresh one per attempt is what lets
      * this loop heal itself instead of going permanently silent after a drop.
      */
     token: () => Promise<string>;
@@ -65,7 +65,8 @@ const MAX_DELAY_MS = 30_000;
  *
  * The distinction is what the UI shows: `reconnecting` is a quiet inline note
  * because a blip should not throw a banner over a working bot, while `down` is
- * the `4b` banner. Three attempts is roughly a few seconds of trying — long
+ * the degraded-state banner. Three attempts is roughly a few seconds of trying,
+ * long
  * enough that the user is not being told about a hiccup they never noticed.
  */
 const ATTEMPTS_BEFORE_DOWN = 3;
@@ -164,7 +165,7 @@ export class LiveConnection {
                 parsed = JSON.parse(event.data) as LiveEvent;
             } catch {
                 // A frame we cannot read is dropped rather than taking the
-                // connection down with it — the feed is ambient, not a log.
+                // connection down with it, because the feed is ambient, not a log.
                 return;
             }
             this.options.onEvent(parsed);

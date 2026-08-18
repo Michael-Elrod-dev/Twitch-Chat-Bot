@@ -9,9 +9,10 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Runtime connects as the least-privilege role (design §4.1 guardrail 3):
-      # it can read and write data but cannot create roles or databases, and does
-      # not own the tables. Migrations use the owner role below, on a connection
+      # Runtime connects as the least-privilege role, guardrail 3 of the
+      # database-hosting decision. It can read and write data but cannot create
+      # roles or databases, and it does not own the tables. Migrations use the
+      # owner role below, on a connection
       # that is opened and closed at boot.
       DATABASE_URL: postgres://almosthadai_app:${APP_DB_PASSWORD:-devpassword}@postgres:5432/almosthadai
       MIGRATION_DATABASE_URL: postgres://almosthadai:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/almosthadai
@@ -110,9 +111,9 @@ services:
 
 volumes:
   # EXTERNAL ON PURPOSE. Compose will not delete a volume it does not manage, so
-  # `docker compose down -v` cannot destroy the database — which is the only
-  # mechanism that actually works, having twice destroyed real data by relying
-  # on remembering not to.
+  # `docker compose down -v` cannot destroy the database. That is the only
+  # mechanism that actually works, because relying on remembering not to has
+  # destroyed real data twice.
   #
   # Create it once per machine:
   #   docker volume create almosthadai-postgres-data

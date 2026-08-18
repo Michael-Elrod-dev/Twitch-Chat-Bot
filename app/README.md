@@ -4,7 +4,7 @@ The Windows client for the bot: Tauri 2 + React + TypeScript. The server is
 always on; this is its remote control and live dashboard for one signed-in
 streamer.
 
-Scope is **Windows, dark theme only** — no light theme, no web layout. Both were
+Scope is **Windows, dark theme only**, with no light theme and no web layout. Both were
 explicitly deferred, so there is deliberately no second palette to keep in step.
 
 ## Running it
@@ -17,7 +17,7 @@ npm run tauri -w @almosthadai/app -- dev
 
 `npm run dev -w @almosthadai/app` runs the front end alone in a browser. The
 shell degrades to no-ops there: the window buttons do nothing and the deep link
-never arrives, so sign-in cannot complete. That is deliberate — the alternative
+never arrives, so sign-in cannot complete. That is deliberate, because the alternative
 is a crash on a missing `__TAURI_INTERNALS__`.
 
 Point it at a server with `VITE_API_BASE_URL`; see [.env.example](.env.example).
@@ -30,8 +30,8 @@ Point it at a server with `VITE_API_BASE_URL`; see [.env.example](.env.example).
 | `src/api/` | One fetch wrapper over the `{ ok, data \| error }` envelope. Transport failure is an `unavailable` code, not a different species of problem. |
 | `src/auth/` | The sign-in arc, the token store, and the deep-link parser. |
 | `src/live/` | The WebSocket connection state machine. Knows nothing about channel status. |
-| `src/shell/` | Title bar, icon rail, channel header — the chrome every signed-in screen keeps. |
-| `src/screens/` | The auth screens. The domain screens arrive with WP9. |
+| `src/shell/` | Title bar, icon rail, channel header, the chrome every signed-in screen keeps. |
+| `src/screens/` | The auth screens. |
 | `src-tauri/` | The Rust shell: window, system browser, deep link, updater. |
 
 ## Three things worth knowing before changing anything
@@ -42,7 +42,7 @@ there is no second copy to forget at the rebrand; the app writes both on boot.
 
 **Connection state is not channel state.** `connecting / open / reconnecting /
 down` describes our link to the server. When it is not `open`, the header reads
-`UNKNOWN` — never `OFFLINE`, and status tiles read `?` rather than zero. Telling
+`UNKNOWN` and never `OFFLINE`, and status tiles read `?` rather than zero. Telling
 a broadcaster their bot is off because our socket dropped would be a lie about a
 bot that is almost certainly still working. `src/shell/channelStatus.ts` is the
 one place the two meet, and it is a pure function so that stays testable.
@@ -67,10 +67,10 @@ Finishing it at that release means: generate a key pair with
 `npm run tauri -- signer generate`, put the public half in `plugins.updater.pubkey`,
 set `active: true` and `createUpdaterArtifacts: true`, and hold the private half
 as a repository secret. This is independent of Windows code signing, which is
-deferred — updates stay cryptographically verified either way.
+deferred, and updates stay cryptographically verified either way.
 
 ## Icons
 
 `src-tauri/icons/` holds a placeholder generated from the design tokens: the clay
 rounded square that appears in the title bar. It is a placeholder for the same
-reason the wordmark is — the rebrand has not happened.
+reason the wordmark is, because the rebrand has not happened.

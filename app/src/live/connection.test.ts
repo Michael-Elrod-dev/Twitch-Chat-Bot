@@ -5,8 +5,8 @@ import { LiveConnection, type ConnectionState, type WebSocketLike } from './conn
 /**
  * The reconnect state machine.
  *
- * Driven through a fake socket and a fake clock so the whole sequence —
- * connecting, dropping, backing off, coming back — runs without a real server
+ * Driven through a fake socket and a fake clock so the whole sequence of
+ * connecting, dropping, backing off and coming back runs without a real server
  * or a real second passing.
  */
 
@@ -45,7 +45,7 @@ interface Harness {
  * Lets the connection's `await token()` resolve.
  *
  * The socket is built after that await, so a test that inspected `sockets`
- * straight after `start()` would see none — not because the connection is
+ * straight after `start()` would see none, not because the connection is
  * broken, but because it has not reached the socket yet.
  */
 const settle = async (): Promise<void> => {
@@ -251,11 +251,12 @@ describe('LiveConnection', () => {
 /**
  * The defect the owner's own machine exhibited.
  *
- * Access tokens live fifteen minutes. The shell captured one at boot and reused
- * it for every reconnect, and a browser WebSocket does not expose the
- * handshake's status code — a rejected upgrade arrives as an ordinary close.
- * So after any drop past the first fifteen minutes the app retried forever with
- * a token the server would never accept, and sat in `4b` claiming it could not
+ * Access tokens live fifteen minutes. A shell that captured one at boot and
+ * reused it for every reconnect would find that a browser WebSocket does not
+ * expose the handshake's status code, because a rejected upgrade arrives as an
+ * ordinary close. After any drop past the first fifteen minutes the app retries
+ * forever with a token the server would never accept, and sits in the degraded
+ * state claiming it could not
  * reach a server that was perfectly healthy.
  */
 describe('the token per attempt', () => {
@@ -292,7 +293,7 @@ describe('the token per attempt', () => {
     });
 
     it('treats a failed refresh as a drop and keeps trying, rather than giving up', async () => {
-        // The refresh can fail because the network is down — which is exactly
+        // The refresh can fail because the network is down, which is exactly
         // when reconnecting matters. Ending the session there would sign a user
         // out over a blip.
         let attempts = 0;

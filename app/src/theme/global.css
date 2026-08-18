@@ -1,7 +1,7 @@
 /*
  * The app's stylesheet.
  *
- * Every color, radius and spacing value here is a `var(--…)` written by
+ * Every color, radius and spacing value here is a `var(--...)` written by
  * applyTheme() from src/theme/tokens.ts. A literal hex in this file would be a
  * design value that cannot be changed from one place, which is exactly what the
  * token module exists to prevent.
@@ -64,7 +64,7 @@ button {
  * Reduced motion: the animation goes, the glow stays.
  *
  * Both the media query and the data attribute, because they answer different
- * questions — the query is the platform preference, and the attribute is what
+ * questions. The query is the platform preference, and the attribute is what
  * watchReducedMotion() reflects so a change mid-session takes effect without a
  * reload. Freezing at the lit end of the cycle keeps "healthy" legible; a dot
  * with no glow at all would read as "off".
@@ -155,8 +155,8 @@ button {
     display: flex;
     align-items: center;
     gap: 18px;
-    /* Buttons inside a draggable strip must opt back out, or they cannot be
-       clicked — only dragged. */
+    /* Buttons inside a draggable strip must opt back out, or they can only be
+       dragged and never clicked. */
     -webkit-app-region: no-drag;
 }
 
@@ -360,12 +360,11 @@ button {
 /*
  * The toggle, at the handoff's standalone size.
  *
- * **34×19 with a 15px knob, and the header's 30×17 is the override.** It was the
- * other way round while the master switch was the only toggle in the app, which
- * was harmless and wrong: the handoff says "34×19 (30×17 in the header)", so
- * writing the header's size as the base made every toggle the settings screens
- * added four pixels too small. Caught in a browser, because a size is not
- * something jsdom has an opinion about.
+ * 34 by 19 with a 15px knob is the base, and the header's 30 by 17 is the
+ * override. The handoff reads "34x19 (30x17 in the header)", so writing the
+ * header's size as the base makes every other toggle four pixels too small.
+ * Only a browser catches that, because a size is not something jsdom has an
+ * opinion about.
  */
 .toggle {
     position: relative;
@@ -376,19 +375,9 @@ button {
     border-radius: var(--radius-pill);
     background: var(--color-toggle-off-track);
     /*
-     * `background-color`, not the `background` shorthand — tidiness, and matching
-     * the `transform` transition below rather than fixing a bug. Transitioning a
-     * shorthand that carries non-animatable longhands is simply not what was
-     * meant.
-     *
-     * Recorded because the shorthand was briefly believed to be a real defect: an
-     * inspection found this toggle stuck on the inert grey after Spotify answered,
-     * and the cause turned out to be the inspecting browser pane not compositing,
-     * which freezes every CSS transition at `currentTime: 0`. Both properties were
-     * stuck at their "from" values, which is the tell — a broken shorthand would
-     * not also freeze a transform. The lesson is the run's own, one layer out:
-     * **the harness can lie about the thing it is measuring**, and a frozen
-     * animation clock looks exactly like a stylesheet that never applied.
+     * `background-color`, not the `background` shorthand, so it matches the
+     * `transform` transition below. Transitioning a shorthand that carries
+     * non-animatable longhands is not what is meant here.
      */
     transition: background-color 120ms var(--motion-easing);
 }
@@ -518,12 +507,11 @@ button {
 /*
  * Both blocks, explicitly.
  *
- * These were styled for block-level children and then given inline ones, so the
- * title and the description ran together into one sentence — "We cannot reach
- * our serverYour bot is probably still running" — and `margin-top` on the
- * description did nothing, because margins do not apply to inline boxes. Stated
- * here rather than relying on the element chosen at each call site, so the two
- * cannot be separated by a component that reaches for a span.
+ * With inline children the title and the description run together into one
+ * sentence, and `margin-top` on the description does nothing, because margins
+ * do not apply to inline boxes. Stated here rather than relying on the element
+ * chosen at each call site, so the two cannot be joined by a component that
+ * reaches for a span.
  */
 .banner__title {
     display: block;
@@ -543,7 +531,7 @@ button {
 /* ---- auth screens ------------------------------------------------------ */
 
 /*
- * No rail, no channel header — centred on the plain body, with the version
+ * No rail and no channel header. Centered on the plain body, with the version
  * pinned 30px from the bottom.
  */
 .auth {
@@ -1007,8 +995,8 @@ button {
 /* ---- chat feed --------------------------------------------------------- */
 
 /*
- * The scroll container. Oldest at the top, newest at the bottom — chat's
- * direction everywhere, and the direction the design mock's own rows run in.
+ * The scroll container. Oldest at the top, newest at the bottom, which is
+ * chat's direction everywhere and the direction the design mock's rows run in.
  */
 .chat-feed {
     display: flex;
@@ -1021,8 +1009,8 @@ button {
 /*
  * `margin-top: auto` rather than `justify-content: flex-end` on the container.
  * Both sit a short feed at the bottom, but flex-end makes the overflowing top
- * of a full list unreachable in a scroll container — the rows scrolled past
- * simply cannot be got back to. This does the same job and stays scrollable.
+ * of a full list unreachable in a scroll container, because the rows scrolled
+ * past cannot be got back to. This does the same job and stays scrollable.
  */
 .chat-feed__list {
     margin: auto 0 0;
@@ -1060,8 +1048,8 @@ button {
  * Name color by role, straight from the event.
  *
  * Derived server-side from the same flags the permission check reads, rather
- * than by matching the login against the channel's — which was all 9a could do
- * without a role on the wire, and which could never have colored a moderator.
+ * than by matching the login against the channel's, which cannot color a
+ * moderator at all.
  */
 .chat-row__name--broadcaster {
     color: var(--color-accent-hover);
@@ -1391,7 +1379,7 @@ button {
     color: var(--color-text-primary);
 }
 
-/* A built-in's name is quieter — it is not something you wrote. */
+/* A built-in's name is quieter, because it is not something the streamer wrote. */
 .list-row__name--builtin {
     display: inline-flex;
     align-items: center;
@@ -1443,7 +1431,7 @@ button {
     color: inherit;
 }
 
-/* Revealed on hover, per the handoff — the row stays quiet until wanted. */
+/* Revealed on hover, per the handoff, so the row stays quiet until wanted. */
 .list-row__actions--hover {
     opacity: 0;
 }
@@ -1467,7 +1455,7 @@ button {
 }
 
 /*
- * `rgba(240,235,225,.07)` per the handoff — one step quieter than the active
+ * `rgba(240,235,225,.07)` per the handoff, one step quieter than the active
  * filter chip's `.09`, which is the difference between "this is selected" and
  * "this is a label". The token is named for structural hairlines because that
  * is where the value first appeared; reaching for it here beats minting a
@@ -1627,7 +1615,7 @@ button {
     color: var(--color-text-tertiary);
 }
 
-/* Clay doubles as the warning color — there is no separate error red. */
+/* Clay doubles as the warning color. There is no separate error red. */
 .field__error {
     font-size: 12px;
     color: var(--color-accent-hover);
@@ -2477,9 +2465,9 @@ button {
  * 1100 the dashboard's bottom grid stacks; the same thing has to happen here, and
  * for a sharper reason than tidiness. At 900px the songs body gave its main
  * column 480px, the queue grid spent 386 of that on fixed columns plus 64 on
- * gaps, and the TRACK column collapsed to 35px — a queue whose one essential
- * piece of information was unreadable, at the smallest size the window can
- * actually be dragged to. The analytics streams table did the same to its WHEN
+ * gaps, and the TRACK column collapsed to 35px, leaving a queue whose one
+ * essential piece of information was unreadable, at the smallest size the window
+ * can actually be dragged to. The analytics streams table did the same to its WHEN
  * column (23px holding "Fri 14 Aug").
  *
  * Found by measuring at 900, not by looking at 1280, which is why it is worth

@@ -7,8 +7,8 @@ import { CloudOff, X } from 'lucide-react';
  * "we could not reach the server" should say the same thing in the same voice
  * wherever the user happens to be standing.
  *
- * Dismissable, because unlike `4b` — where the banner describes an ongoing
- * condition the screen is still in — these describe one request that failed.
+ * Dismissable. Unlike the dashboard banner, which describes an ongoing condition
+ * the screen is still in, these describe one request that failed.
  * Leaving it pinned after a successful retry would be stale.
  */
 

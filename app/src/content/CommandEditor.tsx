@@ -4,17 +4,17 @@ import { USER_LEVEL_LABELS, USER_LEVEL_ORDER } from './commandCatalog.js';
 import { REPLY_MAX_LENGTH, validateCommandName, validateReply } from './validation.js';
 
 /**
- * The command editor (`4e`).
+ * The command editor.
  *
- * Validation is the schema's, not a copy of it — see `validation.ts`. What this
- * component owns is *where* a verdict appears: the name's beside the name, the
+ * Validation is the schema's, not a copy of it, as `validation.ts` sets out.
+ * What this component owns is where a verdict appears: the name's beside the name, the
  * reply's beside the reply, and a `conflict` from the server beside the name
  * too, because "that already exists" is a fact about the name and nowhere else.
  *
  * Editing an existing command deliberately cannot rename it. `updateCommandSchema`
- * accepts only `responseText` and `userLevel` — the name is the identity in the
- * route path — so offering an editable name field would be offering something
- * the API cannot do.
+ * accepts only `responseText` and `userLevel`, because the name is the identity
+ * in the route path, so offering an editable name field would be offering
+ * something the API cannot do.
  */
 
 export interface CommandEditorProps {

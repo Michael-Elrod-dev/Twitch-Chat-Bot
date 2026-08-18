@@ -5,9 +5,8 @@ const tseslint = require('typescript-eslint');
 /**
  * One bot, one language.
  *
- * The Phase-0 CommonJS block and its Jest globals were removed with the legacy
- * tree in P1-LR; the only JavaScript left in the repo is this config and the
- * handful of tooling scripts beside it.
+ * The only JavaScript left in the repo is this config and the handful of
+ * tooling scripts beside it. Everything else is TypeScript.
  */
 const houseStyle = {
     indent: ['error', 4],

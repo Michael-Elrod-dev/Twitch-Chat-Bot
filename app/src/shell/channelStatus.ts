@@ -6,8 +6,8 @@ import type { ConnectionState } from '../live/connection.js';
  *
  * A pure function on purpose: this is the single place where "our link to the
  * server" and "the state of the channel" meet, and it is therefore the single
- * place they could be conflated. The handoff's `4b` rule is absolute — when we
- * cannot reach the server we do not know anything about the channel, and the
+ * place they could be conflated. The rule is absolute. An unreachable server
+ * means nothing is known about the channel, and the
  * honest answer is `unknown`, not `offline`. Telling a broadcaster their bot is
  * offline because our WebSocket dropped would be a lie about a bot that is
  * almost certainly still working.
@@ -49,7 +49,7 @@ export function isMasterSwitchOperable(inputs: PillInputs): boolean {
     return inputs.channel.status !== 'needs_reauth';
 }
 
-/** `LIVE 2:14:07` — ticks locally, re-synced on each `channel.status`. */
+/** `LIVE 2:14:07`. Ticks locally, re-synced on each `channel.status`. */
 export function formatUptime(startedAt: Date, now: Date): string {
     const totalSeconds = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
     const hours = Math.floor(totalSeconds / 3600);

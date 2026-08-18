@@ -31,9 +31,8 @@ export interface StreamOnlineEvent {
     messageId: string;
     broadcasterTwitchId: string;
     /**
-     * Twitch's own stream id. Phase 0 minted `Date.now()` here, which made its
-     * rows impossible to correlate with Twitch and made every restart look like
-     * a new stream.
+     * Twitch's own stream id, never a locally minted one. A minted id cannot be
+     * correlated with Twitch and makes every restart look like a new stream.
      */
     streamId: string;
     startedAt: string;
@@ -48,8 +47,9 @@ export interface StreamOfflineEvent {
 /**
  * A channel-point redemption.
  *
- * `rewardId` is the routing key — never the title. A reward renamed in the
- * Twitch dashboard keeps working; two rewards with similar names stay distinct.
+ * `rewardId` is the routing key, never the title. A reward renamed in the
+ * Twitch dashboard keeps working, and two rewards with similar names stay
+ * distinct.
  */
 export interface RedemptionEvent {
     kind: 'redemption';

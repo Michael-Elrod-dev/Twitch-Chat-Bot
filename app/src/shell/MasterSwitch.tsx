@@ -3,7 +3,7 @@
  *
  * Optimistic with rollback: the toggle moves immediately because a control that
  * waits on a round trip feels broken, and it moves back if the server refuses.
- * Inert — visibly, not just unresponsively — when the server is unreachable or
+ * Visibly inert, not merely unresponsive, when the server is unreachable or
  * Twitch has revoked consent, because a switch that looks live but does nothing
  * is worse than one that plainly cannot be used.
  */

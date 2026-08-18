@@ -10,18 +10,18 @@ import { validateApiKeyName } from '../content/validation.js';
 import { formatShortDate } from '../songs/songsFormat.js';
 
 /**
- * Settings · Stream Deck (`3f`), and the show-once key moment.
+ * The Stream Deck settings pane, and the show-once key moment.
  *
- * **The key is rendered in exactly one place and only while that place is open.**
+ * The key is rendered in exactly one place and only while that place is open.
  * `POST /api/v1/api-keys` is the only response that has ever contained it and
  * there is no route that would return it again, so the modal below is not merely
- * the place the app chooses to show it — it is the only place the value exists.
+ * the place the app chooses to show it. It is the only place the value exists.
  * Closing the modal discards it, which is why the copy says so plainly rather
  * than trusting the streamer to infer it from a missing column.
  *
  * The state holding it is deliberately the modal's own and is cleared on every
- * exit from it, so there is no path — closing, canceling, creating a second key —
- * that leaves a secret in a variable something could later render. The pinning
+ * exit from it, so no path (closing, canceling, or creating a second key)
+ * leaves a secret in a variable something could later render. The pinning
  * test for this asserts the negative: after the modal closes, the key text is not
  * on the screen and cannot be brought back.
  */
@@ -50,7 +50,7 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
     /**
      * Leaving the show-once modal.
      *
-     * Clearing `created` IS the discard — there is nowhere else the secret lives,
+     * Clearing `created` is the discard, because nowhere else holds the secret,
      * so this one line is the whole of "closing it discards it". The new row still
      * appears in the table underneath, because a key you cannot see is still a key
      * you need to be able to revoke.
@@ -143,9 +143,9 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
                                       * The ellipsis is the point: it says this is
                                       * a fragment for recognizing a key, not a key.
                                       */}
-                                    <span className="list-row__name">{key.prefix}…</span>
+                                    <span className="list-row__name">{key.prefix}...</span>
                                     <span className="list-row__cell">
-                                        {formatShortDate(key.createdAt) ?? '—'}
+                                        {formatShortDate(key.createdAt) ?? '-'}
                                     </span>
                                     {/* "never" rather than a dash: a key nothing
                                         has used is worth noticing, because it is
@@ -170,7 +170,7 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
                 <div className="card__footer card__footer--shield">
                     <Shield size={14} aria-hidden="true" />
                     A key can see the queue, skip a track, and turn requests on or off. That is the
-                    whole list — it cannot touch commands, quotes or your numbers, so taping one
+                    whole list. It cannot touch commands, quotes or your numbers, so taping one
                     inside a Stream Deck profile is fine.
                 </div>
             </section>
@@ -217,7 +217,7 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
                         <h2 className="modal__title">Copy this now</h2>
                         <p className="modal__copy">
                             This is the only time you will see it. Close this and it is gone for
-                            good — you would have to make a new one.
+                            good, and you would have to make a new one.
                         </p>
                         <code className="key-reveal">{created.key}</code>
                         <div className="modal__actions">
@@ -229,7 +229,7 @@ export function StreamDeckSettings({ storage }: StreamDeckSettingsProps): React.
                                      * Best effort, and the key stays on screen
                                      * either way. A webview without clipboard
                                      * permission must not swallow the one moment
-                                     * the value exists — so a failed copy leaves
+                                     * the value exists, so a failed copy leaves
                                      * the streamer able to select it by hand
                                      * rather than closing the modal on them.
                                      */

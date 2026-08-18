@@ -95,11 +95,11 @@ describe('the status strip matrix', () => {
                 for (const enabled of [true, false]) {
                     it(`reads Unknown across the row: ${connection} / ${status} / enabled=${enabled}`, () => {
                         /*
-                         * The whole `4b` rule in one assertion, asked eighteen
-                         * ways. Whatever we last believed about the channel, an
-                         * unreachable server means none of it is current — and
-                         * a zero or an "Off" here would be a claim about a bot
-                         * that is very likely running perfectly well without us.
+                         * The whole degraded-state rule in one assertion, asked
+                         * eighteen ways. Whatever was last believed about the
+                         * channel, an unreachable server means none of it is
+                         * current, and a zero or an "Off" here would be a claim
+                         * about a bot very likely running perfectly well.
                          */
                         const tiles = resolveStatusTiles({
                             connection,
@@ -131,8 +131,8 @@ describe('the status strip matrix', () => {
     });
 
     it('offline: the same row at rest, not the same row switched off', () => {
-        // `2b`. The dots dim and stop; they do not go grey, because the bot is
-        // on — it simply has nothing to do.
+        // The dots dim and stop. They do not go grey, because the bot is on and
+        // simply has nothing to do.
         renderDashboard({ live: false, summary: summary({ live: false }) });
 
         expect(tileValue('SESSION')).toBe('Idle');
@@ -142,8 +142,8 @@ describe('the status strip matrix', () => {
     });
 
     it('needs_reauth: TWITCH alone demands action', () => {
-        // `4a`. SESSION is dead and AI is waiting rather than off — the setting
-        // is still on, and the bot answers again the moment Twitch lets it.
+        // SESSION is dead and AI is waiting rather than off. The setting is
+        // still on, and the bot answers again the moment Twitch lets it.
         renderDashboard({ channel: channel({ status: 'needs_reauth' }) });
 
         expect(tileValue('SESSION')).toBe('Stopped');
@@ -208,7 +208,7 @@ describe('the status strip matrix', () => {
         const dots = document.querySelectorAll('.status-tile .dot--healthy');
 
         const delays = Array.from(dots).map((d) => (d as HTMLElement).style.animationDelay);
-        // Distinct, and starting at zero — one shared delay would blink in unison.
+        // Distinct, and starting at zero. One shared delay would blink in unison.
         expect(delays[0]).toBe('0s');
         expect(new Set(delays).size).toBeGreaterThan(1);
     });
@@ -394,7 +394,7 @@ describe('the chat feed', () => {
 
         const feed = document.querySelector('.chat-feed') as HTMLElement;
         // jsdom reports zero heights, so the assertion is that the feed was
-        // scrolled to its own full height — the intent, not a pixel value.
+        // scrolled to its own full height, which is the intent and not a pixel value.
         Object.defineProperty(feed, 'scrollHeight', { value: 900, configurable: true });
 
         rerender(
@@ -441,9 +441,9 @@ describe('the chat feed', () => {
         expect(feed[0]?.text).toBe(`line ${CHAT_FEED_CAP + 49}`);
     });
 
-    it('reads "reconnecting…" rather than showing a healthy dot', () => {
+    it('reads "reconnecting..." rather than showing a healthy dot', () => {
         renderDashboard({ connection: 'reconnecting' });
-        expect(screen.getByText('reconnecting…')).toBeInTheDocument();
+        expect(screen.getByText('reconnecting...')).toBeInTheDocument();
     });
 
     it('states plainly that missed lines stay missed', () => {

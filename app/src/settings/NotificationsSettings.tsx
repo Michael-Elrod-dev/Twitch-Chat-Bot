@@ -8,13 +8,13 @@ import { SettingRow } from '../controls/SettingRow.js';
 import type { SettingsPatch } from './settingsPatch.js';
 
 /**
- * Settings · Notifications (`5b`).
+ * The Notifications settings pane.
  *
  * **The webhook is write-only, and this component cannot break that promise even
  * if it tried.** There is no stored URL in the client to render: `ChannelSettings`
  * carries `discordWebhookConfigured`, a boolean, and the API has no route that
  * would return the value. So "never render the stored URL" is a property of the
- * contract rather than a rule this file remembers — which is the only version of
+ * contract rather than a rule this file remembers, which is the only version of
  * that rule worth having, because a URL is a capability and echoing one back
  * would let a stolen token exfiltrate it.
  *
@@ -79,7 +79,7 @@ export function NotificationsSettings({
         setBusy(true);
         void (async () => {
             // Explicit null clears it; `undefined` would mean "not mentioned" and
-            // leave the webhook in place — see the contract's note on the field.
+            // leave the webhook in place, as the contract's note on the field says.
             const error = await onSettingsChange({ discordWebhookUrl: null });
             setBusy(false);
             if (error !== null) setFieldError(error);
@@ -100,7 +100,7 @@ export function NotificationsSettings({
                 <SettingRow
                     title="Webhook"
                     description={configured
-                        ? 'Set. We never show it back to you — it is a key, not a setting, so replacing is the only edit.'
+                        ? 'Set. It is never shown back to you, because it is a key rather than a setting, so replacing is the only edit.'
                         : 'Not set. Paste a Discord webhook URL and the bot posts there when you go live.'}
                     footer={saved
                         ? <p className="setting-row__confirm">Saved. The next time you go live, Discord hears about it.</p>
@@ -138,7 +138,7 @@ export function NotificationsSettings({
                             <input
                                 className={`field__input field__input--mono${fieldError ? ' field__input--invalid' : ''}`}
                                 value={draft}
-                                placeholder="https://discord.com/api/webhooks/…"
+                                placeholder="https://discord.com/api/webhooks/..."
                                 aria-label="New webhook URL"
                                 onChange={(e) => { setDraft(e.target.value); setFieldError(null); }}
                             />
@@ -168,7 +168,7 @@ export function NotificationsSettings({
                 <header className="card__header">
                     <h2 className="card__title">Channel-point rewards the bot runs</h2>
                     {/*
-                      * How many of the three are bound — NOT "3 of yours
+                      * How many of the three are bound, never "3 of yours
                       * untouched", which the design draws. That number would be a
                       * count of the streamer's own rewards, and the API
                       * deliberately never enumerates them: the whole trust claim

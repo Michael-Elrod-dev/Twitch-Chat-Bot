@@ -175,9 +175,9 @@ describe('withFreshSession', () => {
 /**
  * The token the realtime socket connects with.
  *
- * Separate from `withFreshSession`, which reacts to a 401 — a browser WebSocket
- * never shows one, so this has to decide BEFORE connecting. The defect it
- * exists for: the shell captured a token at boot and reconnected with it
+ * Separate from `withFreshSession`, which reacts to a 401. A browser WebSocket
+ * never shows one, so this has to decide before connecting. Otherwise the shell
+ * captures a token at boot and reconnects with it
  * forever, so any drop past the fifteen-minute expiry left the dashboard
  * permanently unable to reconnect to a perfectly healthy server.
  */

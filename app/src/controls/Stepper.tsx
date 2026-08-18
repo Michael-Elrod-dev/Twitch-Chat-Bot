@@ -1,7 +1,7 @@
 import { Minus, Plus } from 'lucide-react';
 
 /**
- * `− n +`, for the per-tier AI limits.
+ * A minus, a number and a plus, for the per-tier AI limits.
  *
  * The bounds are NOT written here. They are read off the contract's own schema
  * by `validation.ts`, which is the same rule the command form follows and for
@@ -17,7 +17,7 @@ export interface StepperProps {
     value: number;
     min: number;
     max: number;
-    /** What a reader hears — "Everyone", "Mods". The row carries the visible one. */
+    /** What a reader hears, such as "Everyone" or "Mods". The row carries the visible one. */
     label: string;
     onChange: (next: number) => void;
     disabled?: boolean;

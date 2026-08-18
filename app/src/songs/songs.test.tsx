@@ -10,7 +10,7 @@ import { PLAYING_POLL_MS, useAdvancingProgress } from './useAdvancingProgress.js
 /**
  * The songs screen, against a stubbed network.
  *
- * The seam stubbed is the network and nothing else — every hook, component and
+ * The seam stubbed is the network and nothing else. Every hook, component and
  * formatter between the click and the request is the production path, which is
  * the same rule the content screens' suite follows and the reason its
  * optimistic-rollback assertions are worth making.
@@ -78,7 +78,7 @@ function stubApi(routes: {
          * point.
          *
          * This stub used to push only after the GET branch had returned, so reads
-         * were never recorded at all — and the tests below, which count how often
+         * were never recorded at all, and the tests below, which count how often
          * the page re-reads what is playing, were asserting against a list that
          * could only ever be empty. They failed loudly rather than passing
          * vacuously, but only because they assert a count GOES UP; a test phrased
@@ -141,7 +141,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
  * A tiny harness for `useAdvancingProgress`.
  *
  * The hook is rendered inside a real component rather than called directly,
- * because its whole behavior is timers and effects — a plain call would test
+ * because its whole behavior is timers and effects, and a plain call would test
  * arithmetic that nothing runs. Written here rather than pulling in a
  * render-hook helper the project does not otherwise use.
  */
@@ -247,15 +247,15 @@ describe('Songs (3c)', () => {
         /*
          * The position half is a regex and the duration half is exact.
          *
-         * The local progress clock advances the readout while the test runs —
-         * that is the card working, not drifting — so pinning the elapsed side to
+         * The local progress clock advances the readout while the test runs,
+         * which is the card working rather than drifting, so pinning the elapsed side to
          * a literal makes this test fail on a slow machine for a reason that has
          * nothing to do with what it is testing. The shape and the duration are
          * what this assertion is actually about; `formatTrackTime` has its own
          * exact tests above.
          */
         expect(screen.getByText(/^\d+:\d\d \/ 4:03$/)).toBeInTheDocument();
-        expect(screen.getByText('M83 · clipzilla')).toBeInTheDocument();
+        expect(screen.getByText('M83 - clipzilla')).toBeInTheDocument();
     });
 
     it('keeps the track and says "paused" rather than blanking the card', async () => {
@@ -274,7 +274,7 @@ describe('Songs (3c)', () => {
 
         expect(await screen.findByText('Midnight City')).toBeInTheDocument();
         expect(screen.getByText('paused')).toBeInTheDocument();
-        // No requester on a track the streamer started themselves — attributing
+        // No requester on a track the streamer started themselves, because attributing
         // it to the last redeemer would be a lie about who asked.
         expect(screen.getByText('M83')).toBeInTheDocument();
     });
@@ -293,8 +293,8 @@ describe('Songs (3c)', () => {
          * that keeps them apart. Skip beside the now-playing card must reach
          * `POST /songs/skip`; if it ever reaches `DELETE /songs/head` it silently
          * removes a viewer's waiting request while the streamer believes they
-         * skipped what they were listening to — the exact confusion this screen
-         * was briefly built around.
+         * skipped what they were listening to, which is the exact confusion this
+         * screen must not create.
          */
         const api = renderSongs({
             spotify: connected(),
@@ -361,7 +361,7 @@ describe('Songs (3c)', () => {
         await waitFor(() => { expect(changed).toHaveBeenCalled(); });
     });
 
-    it('does not banner an empty-queue 404 — the queue is already where the click asked', async () => {
+    it('does not banner an empty-queue 404, since the queue is already where the click asked', async () => {
         renderSongs({
             spotify: connected(),
             queue: [song()],
@@ -425,9 +425,9 @@ describe('the songs page updates without being navigated away from', () => {
      * The owner's second report, and the half of it that lived in the client.
      *
      * The queue rows arrive through the shell's socket, but the now-playing card
-     * fetched once on mount and never again — so the page appeared to update only
-     * on navigate-away-and-back, because a remount was the only thing that
-     * refetched it. These pin the two triggers that replaced that.
+     * has no socket path of its own. Fetching once on mount and never again makes
+     * the page appear to update only on navigate-away-and-back, because a remount
+     * is the only thing that refetches it. These pin the two triggers that avoid that.
      */
     it('re-reads what is playing when the queue moves', async () => {
         const api = renderSongs({
@@ -487,7 +487,7 @@ describe('the songs page updates without being navigated away from', () => {
 
             await vi.advanceTimersByTimeAsync(PLAYING_POLL_MS * 3);
 
-            // Nothing to ask about, so nothing is asked — a disconnected account
+            // Nothing to ask about, so nothing is asked. A disconnected account
             // must not generate a request every fifteen seconds forever.
             expect(api.calls.length).toBe(before);
         } finally {
@@ -588,7 +588,7 @@ describe('Songs with Spotify missing (4c)', () => {
         expect(screen.queryByText('0 waiting')).not.toBeInTheDocument();
     });
 
-    it('shows neither the queue nor the policy card — there is no queue to explain', async () => {
+    it('shows neither the queue nor the policy card, since there is no queue to explain', async () => {
         renderSongs({ spotify: DISCONNECTED, queue: [song()] });
 
         await screen.findByText('Hook up Spotify and the jukebox opens');

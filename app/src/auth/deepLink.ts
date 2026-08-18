@@ -3,15 +3,15 @@ import { APP_RETURN_TO } from '../api/config.js';
 /**
  * Receiving the session from the browser.
  *
- * Sign-in happens in the system browser (RFC 8252 — never an embedded webview,
- * which would put the app between the user and Twitch's password field). The
- * server redirects to `almosthadai://auth#access_token=…&refresh_token=…`, and
+ * Sign-in happens in the system browser, per RFC 8252, and never in an embedded
+ * webview, which would put the app between the user and Twitch's password field.
+ * The server redirects to `almosthadai://auth` with the tokens in the fragment, and
  * Windows hands that whole URL to the registered application.
  *
  * The fragment is what carries the tokens, deliberately: a fragment is never
  * sent to a server, so it appears in no access log and no `Referer`. The
- * server-side allow-list is what makes that safe — an unchecked `return_to`
- * turned exactly this mechanism into an exfiltration channel once already.
+ * server-side allow-list is what makes that safe, because an unchecked
+ * `return_to` turns exactly this mechanism into an exfiltration channel.
  */
 
 export interface AuthCallback {

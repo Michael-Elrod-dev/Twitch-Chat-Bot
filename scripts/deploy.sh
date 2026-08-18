@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# Deploys the Phase-1 server to the VPS from this machine.
+# Deploys the server to the VPS from this machine.
 #
-# INTERIM MECHANISM. This rsyncs a working copy and builds on the box, which is
-# honest about what it is: fast to write, fine for one server, and not how this
-# should work long-term. The successor is a registry push from CI on a version
-# tag, with the box pulling a known-good image — see the flagged items in the
-# P1-WP6.2 report. Until then, what you deploy is what is on your disk, so
-# deploy from a clean tree.
+# An interim mechanism. This rsyncs a working copy and builds on the box, which
+# is fast to write and fine for one server, but not how this should work
+# long-term. The successor is a registry push from CI on a version tag, with the
+# box pulling a known-good image, and it is on the ops backlog. Until then, what
+# you deploy is what is on your disk, so deploy from a clean tree.
 #
-# What is deliberately NOT sent:
+# What is deliberately not sent:
 #   .env              production secrets live on the box and only on the box
 #   compose.override  the dev overlay would bind-mount source over the image
-#   src/ tests/       the Phase-0 bot does not run in production
 #   node_modules      built inside the image, for the image's platform
 #
 # Usage:
@@ -51,11 +49,11 @@ ssh -o BatchMode=yes "$HOST" "mkdir -p '${REMOTE_DIR}'"
 
 # Two lists, because the distinction is load-bearing.
 #
-# ANYWHERE matches at any depth: a node_modules or dist is unwanted wherever it
-# appears. ROOT_ONLY must be anchored, because `src` and `tests` are the Phase-0
-# bot at the top level but are ALSO `shared/src` and `server/src`, which are the
-# entire thing being deployed. Both rsync and tar match unanchored patterns at
-# every level, so leaving these unanchored silently ships a repo with no source.
+# ANYWHERE matches at any depth, because a node_modules or dist is unwanted
+# wherever it appears. ROOT_ONLY must be anchored, because a bare name matches
+# nested directories too, and a pattern meant for one root-level path can
+# silently exclude `shared/src` or `server/src`, which are the entire thing
+# being deployed. Both rsync and tar match unanchored patterns at every level.
 EXCLUDE_ANYWHERE=(
     '.git' '.github' 'node_modules' 'dist' '*.tsbuildinfo'
     'coverage' 'logs' 'temp_backups' '.claude' '.idea'
@@ -65,7 +63,7 @@ EXCLUDE_ANYWHERE=(
 #
 # The Rust build output is the reason this list now has paths in it. It is 2.6GB
 # and ~9600 files of compiled artifacts for a WINDOWS desktop client, on the way
-# to a 40GB Linux box that never builds or runs it — the image copies only
+# to a 40GB Linux box that never builds or runs it, since the image copies only
 # shared/ and server/. Excluding by the bare name `target` would be a footgun
 # waiting for the first unrelated directory called that, so it is named in full.
 EXCLUDE_ROOT_ONLY=(

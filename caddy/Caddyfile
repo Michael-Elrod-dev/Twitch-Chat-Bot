@@ -3,7 +3,7 @@
 # One file serves both environments through a substitution: SITE_ADDRESS is the
 # public hostname in production and unset locally, where it falls back to plain
 # `:80`. Caddy obtains and renews a Let's Encrypt certificate automatically for
-# any address that is a real hostname, and redirects HTTP to HTTPS on its own —
+# any address that is a real hostname, and redirects HTTP to HTTPS on its own,
 # which is what satisfies Twitch's requirement that EventSub callbacks be TLS on
 # port 443.
 #

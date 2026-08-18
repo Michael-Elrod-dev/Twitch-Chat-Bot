@@ -9,8 +9,8 @@ import { presentError } from '../content/errorPresentation.js';
  * `useCollection` is the same idea for a list you mutate optimistically. This is
  * its sibling for the reads that are not lists: the Spotify card's status, the
  * now-playing track, the analytics summary. They have no rows to roll back, so
- * they carry none of that machinery — but they share the parts that matter and
- * are easy to get subtly wrong: a sequence guard so a slow first response cannot
+ * they carry none of that machinery. They share the parts that matter and are
+ * easy to get subtly wrong: a sequence guard so a slow first response cannot
  * overwrite a newer one, a `loading` flag that is true only on the FIRST load so
  * a refresh does not blank a working screen, and the same banner placement every
  * other failed load in this app uses.
@@ -37,7 +37,7 @@ export interface Resource<T> {
 export interface ResourceOptions {
     path: string;
     storage: SessionStorage;
-    /** Skips loading entirely — used while a prerequisite is missing. */
+    /** Skips loading entirely, for while a prerequisite is missing. */
     enabled?: boolean;
 }
 

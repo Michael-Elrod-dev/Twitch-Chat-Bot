@@ -8,9 +8,9 @@ import type { QueuedSong } from '@almosthadai/shared';
  * how requests work here, and the handoff is explicit that no prose is to be
  * added under them. Two labels do the job a paragraph would do worse.
  *
- * The now-playing half has no source in the contract yet — Spotify playback is
- * the songs screen's surface and lands with it — so this renders that stage's
- * placeholder rather than inventing a track. The stage still appears, because
+ * The now-playing half has no source in the contract here, because Spotify
+ * playback is the songs screen's surface, so this renders a placeholder rather
+ * than inventing a track. The stage still appears, because
  * the label is what explains the queue.
  */
 
@@ -81,7 +81,7 @@ export function SongQueueCard({
                                             <span className="queue-row__track">{song.trackName}</span>
                                             <span className="queue-row__artist">
                                                 {song.artistName}
-                                                {song.requestedByLogin ? ` · ${song.requestedByLogin}` : ''}
+                                                {song.requestedByLogin ? ` - ${song.requestedByLogin}` : ''}
                                             </span>
                                         </span>
                                     </li>

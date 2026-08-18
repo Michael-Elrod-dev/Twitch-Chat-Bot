@@ -4,10 +4,10 @@ import type { DashboardBannerState } from './dashboardState.js';
 /**
  * The one banner above the status strip.
  *
- * Its region is also where `auth.error` finally lands. That message has existed
- * since the auth package and had nowhere to go once the user was signed in —
- * it was a string the shell simply dropped. This is the surface the handoff
- * reserves for it, and it is the right one: a sign-in problem inside a working
+ * Its region is also where `auth.error` lands. Without this the message has
+ * nowhere to go once the user is signed in, and the shell simply drops the
+ * string. This is the surface the handoff reserves for it, and it is the right
+ * one, because a sign-in problem inside a working
  * shell is exactly the class of thing that belongs in a banner rather than a
  * full-page wall over a bot that is still answering.
  */

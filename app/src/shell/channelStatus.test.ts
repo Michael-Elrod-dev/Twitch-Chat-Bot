@@ -27,8 +27,8 @@ describe('resolvePillState', () => {
     });
 
     it.each(states)('reports UNKNOWN, never OFFLINE, while the connection is %s', (connection) => {
-        // The channel is genuinely offline here — and it still must not say so,
-        // because we have no current information either way.
+        // The channel is genuinely offline here and it still must not say so,
+        // because there is no current information either way.
         expect(resolvePillState({ connection, channel: channel('active'), live: false }))
             .toBe('unknown');
     });

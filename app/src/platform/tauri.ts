@@ -13,10 +13,10 @@ import { setDefaultFetch } from '../api/client.js';
 
 export interface Platform {
     controls: WindowControls;
-    /** Opens a URL in the SYSTEM browser — never in an embedded webview. */
+    /** Opens a URL in the system browser, never in an embedded webview. */
     openExternal: (url: string) => Promise<void>;
     /**
-     * Registers a handler for `almosthadai://…` deep links.
+     * Registers a handler for `almosthadai://` deep links.
      *
      * @returns an unsubscribe function.
      */
@@ -25,8 +25,8 @@ export interface Platform {
     /**
      * Whether this machine will deliver the sign-in callback back to us.
      *
-     * Asked BEFORE offering to sign in. If the scheme is not registered, Twitch
-     * consent still succeeds and the server still redirects — to a URL Windows
+     * Asked before offering to sign in. If the scheme is not registered, Twitch
+     * consent still succeeds and the server still redirects, to a URL Windows
      * cannot open. Nothing visibly fails; the user simply waits forever, and
      * each retry spends another single-use OAuth state, so the browser starts
      * answering "this authorization link is no longer valid" with no hint as to
@@ -75,7 +75,7 @@ export async function loadTauriPlatform(): Promise<Platform> {
      * Requests go through Rust from here on.
      *
      * The webview's origin is `http://tauri.localhost`, so a plain `fetch` to
-     * the API is cross-origin and the server sends no CORS headers — every call
+     * the API is cross-origin and the server sends no CORS headers, so every call
      * would be refused by the browser engine before leaving the machine. The
      * plugin performs the request outside the webview, where no origin policy
      * applies, which is narrower than teaching the server to accept requests
@@ -102,7 +102,7 @@ export async function loadTauriPlatform(): Promise<Platform> {
         },
         onDeepLink: async (handler) => {
             // A cold start can carry the link that launched the app, and it
-            // arrives before any listener exists — so both are checked.
+            // arrives before any listener exists, so both are checked.
             const initial = await deepLink.getCurrent();
             if (initial) for (const url of initial) handler(url);
 

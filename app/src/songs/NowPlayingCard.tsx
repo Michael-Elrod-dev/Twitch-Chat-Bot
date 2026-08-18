@@ -10,10 +10,10 @@ import { formatTrackTime, trackProgress } from './songsFormat.js';
  * keeps its frame and says so in one line rather than dropping a dashed-square
  * empty panel into the top of the page every time the streamer pauses.
  *
- * **Skip acts on this track and nothing else.** It calls `POST /songs/skip`,
- * which advances Spotify's player — NOT `DELETE /songs/head`, which drops the
- * next waiting request. The two were briefly conflated, and the button was pulled
- * from this card rather than shipped pointing at the wrong song; the route that
+ * Skip acts on this track and nothing else. It calls `POST /songs/skip`, which
+ * advances Spotify's player, never `DELETE /songs/head`, which drops the next
+ * waiting request. The two are easy to conflate, and a Skip button pointing at
+ * the wrong song is worse than none, so the route that
  * makes it honest exists now, so it is back where the design put it. The waiting
  * rows keep their own "Drop", because removing a request from the queue is a
  * different act on a different song.
@@ -24,8 +24,9 @@ import { formatTrackTime, trackProgress } from './songsFormat.js';
  * **Skipping early plays one interlude track first.** The bot hands a request to
  * Spotify only in the last ten seconds of the current song, so a skip with time
  * left leaves nothing of ours in Spotify's queue and the player falls through to
- * the streamer's own next track; the request goes over at the end of *that* one.
- * Nothing is lost and the order holds — see `ADVANCE_WINDOW_MS` on the server.
+ * the streamer's own next track, and the request goes over at the end of that
+ * one. Nothing is lost and the order holds, as `ADVANCE_WINDOW_MS` on the server
+ * explains.
  */
 
 export interface NowPlayingCardProps {
@@ -72,7 +73,7 @@ export function NowPlayingCard({
                     {/* Only when the track came from the queue. Most of a stream
                         is the streamer's own listening, and attributing that to
                         the last requester would be a lie about who asked. */}
-                    {playing.requestedByLogin ? ` · ${playing.requestedByLogin}` : ''}
+                    {playing.requestedByLogin ? ` - ${playing.requestedByLogin}` : ''}
                 </span>
             </span>
 

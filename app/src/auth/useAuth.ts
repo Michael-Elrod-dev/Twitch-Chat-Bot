@@ -12,7 +12,7 @@ import {
 import { generateNonce, parseAuthCallback, returnToWithNonce } from './deepLink.js';
 
 /**
- * The whole auth arc: signed out → waiting on the browser → signed in.
+ * The whole auth arc: signed out, then waiting on the browser, then signed in.
  *
  * `phase` is what picks the screen, and the states are deliberately distinct
  * from "do we have a token": a user who is signed in but has connected no
@@ -62,7 +62,7 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
      * that launched the app AND the listener fires, and React StrictMode mounts
      * the effect twice in development. Without this, the second delivery finds
      * the nonce already spent and accuses a perfectly good sign-in of being one
-     * "this app did not start" — a false alarm on the happy path, which is the
+     * "this app did not start", a false alarm on the happy path, which is the
      * worst kind of security warning to show.
      */
     const consumedCallback = useRef<string | null>(null);
@@ -72,7 +72,7 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
      *
      * The boot effect probes the server and loads `/me`; keying it on a
      * `storage` object means a caller who passes a fresh one each render
-     * re-runs boot on every render — an endless request loop that also keeps
+     * re-runs boot on every render, an endless request loop that also keeps
      * resetting `phase`, so the UI appears to ignore what the user just did.
      * The hook should not depend on its caller having remembered to memoize.
      */
@@ -135,7 +135,7 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
                 const callback = parseAuthCallback(url);
                 if (!callback) return;
 
-                // Already handled — a redelivery of the same URL, not a second
+                // Already handled. This is a redelivery of the same URL, not a second
                 // sign-in attempt.
                 if (consumedCallback.current === url) return;
 
@@ -173,9 +173,9 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
      * @returns whether the browser actually opened.
      *
      * The return value matters. Opening the system browser can fail for
-     * reasons the app cannot see coming — the shell refusing the URL, no
-     * default browser — and a failure here strands the user on a waiting
-     * screen watching for a callback that was never asked for. Silence is the
+     * reasons the app cannot see coming, such as the shell refusing the URL or
+     * there being no default browser, and a failure here strands the user on a
+     * waiting screen watching for a callback that was never asked for. Silence is the
      * worst outcome: nothing to read, nothing to retry, no way to tell the
      * difference between "nothing happened" and "something is broken".
      */
@@ -199,7 +199,7 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
          *
          * Every `/auth/app/login` mints a single-use OAuth state. If the
          * callback cannot be delivered back to this machine, consent still
-         * succeeds and the state is still spent — so the user waits forever,
+         * succeeds and the state is still spent, so the user waits forever,
          * retries, and the browser starts telling them the authorization link
          * is no longer valid. That message is true and completely unhelpful:
          * the link was fine, there was nothing here to hand it to. Checking
@@ -209,7 +209,7 @@ export function useAuth(platform: Platform, storage: SessionStorage = browserSes
             setError(
                 'This machine has no handler for almosthadai:// links, so Twitch could not '
                 + 'send the sign-in back. Install the app and launch it once, or run it with '
-                + '`npm run tauri dev` — signing in from a browser tab cannot complete.'
+                + '`npm run tauri dev`. Signing in from a browser tab cannot complete.'
             );
             setPhase('signed_out');
             return;

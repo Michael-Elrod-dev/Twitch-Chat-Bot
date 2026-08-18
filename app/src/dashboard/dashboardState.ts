@@ -10,10 +10,10 @@ import type { ConnectionState } from '../live/connection.js';
  * only place they could be conflated. The components below render what this
  * returns and make no decisions of their own.
  *
- * The rule that outranks everything: **when the server is unreachable we do not
- * know anything, and every tile says so.** Never zero, never "off" — a zero is
- * a claim about a bot that is very likely running perfectly well without us
- * watching, and it is the one lie this screen must not tell.
+ * The rule that outranks everything is that an unreachable server means nothing
+ * is known, and every tile says so. Never zero, never "off". A zero is a claim
+ * about a bot that is very likely running perfectly well unobserved, and it is
+ * the one lie this screen must not tell.
  */
 
 export type TileId = 'session' | 'twitch' | 'spotify' | 'ai' | 'discord';
@@ -21,10 +21,10 @@ export type TileId = 'session' | 'twitch' | 'spotify' | 'ai' | 'discord';
 /**
  * How a tile's indicator reads.
  *
- * `healthy` is the sage dot running `okGlow`; `idle` is the same dot at reduced
- * opacity with no animation — on, but not busy; `dead` is the flat grey of
- * something switched off or never set up; `alert` is the pulsing clay of
- * something demanding action; `unknown` is not a dot at all but a `?`.
+ * `healthy` is the sage dot running `okGlow`. `idle` is the same dot at reduced
+ * opacity with no animation, on but not busy. `dead` is the flat grey of
+ * something switched off or never set up. `alert` is the pulsing clay of
+ * something demanding action. `unknown` is not a dot at all but a `?`.
  */
 export type TileDot = 'healthy' | 'idle' | 'dead' | 'alert' | 'unknown';
 
@@ -57,7 +57,7 @@ const UNKNOWN_TILE = (id: TileId, label: string): StatusTile =>
  *
  * Read top to bottom: unreachable wins over everything, then Twitch having
  * revoked consent, then the owner's own switch, then live/offline. That order
- * is the point — each condition describes a world in which the ones below it
+ * is the point. Each condition describes a world in which the ones below it
  * are unknowable, so checking them the other way round would show a confident
  * answer drawn from a stale one.
  */
@@ -83,8 +83,8 @@ export function resolveStatusTiles(inputs: DashboardInputs): StatusTile[] {
     const restingDot: TileDot = busy ? 'healthy' : 'idle';
 
     const session = ((): StatusTile => {
-        // `4a`: Twitch has cut the bot off, so the session is dead whatever the
-        // owner's switch says — showing "Off" here would blame the wrong thing.
+        // Twitch has cut the bot off, so the session is dead whatever the
+        // owner's switch says. Showing "Off" here would blame the wrong thing.
         if (revoked) return { id: 'session', label: 'SESSION', value: 'Stopped', dot: 'dead' };
         // The owner's own choice, which the handoff's mocks never drew but the
         // master switch can produce at any moment.
@@ -146,9 +146,9 @@ const NUMBER_LABELS: { id: keyof DashboardNumbers; label: string }[] = [
 ];
 
 /**
- * @param numbers null when the server has not answered — which is NOT the same
- * as a channel that has streamed and scored zero. A zero means zero; a `?`
- * means we do not know, and conflating them tells a broadcaster their stream
+ * @param numbers null when the server has not answered, which is not the same
+ * as a channel that has streamed and scored zero. A zero means zero, and a `?`
+ * means unknown. Conflating them tells a broadcaster their stream
  * was dead when in fact our socket was.
  */
 export function resolveNumbers(numbers: DashboardNumbers | null): NumberCard[] {
@@ -160,7 +160,7 @@ export function resolveNumbers(numbers: DashboardNumbers | null): NumberCard[] {
 }
 
 /**
- * `Thursday · 4h 02m` — the offline screen's caption for the numbers below it.
+ * `Thursday, 4h 02m`, the offline screen's caption for the numbers below it.
  *
  * @returns null when the channel has never streamed, which is a different
  * state from a stream of zero length and gets the empty copy instead.
@@ -182,7 +182,7 @@ export function formatLastStream(
     const minutes = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000));
     const hours = Math.floor(minutes / 60);
 
-    return `${day} · ${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
+    return `${day}, ${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
 // ---- the banner ------------------------------------------------------------
@@ -201,7 +201,7 @@ export interface DashboardBannerState {
  *
  * Ordered by what the user can act on. An unreachable server outranks a revoked
  * token because the reconnect it would offer cannot be started while we cannot
- * reach the server that starts it — offering a button that must fail is worse
+ * reach the server that starts it. Offering a button that must fail is worse
  * than saying plainly what is wrong.
  *
  * `authError` is the home the sign-in error never had inside the signed-in

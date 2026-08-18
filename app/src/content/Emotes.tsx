@@ -15,10 +15,10 @@ import { ContentBanner } from './ContentBanner.js';
  * the grid so the thing you are about to make lines up with the things you have
  * already made.
  *
- * **No edit path, deliberately.** An emote is a trigger and a reply and nothing
- * else; editing one is indistinguishable from deleting it and adding another,
- * and the API agrees — there is no PATCH route. Offering an edit affordance
- * would be inventing a capability.
+ * No edit path, deliberately. An emote is a trigger and a reply and nothing
+ * else, editing one is indistinguishable from deleting it and adding another,
+ * and the API agrees, because there is no PATCH route. Offering an edit
+ * affordance would be inventing a capability.
  */
 
 export interface EmotesProps {
@@ -44,7 +44,7 @@ export function Emotes({ storage }: EmotesProps): React.JSX.Element {
         if (!triggerCheck.ok) { setFieldError(triggerCheck.message); return; }
         if (!replyCheck.ok) { setFieldError(replyCheck.message); return; }
 
-        // The schema's normalized trigger — lowercased and trimmed — because
+        // The schema's normalized trigger, lowercased and trimmed, because
         // matching is exact and on the lowercased text. Submitting the raw
         // input would store a trigger chat could never hit.
         const body = { triggerText: triggerCheck.value, responseText: replyCheck.value };
@@ -137,7 +137,7 @@ export function Emotes({ storage }: EmotesProps): React.JSX.Element {
             </section>
 
             <p className="footnote">
-                Exact match only — a message has to be just the trigger, nothing around it.
+                Exact match only. A message has to be just the trigger, nothing around it.
             </p>
         </div>
     );

@@ -11,17 +11,17 @@ import { SpotifyCard } from '../songs/SpotifyCard.js';
 import type { SettingsPatch } from './settingsPatch.js';
 
 /**
- * Settings · Songs (`5a`).
+ * The Songs settings pane.
  *
- * The reward switch, the playlist, and the Spotify link in one place — which is
- * the point of the pane: all three are the same decision seen from three angles,
+ * The reward switch, the playlist, and the Spotify link in one place, which is
+ * the point of the pane. All three are the same decision seen from three angles,
  * and a streamer who turns requests off wants to know in the same glance whether
  * the account behind them is even attached.
  *
  * **The name is saved explicitly, and the toggles are not.** A toggle is one bit
  * and its own confirmation: it moved, so it saved. A name is a thing you are
  * halfway through typing, and saving on every keystroke would have the server
- * resolving "S", "St", "Str"… against Spotify and possibly *creating* a playlist
+ * resolving "S", then "St", then "Str" against Spotify and possibly creating a playlist
  * called `S`. Hence a Save button, and hence the sage line confirming what it did.
  */
 
@@ -44,7 +44,7 @@ export function SongsSettings({
      * Null while the field is untouched, so the input shows the saved name.
      *
      * A `useState(settings.requestsPlaylistName)` would freeze at whatever the
-     * name was on first render and never follow a save — the field would go stale
+     * name was on first render and never follow a save, so the field would go stale
      * against the very value it just wrote.
      */
     const [draft, setDraft] = useState<string | null>(null);
@@ -171,7 +171,7 @@ export function SongsSettings({
                 {/*
                   * The sage confirmation, and it says what actually happened
                   * rather than "Saved". `playlist` null after a successful save
-                  * means Spotify has no playlist by that name yet — which is
+                  * means Spotify has no playlist by that name yet, which is
                   * correct and expected, because the bot creates it with the
                   * first request rather than up front. Reporting a track count
                   * here would be reporting a playlist that does not exist.
@@ -179,8 +179,8 @@ export function SongsSettings({
                 {saved && !fieldError && (
                     <p className="setting-row__confirm">
                         {spotify.data?.playlist
-                            ? `Saving requests to “${spotify.data.playlist.name}” — ${spotify.data.playlist.trackCount} tracks in it.`
-                            : `Saved. The bot makes “${saved}” with the first request.`}
+                            ? `Saving requests to "${spotify.data.playlist.name}", ${spotify.data.playlist.trackCount} tracks in it.`
+                            : `Saved. The bot makes "${saved}" with the first request.`}
                     </p>
                 )}
 

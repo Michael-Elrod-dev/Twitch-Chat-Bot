@@ -2,7 +2,7 @@ import { Check } from 'lucide-react';
 import { APP_VERSION } from '../api/config.js';
 
 /**
- * `3h` — connect the channel.
+ * Connect the channel.
  *
  * Reached when someone is signed in but has no channel connected, which is an
  * ordinary state rather than an error (`/me` returns `channel: null` for it).
@@ -75,7 +75,7 @@ export function Onboarding({
                 </div>
 
                 <p className="auth__explainer">
-                    Channel points rewards you made yourself are never touched — the bot
+                    Channel points rewards you made yourself are never touched. The bot
                     creates and manages only its own.
                 </p>
             </div>

@@ -30,18 +30,18 @@ export interface LiveChatMessage {
     /**
      * `role` is the highest tier this chatter holds, so the feed can color the
      * broadcaster clay and moderators sage. It is exposure of a decision the
-     * pipeline already makes per message, not a second derivation — the
+     * pipeline already makes per message, not a second derivation. The
      * permission check and this read the same role flags off the same event.
      */
     chatter: { login: string; displayName: string; role: ChatRole };
     text: string;
     /**
      * What the pipeline decided, so the UI can show why the bot did or did not
-     * answer. Drives the outcome chip: `command` → CMD, `emote` → EMOTE,
-     * `ai` → AI; `none` and `skipped` render no chip at all.
+     * answer. Drives the outcome chip, where `command` reads CMD, `emote` reads
+     * EMOTE and `ai` reads AI. `none` and `skipped` render no chip at all.
      *
      * `skipped` is retained rather than folded into `none` because they are
-     * different facts — `none` means nothing matched, `skipped` means the
+     * different facts. `none` means nothing matched, and `skipped` means the
      * pipeline deliberately declined (the bot's own message, or one already
      * arriving as a redemption). The UI treats them the same today; the log
      * and any future debugging surface should not have to guess.
@@ -66,10 +66,9 @@ export interface LiveSongQueueUpdated {
     /**
      * How many songs are waiting after this change.
      *
-     * **Wired, not dropped** — the flag carried since the dashboard package,
-     * resolved here with its reasoning. The field was declared and never put on
-     * the wire: the one publisher sent a bare `{ type }`, so every client read
-     * `undefined` and the type said otherwise.
+     * On the wire, not merely declared. A field declared here and never
+     * published leaves every client reading `undefined` while the type says
+     * otherwise, so the publisher must always carry it.
      *
      * Wiring it rather than amending the contract, because the number is what
      * two headers actually render (`6 waiting` on the songs screen, the queue
@@ -98,8 +97,8 @@ export interface LiveChannelStatus {
      * that seeded its clock from it would restart the count at every status
      * change and read `0:00:03` an hour into a stream. The client ticks locally
      * once a second from this value and re-syncs whenever a new status arrives,
-     * which is what keeps a machine with a drifting clock — or one that just
-     * woke from sleep — honest.
+     * which is what keeps a machine with a drifting clock honest, or one that
+     * has just woken from sleep.
      */
     startedAt: string | null;
 }
@@ -126,7 +125,7 @@ export const LIVE_PATH = '/api/v1/live';
 
 /**
  * Heartbeat interval. The server pings on this cadence and reaps a socket that
- * has not ponged by the next one — a TCP connection to a laptop that closed its
+ * has not ponged by the next one. A TCP connection to a laptop that closed its
  * lid stays "open" indefinitely otherwise, and every dead socket is a channel's
  * worth of events being written to nowhere.
  */

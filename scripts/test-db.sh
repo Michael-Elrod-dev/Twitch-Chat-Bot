@@ -4,7 +4,7 @@
 # The suites delete rows, truncate globally-scoped tables, and assume they own
 # the schema. They must therefore never run against the development compose
 # database, which holds the owner's imported production data and live Twitch
-# credentials — pointing them at it once already destroyed that import.
+# credentials. Pointing them at it once already destroyed that import.
 #
 # This container is deliberately separate in every way that matters: its own
 # name, its own port, its own volume-less lifetime. `-v` against the dev compose

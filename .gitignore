@@ -43,11 +43,11 @@ dist/
 build/
 *.tsbuildinfo
 
-# Rust build output for the Tauri shell. Everything else under src-tauri/ —
-# the config, the capabilities, the icons, Cargo.lock — is committed.
+# Rust build output for the Tauri shell. Everything else under src-tauri/ is
+# committed, including the config, the capabilities, the icons and Cargo.lock.
 app/src-tauri/target/
 app/src-tauri/gen/
 
-# Design handoff from Claude Design: working reference only, never committed.
-# Deleted entirely as an exit criterion of the final P1-WP9 tranche.
+# Design handoff from Claude Design. A working reference only, never committed.
+# The directory itself is deleted once the design work it holds is finished.
 design_handoff_bot_desktop_app/

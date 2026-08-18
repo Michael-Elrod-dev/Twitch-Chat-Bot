@@ -1,8 +1,8 @@
 /**
  * How many streams before the footer stops saying the data is young.
  *
- * The handoff's copy is "Four streams in. Trends show up around ten." — the
- * *four* is this channel's real count and belongs to the data, the *ten* is the
+ * The handoff's copy is "Four streams in. Trends show up around ten." The four
+ * is the channel's real count and belongs to the data, and the ten is the
  * claim the sentence makes and belongs here. One constant, used by both halves of
  * the sentence, so a footer cannot promise trends at ten while appearing at
  * twelve.
@@ -14,7 +14,7 @@ export const TREND_THRESHOLD = 10;
  *
  * `en-GB` explicitly rather than the machine's locale, for the same reason the
  * songs card pins its dates: the design draws day-then-month, and a US default
- * would render `Aug 14` — a different table.
+ * would render `Aug 14`, a different table.
  */
 export function formatStreamDay(iso: string): string {
     const date = new Date(iso);
@@ -28,7 +28,7 @@ export function formatStreamDay(iso: string): string {
  *
  * Minutes are zero-padded and hours are not, which is what the design draws and
  * what reads as a duration rather than a clock time. A stream under an hour drops
- * the hours entirely — `0h 47m` is a length written by a computer.
+ * the hours entirely, because `0h 47m` is a length written by a computer.
  *
  * An end before its start cannot happen from the server, which closes a stream
  * with a later timestamp than it opened it. Clamped at zero anyway, because the

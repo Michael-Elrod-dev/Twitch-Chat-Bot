@@ -8,10 +8,9 @@ import type { Platform } from '../platform/tauri.js';
  * The deep-link handler, asserted at the hook.
  *
  * These properties are about `error` and `phase`, and the signed-in shell has
- * nowhere that renders `error` — the banner surface is `4a`/`4b` on the
- * dashboard, which is WP9's. Asserting through the rendered app would therefore
- * pass whether or not the code was correct, so the assertions live here where
- * they are real.
+ * nowhere that renders `error`, because the banner surface belongs to the
+ * dashboard. Asserting through the rendered app would therefore pass whether or
+ * not the code was correct, so the assertions live here where they are real.
  */
 
 const ME = {
@@ -55,9 +54,9 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('boot', () => {
     it('probes once, even when the caller passes a fresh storage each render', async () => {
         /*
-         * The bug this pins down: keying the boot effect on the `storage`
-         * object meant an unmemoized argument re-ran boot on every render — an
-         * endless `/healthz` + `/me` loop that also reset `phase` continuously,
+         * Keying the boot effect on the `storage` object would let an
+         * unmemoized argument re-run boot on every render, an
+         * endless `/healthz` and `/me` loop that also resets `phase` continuously,
          * so the app silently undid whatever the user had just done. App.tsx
          * happens to memoize, so production was correct by luck; a hook should
          * not depend on its caller remembering.
@@ -103,7 +102,7 @@ describe('the deep-link callback', () => {
          * The same URL legitimately arrives twice: a cold start replays the URL
          * that launched the app AND the listener fires, and StrictMode mounts
          * the effect twice in development. Treating the second as hostile puts
-         * a security warning on the happy path — the worst possible place for
+         * a security warning on the happy path, the worst possible place for
          * one, because it teaches the user to ignore it.
          */
         const { platform, deliver, opened } = platformFor();
@@ -151,7 +150,7 @@ describe('the deep-link callback', () => {
         /*
          * The failure this covers: `openUrl` is scope-enforced by the shell, so
          * a capability granting the command without a URL scope rejects every
-         * call. The button then appears simply dead — and, worse, the app had
+         * call. The button then appears simply dead, and worse, the app has
          * already moved to "Finish up in your browser", telling the user to go
          * and do something in a window that never opened.
          */
@@ -172,7 +171,7 @@ describe('the deep-link callback', () => {
     });
 
     it('does not leave a pending attempt behind when the browser fails to open', async () => {
-        // Otherwise the next callback to arrive — from anywhere — would match a
+        // Otherwise the next callback to arrive, from anywhere, would match a
         // nonce for an attempt that never actually started.
         // `onDeepLink` is shared with the spread below, so `deliver` still
         // reaches the handler this hook registers.

@@ -8,18 +8,18 @@ import { USER_LEVEL_LABELS } from '../content/commandCatalog.js';
 import type { SettingsPatch } from './settingsPatch.js';
 
 /**
- * Settings · AI (`3e`).
+ * The AI settings pane.
  *
- * **The whole set is sent, never the one tier that moved.** A stepper changes one
- * number and this sends all four, because the contract accepts nothing else — and
- * the reason is in the schema's own note: merging a partial server-side would
+ * The whole set is sent, never the one tier that moved. A stepper changes one
+ * number and this sends all four, because the contract accepts nothing else. The
+ * reason is in the schema's own note. Merging a partial server-side would
  * resolve two people editing different tiers at once to whichever request landed
  * second, with the other tier's change lost inside a body that never mentioned
  * it. The screen already holds all four, so sending them costs nothing.
  *
- * **The broadcaster is a word, not a stepper.** They are unlimited, and a field
- * for it would exist only so that somebody could one day set it to three by
- * accident. The contract has no column for it either — see `AiLimits`.
+ * The broadcaster is a word, not a stepper. They are unlimited, and a field for
+ * it would exist only so that somebody could one day set it to three by
+ * accident. The contract has no column for it either, as `AiLimits` shows.
  */
 
 /**
@@ -28,8 +28,8 @@ import type { SettingsPatch } from './settingsPatch.js';
  * `subscriber` is drawn as "Subs" rather than borrowed from `USER_LEVEL_LABELS`,
  * which has no entry for it: that map labels the WHO chips on a command, and a
  * command's level is `everyone | vip | mod | broadcaster`. Two different sets of
- * tiers, deliberately not forced into one type — a command cannot be
- * subscriber-only, and an AI budget cannot belong to the broadcaster.
+ * tiers, deliberately not forced into one type, because a command cannot be
+ * subscriber-only and an AI budget cannot belong to the broadcaster.
  */
 const TIERS: { key: keyof AiLimits; label: string }[] = [
     { key: 'everyone', label: USER_LEVEL_LABELS.everyone },

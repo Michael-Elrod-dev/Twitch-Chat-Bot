@@ -22,7 +22,7 @@ export type UserLevel = z.infer<typeof userLevelSchema>;
  * Command names.
  *
  * Leading `!` required and normalized to lowercase, because the chat pipeline
- * looks them up lowercased — accepting `!Foo` here and never matching it in
+ * looks them up lowercased. Accepting `!Foo` here and never matching it in
  * chat would be a silent failure the user cannot diagnose.
  */
 export const commandNameSchema = z

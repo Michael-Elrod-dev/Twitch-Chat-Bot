@@ -38,12 +38,12 @@ export class ApiError extends Error {
  *
  * Swapped once at boot, for a reason worth stating: the Tauri webview loads
  * from `http://tauri.localhost`, so a `fetch` to the API is a cross-origin
- * request and the server sends no CORS headers — every call would be blocked
+ * request and the server sends no CORS headers, so every call would be blocked
  * by the browser engine before it left the machine.
  *
  * The fix is Tauri's HTTP plugin, which performs the request in Rust where no
- * origin policy applies. The alternative — teaching the server to send
- * `Access-Control-Allow-Origin` — would open the API to every web page a user
+ * origin policy applies. The alternative, teaching the server to send
+ * `Access-Control-Allow-Origin`, would open the API to every web page a user
  * visits in order to serve a client that is not a web page at all. The narrower
  * change is the right one.
  *

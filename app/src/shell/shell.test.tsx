@@ -156,7 +156,7 @@ describe('ChannelHeader', () => {
         render(<ChannelHeader {...props} channel={channel({ enabled: false })} />);
 
         expect(screen.getByRole('switch')).not.toBeChecked();
-        // And the channel is still active — the two are reported separately.
+        // And the channel is still active, because the two are reported separately.
         expect(screen.getByText('OFFLINE')).toBeInTheDocument();
     });
 

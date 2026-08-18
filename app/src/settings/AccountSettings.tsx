@@ -4,7 +4,7 @@ import { APP_VERSION_NUMBER } from '../api/config.js';
 import { SettingRow } from '../controls/SettingRow.js';
 
 /**
- * Settings · Account (`5c`) — identity, the app's own version, and the danger
+ * The Account settings pane. Identity, the app's own version, and the danger
  * zone.
  *
  * **The danger zone is a separate card, and that is the design doing work.** It
@@ -17,9 +17,9 @@ import { SettingRow } from '../controls/SettingRow.js';
  * for dismissing modals; a button that now reads "Yes, disconnect" cannot be
  * agreed with by accident.
  *
- * **What the card promises, the server keeps — and the copy was changed to match
- * what it actually does.** It used to say the three rewards "go away", which read
- * as deletion and was implemented as deletion. Disconnect now switches them off
+ * What the card promises, the server keeps, and the copy says what it actually
+ * does. "The rewards go away" would read as deletion and invite an
+ * implementation to match. Disconnect switches them off
  * instead: nobody can redeem them, no points are taken, and the title, cost,
  * prompt and redemption history the streamer configured survive for a channel
  * they may reconnect. Two of the owner's own three predate this application
@@ -64,7 +64,7 @@ export function AccountSettings({
                 <span className="identity-card__avatar" aria-hidden="true" />
                 <span className="identity-card__text">
                     <span className="identity-card__login">
-                        {channel?.displayName ?? channel?.login ?? '—'}
+                        {channel?.displayName ?? channel?.login ?? '-'}
                     </span>
                     {/*
                       * No "Channel connected 28 Jul" line, which the design draws.
@@ -113,7 +113,7 @@ export function AccountSettings({
                     footer={confirming
                         ? (
                             <p className="setting-row__warn">
-                                This cannot be undone from here — reconnecting means going through
+                                This cannot be undone from here. Reconnecting means going through
                                 Twitch again.
                             </p>
                         )

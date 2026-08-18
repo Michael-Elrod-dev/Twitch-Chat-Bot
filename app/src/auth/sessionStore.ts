@@ -6,10 +6,10 @@ import { apiRequest, ApiError } from '../api/client.js';
  * Tokens are never logged, never put in a URL the app constructs, and never
  * rendered. The only place they are written is the store below.
  *
- * **Where they live, and the honest limitation.** They are held in
- * `localStorage` inside the Tauri webview. That webview loads only bundled
- * local content — no remote origin, no third-party script — so the usual XSS
- * path to `localStorage` does not exist here. It is still weaker than the
+ * Where they live, and the honest limitation. They are held in `localStorage`
+ * inside the Tauri webview. That webview loads only bundled local content, with
+ * no remote origin and no third-party script, so the usual XSS path to
+ * `localStorage` does not exist here. It is still weaker than the
  * Windows credential store, which survives nothing-in-particular better but
  * does resist another process reading the profile directory. The storage is
  * behind `SessionStorage` precisely so that swap is one implementation, not a
@@ -106,7 +106,7 @@ export async function signOut(
             });
         }
     } catch {
-        // Intentionally swallowed — see above.
+        // Intentionally swallowed, for the reason above.
     } finally {
         storage.clear();
     }
@@ -173,13 +173,13 @@ function expiryOf(accessToken: string): number | null {
  * **This exists because the realtime connection cannot ask for one lazily.**
  * `withFreshSession` refreshes in reaction to a 401, which works for HTTP where
  * the rejection is visible. A browser WebSocket does not expose the handshake's
- * status code — a rejected upgrade arrives as an ordinary close — so a socket
- * reconnecting with a stale token retries forever and never learns why.
+ * status code, because a rejected upgrade arrives as an ordinary close, so a
+ * socket reconnecting with a stale token retries forever and never learns why.
  *
- * That is not hypothetical. Access tokens live fifteen minutes and the shell
- * captured one at boot and reused it for every reconnect, so any drop after the
- * first fifteen minutes — a deploy, a blip, a closed laptop lid — left the
- * dashboard permanently unable to reconnect, showing "we cannot reach our
+ * That is not hypothetical. Access tokens live fifteen minutes, so a shell that
+ * captured one at boot and reused it for every reconnect would find any drop
+ * after the first fifteen minutes (a deploy, a blip, a closed laptop lid) left
+ * the dashboard permanently unable to reconnect, showing "we cannot reach our
  * server" over a server that was perfectly healthy. Found on the owner's own
  * machine, in exactly that state, after a redeploy.
  *

@@ -21,18 +21,18 @@ import type { SettingsPatch } from '../settings/settingsPatch.js';
 /**
  * Songs (`3c`) and its Spotify-missing state (`4c`).
  *
- * **There is no add button, and its absence is the screen's argument.** Songs
- * arrive by redeeming the reward and no other way, because a track with no points
- * behind it is not a request — so the policy card explains the rule rather than
+ * There is no add button, and its absence is the screen's argument. Songs arrive
+ * by redeeming the reward and no other way, because a track with no points
+ * behind it is not a request, so the policy card explains the rule rather than
  * the UI apologizing for a missing control. Adding one would also be inventing a
- * capability: no endpoint accepts a track.
+ * capability, because no endpoint accepts a track.
  *
  * **Two removals, and they are different songs.** Skip, beside the now-playing
  * card, advances Spotify's player (`POST /songs/skip`). Drop, on the queue's head
  * row, removes the next *waiting* request (`DELETE /songs/head`). Conflating them
  * is the mistake this screen was briefly built around, so the labels and the
  * placement both say which song each one acts on. Drop appears on row one and
- * nowhere else, because the head is the only row the API can remove — an `x` on
+ * nowhere else, because the head is the only row the API can remove. An `x` on
  * row four that quietly removed row one would be the worst kind of working button.
  *
  * Both are one click with no confirmation, per the handoff: they are live,
@@ -53,9 +53,9 @@ export interface SongsProps {
      * Bumped by the shell every time the queue changes.
      *
      * A counter rather than the array, because the card this drives has to
-     * re-read when the queue moves even if the visible rows end up identical —
-     * and an array identity check would miss a handoff that emptied a
-     * one-song queue back to a one-song queue.
+     * re-read when the queue moves even if the visible rows end up identical.
+     * An array identity check would miss a handoff that emptied a one-song
+     * queue back to a one-song queue.
      */
     queueRevision: number;
     /** Re-reads the queue after this screen changes it. */
@@ -89,17 +89,16 @@ export function Songs({
      * The now-playing card, kept live rather than fetched once.
      *
      * The queue rows arrive through the shell's socket, but this card had no
-     * live path at all — so the page only changed when it was unmounted and
-     * remounted, which is precisely what the owner described as "updates only on
-     * navigate-away-and-back".
+     * live path of its own, so without one the page changes only when it is
+     * unmounted and remounted.
      *
      * Two triggers, because the track changes for two different reasons:
      *
      *  - **The queue moved.** A handoff is the bot putting a NEW track into
      *    Spotify, so the moment the queue shrinks is the moment this card is
      *    stale. That is an event, not a guess, and it arrives already.
-     *  - **Time passed.** Everything else — the streamer skipping in Spotify, a
-     *    track simply ending — is invisible to us, and the card draws a
+     *  - Time passed. Everything else, such as the streamer skipping in Spotify
+     *    or a track simply ending, is invisible here, and the card draws a
      *    `1:34 / 4:03` readout that has to advance. So it also polls.
      *
      * The poll is deliberately slow and the progress is advanced locally between
@@ -210,7 +209,7 @@ export function Songs({
                 await spotify.reload();
                 // The server switches requests off with the account, so the
                 // shell's copy of the settings is now wrong. Re-read rather than
-                // guessed — the header pill reads the same field.
+                // guessed, because the header pill reads the same field.
                 await onSettingsChange({});
             }
         })();
@@ -312,7 +311,7 @@ export function Songs({
                                                 <span className="list-row__artist">{song.artistName}</span>
                                             </span>
                                             <span className="list-row__requester">
-                                                {song.requestedByLogin ?? '—'}
+                                                {song.requestedByLogin ?? '-'}
                                             </span>
                                             <span className="list-row__when">
                                                 {formatWaiting(song.createdAt)}
@@ -364,7 +363,7 @@ export function Songs({
                                       * The count comes from Spotify, not from the
                                       * name the streamer typed. Null covers "named
                                       * but not created yet" and "deleted in the
-                                      * Spotify app since" — both have nothing to
+                                      * Spotify app since". Both have nothing to
                                       * count, and neither is an error worth a
                                       * banner over a working bot.
                                       */}
@@ -377,14 +376,14 @@ export function Songs({
                                         )
                                         : (
                                             <span className="playlist-card__count playlist-card__count--pending">
-                                                Not made yet — the bot creates it with the first request.
+                                                Not made yet. The bot creates it with the first request.
                                             </span>
                                         )}
                                 </>
                             )
                             : (
                                 <span className="playlist-card__count playlist-card__count--pending">
-                                    Name one in Settings · Songs.
+                                    Name one in Settings, under Songs.
                                 </span>
                             )}
                     </section>
@@ -393,7 +392,7 @@ export function Songs({
                         <span className="policy-card__label">HOW SONGS GET HERE</span>
                         <p className="policy-card__copy">
                             Only by redeeming the Song Request reward. There is no add button on
-                            purpose — a track with no points behind it is not a request.
+                            purpose, because a track with no points behind it is not a request.
                         </p>
                     </section>
                 </div>
@@ -402,7 +401,7 @@ export function Songs({
     );
 }
 
-/** `4c` — one centred column that sells the feature rather than reporting a fault. */
+/** One centered column that sells the feature rather than reporting a fault. */
 function SpotifyMissing({ onConnect }: { onConnect: () => void }): React.JSX.Element {
     return (
         <section className="spotify-missing">

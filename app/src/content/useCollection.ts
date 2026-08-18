@@ -9,8 +9,8 @@ import { isAlreadyGone, presentError, type PresentedError } from './errorPresent
  *
  * The three content screens differ in what they render and agree completely on
  * how they behave: fetch a page, mutate optimistically, put it back if the
- * server refuses. That agreement lives here rather than three times over —
- * partly to save the typing, mostly because "rollback on error" is the sort of
+ * server refuses. That agreement lives here rather than three times over,
+ * partly to save the typing and mostly because "rollback on error" is the sort of
  * rule that gets implemented three times and remembered twice.
  *
  * **Optimistic, with the rollback as the point.** A list that waits for a round
@@ -48,7 +48,7 @@ export interface CollectionOptions {
     storage: SessionStorage;
     limit?: number;
     offset?: number;
-    /** Skips loading entirely — used while the shell has no channel yet. */
+    /** Skips loading entirely, for while the shell has no channel yet. */
     enabled?: boolean;
 }
 

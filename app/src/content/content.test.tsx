@@ -14,7 +14,7 @@ import { ApiError } from '../api/client.js';
  *
  * The seam stubbed is the network and nothing else: every component, hook and
  * schema between the click and the request is the production path. That is what
- * makes an optimistic-rollback assertion worth making — the rollback under test
+ * makes an optimistic-rollback assertion worth making. The rollback under test
  * is the one that will actually run.
  */
 
@@ -23,7 +23,7 @@ const session = () => memorySessionStorage({ accessToken: 'token', refreshToken:
 /*
  * Deliberately NOT one of `!discord` / `!socials` / `!schedule`: those three are
  * the empty state's suggestion chips, which render the moment the last of your
- * own commands is deleted — so a fixture sharing a name with one of them makes
+ * own commands is deleted, so a fixture sharing a name with one of them makes
  * "the row is gone" unassertable.
  */
 const command = (over: Partial<Command> = {}): Command => ({
@@ -120,7 +120,7 @@ describe('Commands', () => {
 
     it('searches the behavior text of a built-in, not just its name', () => {
         // People look for "the one about uptime" as often as for `!uptime`.
-        // The text is the server's now, not a map in this workspace — so the
+        // The text is the server's, not a map in this workspace, so the
         // fixture supplies it the way the API does.
         const all = [command({
             name: '!u', responseText: null,
@@ -144,7 +144,7 @@ describe('Commands', () => {
         expect(screen.getByText('BUILT IN')).toBeInTheDocument();
         expect(screen.getByText('Says how long the stream has been live')).toBeInTheDocument();
         expect(screen.getByLabelText('Built in, not editable')).toBeInTheDocument();
-        // Not a disabled pencil — there is no edit control on the built-in row
+        // Not a disabled pencil. There is no edit control on the built-in row
         // at all. (The static row above it has one, which is the contrast.)
         expect(screen.queryByRole('button', { name: 'Edit !uptime' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Edit !links' })).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe('Commands', () => {
         });
         render(<Commands storage={session()} />);
 
-        expect(await screen.findByText('1 yours · 1 built in')).toBeInTheDocument();
+        expect(await screen.findByText('1 yours, 1 built in')).toBeInTheDocument();
     });
 
     it('shows the empty state when nothing is yours, listing the built-ins that work anyway', async () => {
@@ -322,7 +322,7 @@ describe('Emotes', () => {
         await waitFor(() => { expect(screen.getByLabelText('Trigger')).toHaveValue(''); });
     });
 
-    it('offers no edit path — delete and re-add is the model', async () => {
+    it('offers no edit path, because delete and re-add is the model', async () => {
         stubApi({ emotes: [emote()] });
         render(<Emotes storage={session()} />);
 
@@ -336,7 +336,7 @@ describe('Emotes', () => {
         render(<Emotes storage={session()} />);
 
         expect(await screen.findByText(
-            'Exact match only — a message has to be just the trigger, nothing around it.'
+            'Exact match only. A message has to be just the trigger, nothing around it.'
         )).toBeInTheDocument();
     });
 
@@ -352,7 +352,7 @@ describe('Emotes', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         expect(await screen.findByText('kekw already exists')).toBeInTheDocument();
-        // The optimistic row is gone again — the list matches the server.
+        // The optimistic row is gone again, so the list matches the server.
         expect(document.querySelectorAll('.list-row:not(.list-row--composer)')).toHaveLength(0);
     });
 });
@@ -373,7 +373,7 @@ describe('Quotes', () => {
         expect(screen.getByText('#9')).toBeInTheDocument();
         expect(screen.queryByText('#8')).not.toBeInTheDocument();
         expect(screen.getByText(
-            'Numbers stick — #7 stays #7 forever, so old clips never point at the wrong quote.'
+            'Numbers stick. #7 stays #7 forever, so old clips never point at the wrong quote.'
         )).toBeInTheDocument();
     });
 
@@ -381,8 +381,8 @@ describe('Quotes', () => {
         stubApi({ quotes: [quote(), quote({ quoteNumber: 8, author: null })] });
         render(<Quotes storage={session()} />);
 
-        expect(await screen.findByText('— Someone')).toBeInTheDocument();
-        expect(screen.getAllByText(/^—/)).toHaveLength(1);
+        expect(await screen.findByText('- Someone')).toBeInTheDocument();
+        expect(screen.getAllByText(/^-/)).toHaveLength(1);
     });
 
     it('deletes permanently and optimistically', async () => {

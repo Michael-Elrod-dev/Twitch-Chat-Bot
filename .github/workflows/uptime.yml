@@ -1,8 +1,8 @@
 name: Production uptime
 
-# Interim uptime monitoring. A scheduled workflow is not a monitoring system —
-# GitHub's scheduler is best-effort and can lag by many minutes — but it costs
-# nothing, needs no third-party account, and turns "the bot is down" from
+# Interim uptime monitoring. A scheduled workflow is not a monitoring system,
+# because GitHub's scheduler is best-effort and can lag by many minutes, but it
+# costs nothing, needs no third-party account, and turns "the bot is down" from
 # something the owner notices during a stream into an email. A real probe with
 # sub-minute resolution is on the ops backlog.
 #

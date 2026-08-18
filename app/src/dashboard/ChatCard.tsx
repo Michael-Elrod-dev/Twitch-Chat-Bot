@@ -8,8 +8,8 @@ import type { LiveChatMessage } from '@almosthadai/shared';
  * **Ambient, not a log.** New lines arrive at the bottom, the list is capped in
  * memory, and there is deliberately no backfill and no scroll-to-load: the glance
  * from the second monitor, and a broadcaster who missed a line while the app
- * was closed did not miss it — they were not there. Saying so plainly (the `4b`
- * empty copy) is better than a feed that pretends to be complete.
+ * was closed did not miss it, because they were not there. Saying so plainly in
+ * the empty copy is better than a feed that pretends to be complete.
  */
 
 /**
@@ -25,9 +25,9 @@ export const CHAT_FEED_CAP = 200;
  * Adds one line, keeping the feed at its cap.
  *
  * Newest-first in memory so the cap drops the OLDEST line rather than the line
- * that just arrived. That is the opposite of how the feed reads on screen —
- * see `ChatCard`, which renders it oldest-first — and the two are deliberately
- * separate concerns: the array's order is about what to evict, the card's is
+ * that just arrived. That is the opposite of how the feed reads on screen, since
+ * `ChatCard` renders it oldest-first, and the two are deliberately separate
+ * concerns. The array's order is about what to evict, and the card's is
  * about which way chat flows.
  */
 export function appendChatMessage(
@@ -37,7 +37,7 @@ export function appendChatMessage(
     return [message, ...feed].slice(0, CHAT_FEED_CAP);
 }
 
-/** `20:14` — the machine owns timestamps, so they are mono and short. */
+/** `20:14`. The machine owns timestamps, so they are mono and short. */
 function formatTime(at: string): string {
     const date = new Date(at);
     if (Number.isNaN(date.getTime())) return '--:--';
@@ -45,7 +45,7 @@ function formatTime(at: string): string {
 }
 
 /**
- * `command` → CMD, `emote` → EMOTE, `ai` → AI.
+ * `command` reads CMD, `emote` reads EMOTE, and `ai` reads AI.
  *
  * `none` and `skipped` render nothing at all. They are different facts in the
  * contract and the UI treats them the same here on purpose: both mean the bot
@@ -73,7 +73,7 @@ export function ChatCard({
     emptyCopy
 }: ChatCardProps): React.JSX.Element {
     /*
-     * Oldest at the top, newest at the bottom — chat's direction everywhere,
+     * Oldest at the top, newest at the bottom, which is chat's direction,
      * and the direction the design mock's own markup runs in (its rows read
      * 21:14 down to 21:17). The README's word for the feed is "prepends", which
      * describes the in-memory operation above; reading it as a rendering order
@@ -84,7 +84,7 @@ export function ChatCard({
     /*
      * Follow the newest line.
      *
-     * The feed is ambient, not a log — it is read by glancing at it while doing
+     * The feed is ambient, not a log. It is read by glancing at it while doing
      * something else, so it stays pinned to the bottom rather than asking the
      * broadcaster to chase it. Scrolled on the element rather than via
      * `scrollIntoView`, which would drag the whole page when the card is only
@@ -103,7 +103,7 @@ export function ChatCard({
                 <h2 className="card__title">Chat</h2>
                 {connection === 'open'
                     ? <span className="dot dot--healthy" aria-label="Connected" role="img" />
-                    : <span className="card__meta">reconnecting…</span>}
+                    : <span className="card__meta">reconnecting...</span>}
             </header>
 
             {messages.length === 0
@@ -123,8 +123,9 @@ export function ChatCard({
 
                             return (
                                 <li
-                                    // The feed has no stable ids — `chat.message`
-                                    // carries none — so position plus time is the
+                                    // The feed has no stable ids, because
+                                    // `chat.message` carries none, so position
+                                    // plus time is the
                                     // best available key. Lines are only ever added
                                     // at one end and evicted from the other, never
                                     // reordered, so this does not shuffle.

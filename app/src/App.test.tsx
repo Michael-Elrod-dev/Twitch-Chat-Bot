@@ -68,7 +68,7 @@ function harness(
  * An access token with a readable, distant expiry.
  *
  * The realtime connection asks for a fresh token before every attempt and
- * refreshes anything close to expiry — a fixture of `'at'` has no expiry it can
+ * refreshes anything close to expiry. A fixture of `'at'` has no expiry it can
  * read, so it is treated as expired and every test would exercise the refresh
  * path it is not about. Only the `exp` claim is ever read; nothing here
  * verifies a signature.
@@ -183,8 +183,8 @@ describe('the auth arc', () => {
          * `almosthadai://`, Twitch consent succeeds, the server spends the
          * single-use OAuth state redirecting to a URL Windows cannot open, and
          * the user waits forever. Retrying replays the spent state, so the
-         * browser answers "this authorization link is no longer valid" — true,
-         * and no help at all in working out that the link was never the
+         * browser answers "this authorization link is no longer valid", which is
+         * true and no help at all in working out that the link was never the
          * problem.
          */
         stubFetch({ '/healthz': () => new Response('ok') });
@@ -345,7 +345,7 @@ describe('the master switch, against the API', () => {
 
         await userEvent.click(screen.getByRole('switch'));
 
-        // Optimistic, then back where it started — never silently wrong.
+        // Optimistic, then back where it started, never silently wrong.
         await waitFor(() => { expect(screen.getByRole('switch')).toBeChecked(); });
     });
 
@@ -363,9 +363,9 @@ describe('the master switch, against the API', () => {
 /**
  * The dashboard, wired through the real App.
  *
- * The component tests prove what each state reads; these prove the seams — that
- * the uptime clock is seeded from the stream's start rather than the event's
- * timestamp, and that a chat line arriving on the socket reaches the screen.
+ * The component tests prove what each state reads, and these prove the seams.
+ * The uptime clock is seeded from the stream's start rather than the event's
+ * timestamp, and a chat line arriving on the socket reaches the screen.
  * Both were live defects: the shell shipped seeding its clock from `at`.
  */
 describe('the dashboard wiring', () => {
@@ -416,9 +416,9 @@ describe('the dashboard wiring', () => {
          * Wait for the socket to be OPEN, not merely for the shell to render.
          *
          * The switch becomes operable only at `connection === 'open'`, which is
-         * also the point the dashboard starts trusting anything it is told —
-         * sending a frame before then is delivered to a connection the screen is
-         * still treating as `4b`, and the assertion fails for a reason that has
+         * also the point the dashboard starts trusting anything it is told. A
+         * frame sent before then reaches a connection the screen is
+         * still treating as unreachable, and the assertion fails for a reason that has
          * nothing to do with what it is testing. This was flaky until it waited.
          */
         await waitFor(() => { expect(screen.getByRole('switch')).toBeEnabled(); });
@@ -451,8 +451,7 @@ describe('the dashboard wiring', () => {
              *
              * If the summary already carried the stream's start, the clock would
              * be correct before the event arrived and this test would pass over a
-             * broken event path — which it did, until the reintroduction pass
-             * showed the mutation surviving it.
+             * broken event path, so the summary deliberately omits it.
              */
             await boot({ ...SUMMARY, live: false, startedAt: null });
             send({

@@ -353,8 +353,8 @@ jobs:
     name: Windows installer
     # Tags, plus manual dispatch. A Rust release build on a Windows runner is
     # minutes of CI on every push otherwise, and nobody installs a build of an
-    # unreleased commit — `test-app` above is what keeps the front end honest
-    # day to day. Dispatch exists so this job can be PROVEN without minting a
+    # unreleased commit. `test-app` above is what keeps the front end honest
+    # day to day. Dispatch exists so this job can be proven without minting a
     # release tag that would then have to be deleted.
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
@@ -396,11 +396,10 @@ jobs:
       # independent of Windows code signing and is configured separately at the
       # first release.
       #
-      # VITE_API_BASE_URL is REQUIRED here, not optional. It is a build-time
-      # constant baked into the bundle, and its fallback is the local dev server
-      # — so without this line the installer this job produces can only talk to
-      # a machine the person who installs it does not have. That is exactly what
-      # shipped from the first proven artifact, silently, because nothing looked.
+      # VITE_API_BASE_URL is required here, not optional. It is a build-time
+      # constant baked into the bundle, and its fallback is the local dev
+      # server, so without this line the installer this job produces can only
+      # talk to a machine the person who installs it does not have.
       #
       # Tag builds and dispatch builds both target production deliberately:
       # there is one host, and a developer wanting a local build uses
@@ -411,10 +410,10 @@ jobs:
           VITE_API_BASE_URL: https://almosthadai.duckdns.org
         run: npm run tauri -w @almosthadai/app -- build --bundles nsis
 
-      # The loud failure the first artifact did not have.
+      # The loud failure, so a wrong host can never reach an installer.
       #
-      # Asserted on the built bundle AFTER packaging rather than before, because
-      # `tauri build` runs the front-end build itself (beforeBuildCommand) — so
+      # Asserted on the built bundle after packaging rather than before, because
+      # `tauri build` runs the front-end build itself (beforeBuildCommand), so
       # app/dist at this point is precisely the tree NSIS packaged, not an
       # earlier one that happened to be built the same way. A missing or wrong
       # host fails the job here; it never reaches the upload below.

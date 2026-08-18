@@ -41,7 +41,7 @@ import { Onboarding } from './screens/Onboarding.js';
 /**
  * The application root.
  *
- * The title bar persists across every phase — including the auth screens, which
+ * The title bar persists across every phase, including the auth screens, which
  * have no rail and no channel header but are still inside a window that has to
  * be movable and closable. Everything below it swaps.
  */
@@ -84,8 +84,8 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
      * Declared above the realtime effect because both it and the songs screen use
      * it, and there is only one right way to do it: the `song_queue.updated` event
      * announces that the queue moved and does not carry it, so every path that
-     * learns the queue changed — the event, and the screen's own drop — has to
-     * fetch. Two copies of that fetch is how one of them ends up reading a
+     * learns the queue changed, meaning the event and the screen's own drop, has
+     * to fetch. Two copies of that fetch is how one of them ends up reading a
      * different limit than the other.
      */
     const reloadQueue = useCallback((): void => {
@@ -101,7 +101,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
      * The realtime feed carries transitions; this carries the state they change.
      * An app opened mid-stream has missed every transition that ever happened,
      * so without this the uptime clock would not start until the broadcaster
-     * went offline — which is exactly when it stops being interesting.
+     * went offline, which is exactly when it stops being interesting.
      */
     const loadDashboard = useCallback(async (): Promise<void> => {
         try {
@@ -157,7 +157,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                     setLive(event.live);
                     // Re-synced from the server on every status event; the tick
                     // below only fills in the seconds between them. Taken from
-                    // `startedAt` and NOT from `at` — `at` is when the event was
+                    // `startedAt` and never from `at`, since `at` is when the event was
                     // sent, so seeding from it would restart the clock at every
                     // status change and read minutes into an hours-long stream.
                     setStreamStartedAt(event.startedAt ? new Date(event.startedAt) : null);
@@ -174,7 +174,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                     // Refetched rather than applied: the event announces that
                     // the queue moved, and the payload does not carry it. The
                     // event now carries `queueLength`, which is deliberately not
-                    // used to shortcut this — a length is not a list, and
+                    // used to shortcut this, because a length is not a list and
                     // rendering rows from one would mean inventing them.
                     reloadQueue();
                 }
@@ -226,8 +226,8 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
                         accessToken
                     }));
 
-                // Both fields from one round trip — `status` is authoritative
-                // and is NOT inferred from the switch we just moved.
+                // Both fields from one round trip. `status` is authoritative and
+                // is never inferred from the switch that just moved.
                 auth.setMe({
                     ...current,
                     channel: { ...channel, enabled: result.enabled, status: result.status }
@@ -245,9 +245,9 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
     /**
      * Saves a settings patch and puts the server's answer back into `/me`.
      *
-     * **The shell owns `ChannelSettings` and the panes do not.** Three screens
-     * edit the same object — the songs page's requests toggle, the AI pane, the
-     * songs pane — and the header pill reads one of its fields. A pane holding its
+     * The shell owns `ChannelSettings` and the panes do not. Three screens edit
+     * the same object (the songs page's requests toggle, the AI pane and the
+     * songs pane) and the header pill reads one of its fields. A pane holding its
      * own copy would let two of them disagree about the same setting, with the
      * header agreeing with whichever rendered last.
      *
@@ -258,7 +258,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
      * actually happened, so showing a guess first and correcting it after would
      * flicker a name the server may have resolved to something else.
      *
-     * An empty patch is a re-read and sends no body — see `SettingsPatch`. The
+     * An empty patch is a re-read and sends no body, as `SettingsPatch` says. The
      * schema refuses an empty object, so this is not merely an optimization.
      */
     const saveSettings = useCallback(async (patch: SettingsPatch): Promise<string | null> => {
@@ -312,7 +312,7 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
 
     const connectChannel = useCallback((): void => {
         // The channel grant is a second Twitch consent, in the system browser
-        // like the first one — and, like the first one, a browser that fails to
+        // like the first one, and, like the first one, a browser that fails to
         // open must say so rather than leaving a button that appears dead.
         setConnectError(null);
         void platform.openExternal(`${API_BASE_URL}/auth/twitch/connect`).catch((err: unknown) => {
@@ -332,8 +332,8 @@ export function App({ platform, storage }: AppProps): React.JSX.Element {
             /*
              * Swallowed here, unlike the Twitch grant above, and the asymmetry is
              * deliberate rather than an oversight. The channel connect button is a
-             * dead end if the browser will not open — there is no app without it —
-             * so it earns a visible error. Spotify is an optional feature reached
+             * dead end if the browser will not open, because there is no app
+             * without it, so it earns a visible error. Spotify is an optional feature reached
              * from a card that keeps explaining itself, so the honest thing is to
              * leave the streamer looking at that card rather than at a message
              * about their browser.

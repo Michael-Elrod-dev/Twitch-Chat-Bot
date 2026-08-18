@@ -17,8 +17,8 @@ import {
  * route validates with, so a rule can be changed in `shared/` and the form
  * follows without anyone remembering it exists.
  *
- * The alternative — a regex here that looks like the regex there — is the
- * failure this codebase has already met twice: two things that agree with each
+ * The alternative, a regex here that looks like the regex there, is a familiar
+ * failure. Two things agree with each
  * other and not with reality (the reconciler's fixture) or with each other and
  * not with the wire (the redemption condition). A form that accepts what the
  * server rejects wastes a round trip; a form that rejects what the server
@@ -30,7 +30,7 @@ import {
 
 export interface ValidationResult {
     ok: boolean;
-    /** The normalized value — lowercased and trimmed — when `ok`. */
+    /** The normalized value, lowercased and trimmed, when `ok`. */
     value: string;
     /** The schema's own message when not. */
     message: string;
@@ -44,18 +44,18 @@ function check(schema: { safeParse: (v: unknown) => { success: boolean; data?: u
     return {
         ok: false,
         value: raw,
-        // The schema's first message. These are written for humans already —
+        // The schema's first message. These are written for humans already, so
         // "must start with ! and contain no spaces" needs no translation.
         message: issues?.[0]?.message ?? 'That is not valid'
     };
 }
 
-/** Leading `!`, no spaces, 2–64, lowercased — all of it the schema's opinion. */
+/** Leading `!`, no spaces, 2 to 64, lowercased. All of it the schema's opinion. */
 export function validateCommandName(raw: string): ValidationResult {
     return check(commandNameSchema, raw);
 }
 
-/** 1–500 after trimming. Twitch truncates beyond 500, so the server refuses. */
+/** 1 to 500 after trimming. Twitch truncates beyond 500, so the server refuses. */
 export function validateReply(raw: string): ValidationResult {
     return check(chatTextSchema, raw);
 }
@@ -73,7 +73,7 @@ export function validateQuoteText(raw: string): ValidationResult {
  * The playlist the streamer names on `5a`.
  *
  * `.nullable().optional()` on the contract's field means `undefined` is a valid
- * value — "not mentioned in this PATCH". A form must not treat that as a pass,
+ * value, meaning "not mentioned in this PATCH". A form must not treat that as a pass,
  * because an empty box is a name the streamer has not given, so the raw string
  * goes in and the schema's `min(1)` refuses it.
  */
@@ -106,8 +106,8 @@ export const QUOTE_MAX_LENGTH: number = createQuoteSchema.shape.quoteText.maxLen
 /**
  * The stepper's ends, from the schema that decides whether a save is accepted.
  *
- * Zero is a real setting — the AI off for that tier and on for the ones above it
- * — so the floor is `min`, not one. The ceiling is a fat-finger guard rather than
+ * Zero is a real setting, the AI off for that tier and on for the ones above it,
+ * so the floor is `min` and not one. The ceiling is a fat-finger guard rather than
  * a policy, which is exactly why it must not be re-typed at the control: a
  * stepper that stopped at a number the server no longer enforces would be
  * inventing a rule.

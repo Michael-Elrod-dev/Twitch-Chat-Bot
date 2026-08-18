@@ -10,8 +10,8 @@ import { ContentBanner } from './ContentBanner.js';
 /**
  * Quotes (`3b`).
  *
- * **Numbers are retired, not reused.** Deleting #7 leaves a hole where #7 was,
- * and the grid shows it. That is not an oversight to tidy up later — a quote
+ * Numbers are retired, not reused. Deleting #7 leaves a hole where #7 was, and
+ * the grid shows it. That is not an oversight to tidy up later. A quote
  * number is a permanent handle, printed in clip titles and typed into chat as
  * `!quote 7`, and renumbering would silently point every old reference at
  * someone else's words. The footnote says so out loud, because a user who sees
@@ -154,7 +154,7 @@ export function Quotes({ storage }: QuotesProps): React.JSX.Element {
                         <span className="quote-card__number">#{quote.quoteNumber}</span>
                         <span className="quote-card__body">
                             <span className="quote-card__text">{quote.quoteText}</span>
-                            {quote.author && <span className="quote-card__author">— {quote.author}</span>}
+                            {quote.author && <span className="quote-card__author">- {quote.author}</span>}
                         </span>
                         <button
                             type="button"
@@ -169,7 +169,7 @@ export function Quotes({ storage }: QuotesProps): React.JSX.Element {
             </div>
 
             <p className="footnote">
-                Numbers stick — #7 stays #7 forever, so old clips never point at the wrong quote.
+                Numbers stick. #7 stays #7 forever, so old clips never point at the wrong quote.
             </p>
         </div>
     );

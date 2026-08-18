@@ -2,7 +2,7 @@
  * The standard setting row: a title, an optional description, a control on the
  * right, and a hairline underneath unless it is the last one in its card.
  *
- * Written once because the handoff specifies it once — `16px 18px`, title
+ * Written once because the handoff specifies it once, at `16px 18px`, title
  * 13.5/600, description 12.5/1.5 capped at 430px. Five screens use it, and five
  * hand-built copies would be five chances for one of them to be 14px.
  *
@@ -16,7 +16,7 @@ export interface SettingRowProps {
     description?: string | undefined;
     /** The control, right-aligned. */
     children?: React.ReactNode;
-    /** An extra line under the row — the sage save confirmation, an inline error. */
+    /** An extra line under the row, such as the save confirmation or an inline error. */
     footer?: React.ReactNode;
 }
 

@@ -9,8 +9,7 @@ import { AccountSettings } from './AccountSettings.js';
 import type { SettingsPatch } from './settingsPatch.js';
 
 /**
- * Settings — the sub-nav and the five panes behind it (`3e`, `5a`, `5b`, `3f`,
- * `5c`).
+ * Settings. The sub-nav and the five panes behind it.
  *
  * One page with a column of its own rather than five rail entries, because these
  * are things you set once and then forget: putting Notifications in the rail
@@ -18,7 +17,7 @@ import type { SettingsPatch } from './settingsPatch.js';
  * the streamer looks at live.
  *
  * The panes each own their own data. The two that edit `ChannelSettings` go
- * through the shell, which owns `/me` — a pane holding its own copy would let the
+ * through the shell, which owns `/me`. A pane holding its own copy would let the
  * AI toggle and the songs toggle disagree about the same object.
  */
 

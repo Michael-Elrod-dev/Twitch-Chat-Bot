@@ -6,7 +6,7 @@
  *
  * It carries exactly one dependency, zod, and that is a deliberate trade. A
  * contract that only described shapes would leave validation to be written
- * separately on each side — which is precisely where a client and server drift
+ * separately on each side, which is precisely where a client and server drift
  * apart, silently, until a request that typechecks gets a 400. Defining the
  * schema once means the server validates with the same object the client's
  * types are inferred from.

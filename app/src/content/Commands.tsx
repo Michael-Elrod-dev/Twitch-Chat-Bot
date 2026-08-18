@@ -28,9 +28,9 @@ export function isBuiltIn(command: Command): boolean {
 }
 
 /**
- * Filter, then search — order matters only for readability, but the search
- * matching both name and reply is deliberate: people look for "the one about
- * the discord link" as often as they look for `!discord`.
+ * Filter, then search. Order matters only for readability, but the search
+ * matching both name and reply is deliberate, because people look for "the one
+ * about the discord link" as often as they look for `!discord`.
  */
 export function filterCommands(
     commands: Command[],
@@ -58,7 +58,7 @@ export interface CommandsProps {
 export function Commands({ storage }: CommandsProps): React.JSX.Element {
     // Every command is fetched once and paged in memory: the whole list is 22
     // rows for the owner and the filter chips have to count across all of it
-    // anyway ("5 yours · 17 built in" is a fact about the set, not the page).
+    // anyway ("5 yours, 17 built in" is a fact about the set, not the page).
     const collection = useCollection<Command>({ path: '/api/v1/commands', storage, limit: 200 });
 
     const [filter, setFilter] = useState<CommandFilter>('all');
@@ -142,7 +142,7 @@ export function Commands({ storage }: CommandsProps): React.JSX.Element {
             <header className="content-header">
                 <h1 className="content-title">Commands</h1>
                 <span className="content-meta">
-                    {yours.length} yours · {builtIns.length} built in
+                    {yours.length} yours, {builtIns.length} built in
                 </span>
 
                 <div className="content-header__spacer" />
@@ -209,7 +209,7 @@ export function Commands({ storage }: CommandsProps): React.JSX.Element {
                             <span className="list-footer__count">
                                 {visible.length === 0
                                     ? '0 of 0'
-                                    : `${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, visible.length)} of ${visible.length}`}
+                                    : `${pageStart + 1}-${Math.min(pageStart + PAGE_SIZE, visible.length)} of ${visible.length}`}
                             </span>
                             <span className="list-footer__pager">
                                 <button
@@ -292,7 +292,7 @@ function CommandRow({ command, onEdit, onDelete }: {
     );
 }
 
-/** `4d` — nothing of your own yet, and the built-ins that already work. */
+/** Nothing of your own yet, and the built-ins that already work. */
 function CommandsEmpty({ builtIns, onWrite }: {
     builtIns: Command[];
     onWrite: () => void;

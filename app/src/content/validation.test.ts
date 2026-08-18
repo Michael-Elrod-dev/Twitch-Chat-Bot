@@ -26,10 +26,10 @@ import {
  * THE VALIDATION MIRROR.
  *
  * The package's brief asks that "the zod schema and the UI agree, or a test
- * fails". The implementation makes disagreement structurally impossible — the
- * form runs the schema rather than restating it — so what these prove is that
- * the structure holds: for every input, the UI's verdict IS the schema's
- * verdict, and the form submits the value the SERVER would have stored rather
+ * fails". The implementation makes disagreement structurally impossible, because
+ * the form runs the schema rather than restating it, so what these prove is that
+ * the structure holds. For every input, the UI's verdict is the schema's
+ * verdict, and the form submits the value the server would have stored rather
  * than the one the user typed.
  *
  * The table is driven off the schema itself. A test that hardcoded "!ok is
@@ -40,8 +40,8 @@ import {
 /** Inputs chosen to sit on every boundary the schema draws. */
 const NAME_CASES = [
     '!discord',          // ordinary
-    '!Discord',          // uppercase — must come back lowercased
-    '  !discord  ',      // padded — trimmed before anything else
+    '!Discord',          // uppercase, must come back lowercased
+    '  !discord  ',      // padded, trimmed before anything else
     'discord',           // no leading !
     '!has space',        // space in the middle
     '!',                 // just the mark, nothing after it
@@ -70,7 +70,7 @@ describe('the validation mirror', () => {
 
                 expect(ui.ok).toBe(schema.success);
                 if (schema.success) {
-                    // The value submitted is the schema's OUTPUT — lowercased and
+                    // The value submitted is the schema's output, lowercased and
                     // trimmed. Submitting the raw text would store a name the
                     // chat pipeline, which looks up lowercased, could never match.
                     expect(ui.value).toBe(schema.data);
@@ -152,7 +152,7 @@ describe('the validation mirror', () => {
         it('refuses an empty box even though the contract field is optional', () => {
             /*
              * The trap this exists for. `requestsPlaylistName` is
-             * `.nullable().optional()`, so `safeParse(undefined)` SUCCEEDS — it
+             * `.nullable().optional()`, so `safeParse(undefined)` succeeds. It
              * means "this PATCH does not mention the playlist". A form that
              * passed its empty box through as undefined would therefore "pass"
              * validation and then save nothing, with a sage confirmation under
@@ -229,7 +229,7 @@ describe('the validation mirror', () => {
         it('resolved a real limit rather than falling back', () => {
             /*
              * `?? 500` would look identical to a working derivation if the
-             * getter ever returned undefined — the counter would read 500
+             * getter ever returned undefined, and the counter would read 500
              * forever while the schema said something else. This is the
              * assertion that the fallback is NOT what is in use.
              */

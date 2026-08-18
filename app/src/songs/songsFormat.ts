@@ -9,7 +9,7 @@
 /**
  * `1:34`, from milliseconds.
  *
- * `m:ss` and not `mm:ss` — the handoff draws `1:34 / 4:03`, and a leading zero
+ * `m:ss` and not `mm:ss`. The handoff draws `1:34 / 4:03`, and a leading zero
  * on the minutes would make a four-minute song read like a stopwatch. Seconds
  * always get theirs, because `1:4` is not a time.
  *
@@ -26,7 +26,7 @@ export function formatTrackTime(ms: number): string {
 }
 
 /**
- * How full the progress bar is, 0–1.
+ * How full the progress bar is, from 0 to 1.
  *
  * Clamped at both ends. Spotify can report a position past the duration during
  * a track change, and a bar wider than its track is a visible glitch on a screen
@@ -42,7 +42,7 @@ export function trackProgress(progressMs: number, durationMs: number): number {
  *
  * Minutes are the unit the design draws and the unit that matters: a request is
  * interesting for the twenty minutes it spends waiting, and "0 min ago" for
- * something that just landed would read as a bug — hence `just now`. Hours
+ * something that just landed would read as a bug, hence `just now`. Hours
  * appear because a queue can outlive an hour when nobody is skipping.
  */
 export function formatWaiting(createdAt: string, now: Date = new Date()): string {
@@ -51,7 +51,7 @@ export function formatWaiting(createdAt: string, now: Date = new Date()): string
 
     const minutes = Math.floor((now.getTime() - at) / 60_000);
     // A clock a few seconds behind the server's puts a request in the future.
-    // "in −1 min" is nonsense; "just now" is true enough and unremarkable.
+    // "in -1 min" is nonsense, and "just now" is true enough and unremarkable.
     if (minutes < 1) return 'just now';
     if (minutes < 60) return `${minutes} min ago`;
 
@@ -75,7 +75,7 @@ export function formatShortDate(iso: string | null): string | null {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-/** `1 Aug 2026` — the analytics header's "since", where the year is the point. */
+/** `1 Aug 2026`, the analytics header's "since", where the year is the point. */
 export function formatFullDate(iso: string | null): string | null {
     if (!iso) return null;
     const date = new Date(iso);

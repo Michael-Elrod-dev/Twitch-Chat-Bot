@@ -4,7 +4,7 @@ import { generateNonce, parseAuthCallback, returnToWithNonce } from './deepLink.
 /**
  * The deep link is the one place a hostile input reaches this app directly:
  * any local program can invoke a registered URI scheme. So the parser is
- * tested the way the server's `return_to` allow-list is — by trying the shapes
+ * tested the way the server's `return_to` allow-list is, by trying the shapes
  * an attacker would.
  */
 
@@ -40,8 +40,8 @@ describe('parseAuthCallback', () => {
     });
 
     it('does not confuse a query parameter for a fragment one', () => {
-        // `?access_token=…#refresh_token=…` has one of each; half a session is
-        // not a session.
+        // One token in the query and one in the fragment is one of each, and
+        // half a session is not a session.
         expect(parseAuthCallback('almosthadai://auth?access_token=a#refresh_token=b')).toBeNull();
     });
 });
@@ -51,7 +51,7 @@ describe('returnToWithNonce', () => {
         const value = returnToWithNonce('abc123');
 
         expect(value).toBe('almosthadai://auth?n=abc123');
-        // The server appends `#access_token=…` to whatever this is, so it must
+        // The server appends the token fragment to whatever this is, so it must
         // not already carry a fragment.
         expect(value).not.toContain('#');
     });

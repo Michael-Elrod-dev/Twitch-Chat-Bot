@@ -21,7 +21,7 @@ import { APP_VERSION_NUMBER } from '../api/config.js';
  *  - **The webhook URL is never rendered.** Asserted as a negative over the whole
  *    document, not just the row, so a debug echo anywhere on the page fails.
  *  - **The API key renders exactly once.** Asserted the same way, plus the fact
- *    that closing the modal makes it unrecoverable — there is no route that would
+ *    that closing the modal makes it unrecoverable, because no route would
  *    hand it back, so a UI that kept it in state would be the only copy and would
  *    outlive the moment it was meant to exist for.
  */
@@ -125,9 +125,7 @@ const openPane = async (label: string): Promise<void> => {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-// ---- 3e --------------------------------------------------------------------
-
-describe('Settings · AI (3e)', () => {
+describe('Settings, the AI pane', () => {
     it('opens on AI', () => {
         stubApi();
         renderSettings();
@@ -208,14 +206,12 @@ describe('Settings · AI (3e)', () => {
     });
 });
 
-// ---- 5a --------------------------------------------------------------------
-
-describe('Settings · Songs (5a)', () => {
+describe('Settings, the Songs pane', () => {
     it('saves the playlist name on Save, not on every keystroke', async () => {
         /*
-         * Saving per keystroke would have the server resolving "S", "St", "Str"…
-         * against Spotify — and possibly *creating* a playlist called `S`, since
-         * naming one creates it when missing.
+         * Saving per keystroke would have the server resolving "S", then "St",
+         * then "Str" against Spotify, and possibly creating a playlist called
+         * `S`, since naming one creates it when missing.
          */
         const onSettingsChange = vi.fn(async () => null);
         stubApi();
@@ -245,7 +241,7 @@ describe('Settings · Songs (5a)', () => {
     });
 
     it('says the bot will make the playlist when Spotify has none by that name', async () => {
-        // Named but not created is correct and expected — the bot creates it with
+        // Named but not created is correct and expected, since the bot creates it with
         // the first request. Reporting a count would describe a missing playlist.
         stubApi({ spotify: { ...CONNECTED, playlist: null } });
         renderSettings();
@@ -254,7 +250,7 @@ describe('Settings · Songs (5a)', () => {
         await userEvent.type(await screen.findByPlaceholderText('Stream Requests'), 'Fresh List');
         await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-        expect(await screen.findByText(/The bot makes “Fresh List” with the first request/))
+        expect(await screen.findByText(/The bot makes "Fresh List" with the first request/))
             .toBeInTheDocument();
     });
 
@@ -293,21 +289,19 @@ describe('Settings · Songs (5a)', () => {
     });
 });
 
-// ---- 5b --------------------------------------------------------------------
-
-describe('Settings · Notifications (5b)', () => {
+describe('Settings, the Notifications pane', () => {
     it('never renders a stored webhook URL, anywhere on the page', async () => {
         /*
          * The negative asserted over the whole document rather than the row, so a
          * debug echo elsewhere would fail this too. It holds structurally as well:
-         * `ChannelSettings` carries a boolean, and no route returns the value — but
+         * `ChannelSettings` carries a boolean and no route returns the value, but
          * a test that only checked the row would not notice if one started to.
          */
         stubApi();
         renderSettings({ settings: settings({ discordWebhookConfigured: true }) });
         await openPane('Notifications');
 
-        expect(await screen.findByText(/We never show it back to you/)).toBeInTheDocument();
+        expect(await screen.findByText(/It is never shown back to you/)).toBeInTheDocument();
         expect(document.body.textContent).not.toContain('discord.com/api/webhooks');
         expect(document.body.textContent).not.toContain('http');
     });
@@ -353,9 +347,9 @@ describe('Settings · Notifications (5b)', () => {
         /*
          * Re-opened, and the field must be EMPTY.
          *
-         * The obvious assertion here — `document.body.textContent` no longer
-         * contains the URL — passes for the wrong reason and was written that way
-         * first: saving also closes the form, so an unrendered input holds its
+         * The obvious assertion here, that `document.body.textContent` no longer
+         * contains the URL, passes for the wrong reason. Saving also closes the
+         * form, so an unrendered input holds its
          * value invisibly and the negative is satisfied either way. Re-opening is
          * what tells "cleared from state" apart from "merely hidden", which is the
          * difference between the URL being gone and it sitting in a closed form's
@@ -411,7 +405,7 @@ describe('Settings · Notifications (5b)', () => {
 
     it('counts what the bot manages rather than claiming to know the streamer own rewards', async () => {
         // "3 of yours untouched" would be a count of their rewards, which the API
-        // deliberately never enumerates — the trust claim rests on not looking.
+        // deliberately never enumerates. The trust claim rests on not looking.
         stubApi();
         renderSettings();
         await openPane('Notifications');
@@ -420,9 +414,7 @@ describe('Settings · Notifications (5b)', () => {
     });
 });
 
-// ---- 3f --------------------------------------------------------------------
-
-describe('Settings · Stream Deck (3f)', () => {
+describe('Settings, the Stream Deck pane', () => {
     const key = (over: Partial<ApiKeySummary> = {}): ApiKeySummary => ({
         id: 'k1',
         // Deliberately not "Stream Deck": that is also the sub-nav label, and a
@@ -440,7 +432,7 @@ describe('Settings · Stream Deck (3f)', () => {
         renderSettings();
         await openPane('Stream Deck');
 
-        expect(await screen.findByText('ahai_7x2f…')).toBeInTheDocument();
+        expect(await screen.findByText('ahai_7x2f...')).toBeInTheDocument();
         expect(screen.getByText('Backup deck')).toBeInTheDocument();
         expect(screen.getByText('12 Aug')).toBeInTheDocument();
         // "never" rather than a dash: an unused key is the one that is safe to
@@ -463,7 +455,7 @@ describe('Settings · Stream Deck (3f)', () => {
          *
          * `POST /api/v1/api-keys` is the only response that has ever contained the
          * secret and there is no route that would return it, so the modal is not
-         * merely where the app chooses to show it — it is the only place it
+         * merely where the app chooses to show it. It is the only place it
          * exists. This asserts both halves: it IS rendered once, and after Done
          * it is nowhere in the document and nothing brings it back.
          */
@@ -499,7 +491,7 @@ describe('Settings · Stream Deck (3f)', () => {
         await waitFor(() => { expect(screen.queryByText(secret)).not.toBeInTheDocument(); });
         expect(document.body.textContent).not.toContain(secret);
 
-        // Re-opening the creation flow must not resurrect it either — the state
+        // Re-opening the creation flow must not resurrect it either. The state
         // that held it is the modal's own and was cleared on the way out.
         await userEvent.click(screen.getByRole('button', { name: 'New key' }));
         expect(document.body.textContent).not.toContain(secret);
@@ -540,14 +532,12 @@ describe('Settings · Stream Deck (3f)', () => {
 
         await userEvent.click(await screen.findByRole('button', { name: 'Revoke Backup deck' }));
 
-        await waitFor(() => { expect(screen.queryByText('ahai_7x2f…')).not.toBeInTheDocument(); });
+        await waitFor(() => { expect(screen.queryByText('ahai_7x2f...')).not.toBeInTheDocument(); });
         expect(api.calls.some((c) => c.method === 'DELETE')).toBe(true);
     });
 });
 
-// ---- 5c --------------------------------------------------------------------
-
-describe('Settings · Account (5c)', () => {
+describe('Settings, the Account pane', () => {
     it('shows the identity, the running version, and sign out', async () => {
         stubApi();
         renderSettings();

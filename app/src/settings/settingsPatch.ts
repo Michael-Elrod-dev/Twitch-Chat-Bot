@@ -3,7 +3,7 @@ import type { UpdateSettingsRequest } from '@almosthadai/shared';
 /**
  * What a settings pane asks the shell to save.
  *
- * The contract's own request type, NOT `Partial<ChannelSettings>` — the two are
+ * The contract's own request type, never `Partial<ChannelSettings>`. The two are
  * deliberately different shapes and conflating them is what forces casts. The
  * clearest case is the webhook: the response carries
  * `discordWebhookConfigured: boolean` and the request carries
